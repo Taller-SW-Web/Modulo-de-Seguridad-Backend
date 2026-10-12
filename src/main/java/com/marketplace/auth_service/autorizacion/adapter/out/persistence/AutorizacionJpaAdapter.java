@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence;
 
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.mapper.AutorizacionPersistenceMapper;
+import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.CatalogoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.RolPermisoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.UsuarioRolJpaRepository;
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
@@ -15,10 +16,13 @@ public class AutorizacionJpaAdapter implements AsociacionesRolPort {
 
     private final UsuarioRolJpaRepository usuarioRol;
     private final RolPermisoJpaRepository rolPermiso;
+    private final CatalogoJpaRepository catalogo;
 
-    public AutorizacionJpaAdapter(UsuarioRolJpaRepository usuarioRol, RolPermisoJpaRepository rolPermiso) {
+    public AutorizacionJpaAdapter(UsuarioRolJpaRepository usuarioRol, RolPermisoJpaRepository rolPermiso,
+                                  CatalogoJpaRepository catalogo) {
         this.usuarioRol = usuarioRol;
         this.rolPermiso = rolPermiso;
+        this.catalogo = catalogo;
     }
 
     @Override
@@ -34,5 +38,17 @@ public class AutorizacionJpaAdapter implements AsociacionesRolPort {
     @Override
     public Map<Rol, Set<String>> matrizPersistida() {
         return AutorizacionPersistenceMapper.aMatriz(rolPermiso.findAll());
+    }
+
+    @Override
+    public Set<UUID> usuariosConRol(Rol rol) {
+        return Set.copyOf(usuarioRol.usuariosConRol(rol));
+    }
+
+    @Override
+    public void bloquearFilaAdministrador() {
+        if (catalogo.bloquearFilaAdministrador().isEmpty()) {
+            throw new IllegalStateException("La tabla rol no contiene ADMIN_SISTEMA: el catálogo no está sembrado");
+        }
     }
 }

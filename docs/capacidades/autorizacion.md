@@ -1,8 +1,9 @@
 # Capacidad `autorizacion` — roles y permisos
 
 **Dueño:** Sergio Osorio · **Épica:** EP-05 (SPEC-11) · **Tareas:** EP-05-T001
-(catálogo, mappings y permisos efectivos).
-**Fuentes:** SPEC-11 RF-11.1/11.2/11.4/11.9, ESC-11.2/11.4/11.7;
+(catálogo, mappings y permisos efectivos), EP-05-T002 (decisiones de permiso,
+titularidad y guard de administrador).
+**Fuentes:** SPEC-11 RF-11.1/11.2/11.4/11.7/11.9/11.10, ESC-11.2/11.3/11.4/11.7;
 `plan/hito-3/DISENO-PERSISTENCIA.md` §§1–2 y `ACUERDOS-INTERNOS.md` §2 en el
 repo de documentación.
 
@@ -50,8 +51,60 @@ efectivos.tiene(Permiso.ROL_ASIGNAR);
   fuera del catálogo (`"BUYER"`, `"admin_sistema"`) lanza `RolInvalidoException`
   (el adaptador HTTP lo traducirá a `400 VALIDACION`).
 
-Siguientes tareas: EP-05-T002 añade `exigirPermiso`, `exigirTitularOPrivilegio`,
-`bloquearCatalogoAdministrador` y `usuariosConRol`; T003/T004 asignan y revocan.
+### Decidir si alguien puede hacer algo
+
+**Los permisos del token no autorizan.** Toda decisión se toma con los permisos
+actuales de la base: un permiso retirado deja de servir aunque el acceso
+emitido antes siga vigente, y uno nuevo sirve sin esperar a otro login.
+Ocultar un botón o tener un scope de servicio tampoco concede nada.
+
+```java
+// Operación sobre cualquier cuenta: hace falta el permiso.
+autorizacionPort.exigirPermiso(actor, Permiso.ROL_ASIGNAR);
+
+// Operación que el titular puede hacer sobre su propia cuenta (RF-11.10):
+autorizacionPort.exigirTitularOPrivilegio(actor, usuarioId, Permiso.USUARIO_VER);
+```
+
+- Si no se cumple lanzan `AccesoDenegadoException`. El adaptador HTTP responde
+  `403 SCOPE_INSUFICIENTE` **sin decir qué permiso faltaba**; la excepción
+  guarda `actor()` y `permiso()` para auditar `ACCESO_DENEGADO`.
+- La titularidad solo cubre lo que la spec permite al titular: ver su perfil,
+  cambiar su contraseña y editar nombres, apellidos y celular. **Documento y
+  atributos de rol exigen `atributos.editar` incluso sobre la cuenta propia**:
+  para eso se usa `exigirPermiso`, no `exigirTitularOPrivilegio`.
+- `actor` es `shared.domain.ActorUsuario(sub, jti, roles, permisos)`. Solo lo
+  crea el filtro de acceso a partir de un JWT verificado (TEC-IDENTIDAD-T002).
+
+### Guard de administrador (RF-11.7)
+
+```java
+@Transactional  // la transacción del caso de uso
+void revocarRol(...) {
+    autorizacionPort.bloquearCatalogoAdministrador(); // 1º: antes que cuentas y familias
+    // ... locks de cuentas (Eva), familias (Jose Luis), filas propias
+}
+```
+
+- Bloquea la fila fija `rol.ADMIN_SISTEMA` (`SELECT ... FOR UPDATE`) hasta el
+  fin de la transacción. Es el **nivel 1** del orden de locks
+  (ACUERDOS-INTERNOS §3).
+- Lo llaman todas las operaciones que pueden dejar al sistema sin
+  administrador activo: asignar/revocar roles, registrar un fallo de login y
+  desbloquear (Luis), y las futuras baja/reactivación/bloqueo manual. Dos
+  operaciones así se ejecutan una detrás de otra.
+- Exige una transacción abierta (`MANDATORY`): sin ella lanza
+  `IllegalTransactionStateException` en vez de bloquear y soltar al instante.
+- Solo serializa; no añade reglas. La regla «no quitar el último
+  administrador» la aplica cada caso de uso (EP-05-T004 para roles).
+
+### Quién tiene un rol
+
+`usuariosConRol(Rol)` devuelve los UUID. Eva lo usa para filtrar el listado
+por rol y para contar administradores activos con su estado efectivo, sin
+consultar `usuario_rol` desde su repositorio.
+
+Siguientes tareas: EP-05-T003/T004 asignan y revocan.
 
 ## Tablas (todas de Sergio)
 
@@ -85,13 +138,14 @@ una prueba compara la base con la clase.
 ```text
 autorizacion/
   domain/model/            Rol, Permiso, CatalogoAutorizacion, PermisosEfectivos
-  domain/exception/        RolInvalidoException
+  domain/exception/        RolInvalidoException, AccesoDenegadoException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
   application/port/out/    AsociacionesRolPort
   application/service/     AutorizacionService (Java puro)
   adapter/in/transaction/  AutorizacionTransaccional (frontera @Transactional)
   adapter/out/persistence/ AutorizacionJpaAdapter, entity/, repository/, mapper/
 configuration/             AutorizacionConfig (wiring: un único bean AutorizacionPort)
+shared/domain/             ActorUsuario (tipo común: persona de un acceso verificado)
 ```
 
 ## Pruebas
@@ -99,7 +153,10 @@ configuration/             AutorizacionConfig (wiring: un único bean Autorizaci
 Unitarias (sin base): `CatalogoYRolesTest`, `PermisosEfectivosTest`,
 `AutorizacionServiceTest`.
 
-De persistencia (`AutorizacionPersistenciaTest`): PostgreSQL real, nunca H2.
+De persistencia (`AutorizacionPersistenciaTest`, `GuardAdministradorTest`):
+PostgreSQL real, nunca H2. `GuardAdministradorTest` abre dos transacciones
+reales y comprueba que la segunda espera hasta que la primera confirma; si se
+quita el `FOR UPDATE`, falla.
 Usan un esquema aleatorio nuevo por clase, crean las tablas de V1 desde
 `src/test/resources/db/prueba-autorizacion/` y aplican la semilla real.
 
