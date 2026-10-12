@@ -45,5 +45,20 @@ Identificar esquema e historial Supabase antes de aplicar cambios. No heredar
 contraseñas, entidades, migraciones ejecutables o contenedores del backend antiguo.
 Las reservas de migración H3 están en el diseño SDD, no aplicadas a la base.
 
+### Firma de accesos (TEC-IDENTIDAD)
+
+| Variable | Contenido |
+|---|---|
+| `AUTH_ISSUER` | URL absoluta del emisor, p. ej. `https://<host G7>/api/v1/auth`, sin `/` final |
+| `AUTH_CLAVE_PRIVADA_ARCHIVO` | Ruta a la clave RSA PKCS8 (PEM `BEGIN PRIVATE KEY`), 3072 bits o más |
+| `AUTH_CLAVE_PRIVADA` | Alternativa: el texto PEM de esa clave. Usar solo una de las dos |
+
+Para desarrollo local, generar una clave propia fuera del repo:
+`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out ../firma-local.pem`.
+La del entorno de nube la custodia Christian y no se cambia entre despliegues:
+el `kid` publicado depende de ella. Sin issuer o sin clave válida la aplicación
+arranca, pero toda emisión de accesos se deniega (se registra el motivo, nunca
+la clave). `.gitignore` excluye `*.pem` y `*.key`.
+
 Estado: scaffold y dependencias; casos de uso, configuración operativa y
 recorridos funcionales siguen pendientes en los tableros de cada dueño.
