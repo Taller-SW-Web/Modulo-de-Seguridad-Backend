@@ -60,5 +60,8 @@ el `kid` publicado depende de ella. Sin issuer o sin clave válida la aplicació
 arranca, pero toda emisión de accesos se deniega (se registra el motivo, nunca
 la clave). `.gitignore` excluye `*.pem` y `*.key`.
 
+Guía completa de la capacidad, para quien la consume o la revisa:
+[docs/capacidades/identidad.md](docs/capacidades/identidad.md).
+
 Estado: scaffold y dependencias; casos de uso, configuración operativa y
 recorridos funcionales siguen pendientes en los tableros de cada dueño.

@@ -3,9 +3,12 @@ package com.marketplace.auth_service.identidad.adapter.out.crypto;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.service.FirmarAccesoService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.util.Base64URL;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtException;
@@ -125,5 +128,17 @@ class NimbusFirmadorJwsTest {
         String token = firmar(List.of("ADMIN_SISTEMA", "VENDEDOR"), diez).token();
 
         assertThat(token.getBytes(StandardCharsets.US_ASCII).length).isLessThan(4096);
+    }
+
+    @Test
+    void laClavePublicaPublicadaVerificaLosTokensFirmados() throws Exception {
+        List<ClavePublica> publicada = new NimbusFirmadorJws(clave).clavesPublicas();
+        RSAKey jwk = new RSAKey.Builder(
+                new Base64URL(publicada.getFirst().n()), new Base64URL(publicada.getFirst().e())).build();
+        NimbusJwtDecoder conLaPublicada = NimbusJwtDecoder.withPublicKey(jwk.toRSAPublicKey()).build();
+
+        assertThat(publicada).singleElement().extracting(ClavePublica::kid).isEqualTo(clave.kid());
+        assertThat(conLaPublicada.decode(firmar(List.of(), List.of()).token()).getSubject())
+                .isEqualTo(USUARIO.toString());
     }
 }
