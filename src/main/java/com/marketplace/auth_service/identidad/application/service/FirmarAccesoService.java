@@ -1,12 +1,16 @@
 package com.marketplace.auth_service.identidad.application.service;
 
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
+import com.marketplace.auth_service.identidad.application.dto.AccesoValidado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ClaimsVerificados;
 import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.dto.ContenidoAcceso;
 import com.marketplace.auth_service.identidad.application.dto.Descubrimiento;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.identidad.application.port.out.FirmadorJws;
+import com.marketplace.auth_service.identidad.domain.exception.TokenInvalidoException;
+import com.marketplace.auth_service.identidad.domain.exception.TokenNoAplicableException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -24,11 +28,16 @@ import java.util.UUID;
  * <p>También publica la parte pública (RF-17.1/17.2): el {@code jwks_uri} se
  * deriva del issuer configurado, no de la petición, así que detrás de un proxy
  * sigue apuntando a la URL externa del entorno.
+ *
+ * <p>Y valida los accesos que recibe el backend (TEC-IDENTIDAD-T002): la
+ * criptografía la hace el adaptador; aquí se aplican issuer, vigencia con el
+ * mismo {@link Clock} (sin tolerancia) y perfil de persona.
  */
 public class FirmarAccesoService implements FirmaPort {
 
     public static final Duration DURACION_ACCESO = Duration.ofSeconds(900);
     public static final String RUTA_JWKS = "/.well-known/jwks.json";
+    private static final String TIPO_SERVICIO = "servicio";
 
     private final FirmadorJws firmador;
     private final String issuer;
@@ -60,5 +69,41 @@ public class FirmarAccesoService implements FirmaPort {
     @Override
     public Descubrimiento descubrimiento() {
         return new Descubrimiento(issuer, issuer + RUTA_JWKS, List.of(ClavePublica.ALGORITMO));
+    }
+
+    @Override
+    public AccesoValidado validar(String token) {
+        if (token == null || token.isBlank()) {
+            throw new TokenInvalidoException("token ausente");
+        }
+        ClaimsVerificados claims = firmador.verificar(token);
+        if (!issuer.equals(claims.iss())) {
+            throw new TokenInvalidoException("issuer distinto del de este entorno");
+        }
+        if (claims.exp() == null || !claims.exp().isAfter(clock.instant())) {
+            throw new TokenInvalidoException("vencido o sin exp");
+        }
+        if (TIPO_SERVICIO.equals(claims.tipo())) {
+            throw new TokenNoAplicableException();
+        }
+        if (!ContenidoAcceso.TIPO.equals(claims.tipo())) {
+            throw new TokenInvalidoException("perfil no es un acceso de persona");
+        }
+        if (claims.roles() == null || claims.permisos() == null) {
+            throw new TokenInvalidoException("roles o permisos ausentes o no son arrays");
+        }
+        return new AccesoValidado(uuid(claims.sub(), "sub"), uuid(claims.jti(), "jti"),
+                claims.roles(), claims.permisos(), claims.exp());
+    }
+
+    private static UUID uuid(String valor, String claim) {
+        if (valor == null) {
+            throw new TokenInvalidoException(claim + " ausente");
+        }
+        try {
+            return UUID.fromString(valor);
+        } catch (IllegalArgumentException e) {
+            throw new TokenInvalidoException(claim + " no es un UUID");
+        }
     }
 }
