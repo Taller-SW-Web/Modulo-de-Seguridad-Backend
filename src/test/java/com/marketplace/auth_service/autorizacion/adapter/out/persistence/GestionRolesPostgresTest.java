@@ -14,6 +14,7 @@ import com.marketplace.auth_service.autorizacion.application.port.out.CuentasRol
 import com.marketplace.auth_service.autorizacion.application.port.out.EventosRolesPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.SesionesRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
+import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.model.Rol;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
@@ -77,11 +78,24 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
 
         @Bean
         CuentasRolesPort cuentasRolesPort(JdbcTemplate jdbc) {
-            return usuarioId -> {
-                exigirTransaccion();
-                return jdbc.query("SELECT id, estado FROM prueba_cuenta WHERE id = ? FOR UPDATE",
-                        (fila, n) -> new CuentaRoles(fila.getObject("id", UUID.class), "Nombre", "c@ejemplo.test",
-                                fila.getString("estado")), usuarioId).stream().findFirst();
+            return new CuentasRolesPort() {
+                @Override
+                public Optional<CuentaRoles> bloquear(UUID usuarioId) {
+                    exigirTransaccion();
+                    return jdbc.query("SELECT id, estado FROM prueba_cuenta WHERE id = ? FOR UPDATE",
+                            (fila, n) -> new CuentaRoles(fila.getObject("id", UUID.class), "Nombre",
+                                    "c@ejemplo.test", fila.getString("estado")), usuarioId).stream().findFirst();
+                }
+
+                @Override
+                public long contarActivos(Set<UUID> usuarioIds) {
+                    if (usuarioIds.isEmpty()) {
+                        return 0;
+                    }
+                    Long n = jdbc.queryForObject("SELECT count(*) FROM prueba_cuenta WHERE estado = 'ACTIVO'"
+                            + " AND id = ANY (?)", Long.class, (Object) usuarioIds.toArray(new UUID[0]));
+                    return n == null ? 0 : n;
+                }
             };
         }
 
@@ -346,6 +360,86 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
             senal.await(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    // ── Revocación (EP-05-T004) ───────────────────────────────
+
+    @Test
+    void revocaConservandoLosDemasRolesYConfirmaLosEfectos() {
+        UUID admin = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID objetivo = cuenta("ACTIVO", Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
+
+        gestionRoles.revocar(asignar(admin, objetivo, "GESTOR_DESPACHO"));
+
+        assertThat(rolesEnLaBase(objetivo)).containsExactly(Rol.VENDEDOR);
+        assertThat(filas("prueba_revocacion", objetivo)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT accion FROM prueba_auditoria WHERE objetivo = ?", String.class, objetivo))
+                .isEqualTo("ROL_REVOCADO");
+        assertThat(jdbc.queryForObject("SELECT roles FROM prueba_outbox WHERE usuario_id = ?", String.class, objetivo))
+                .isEqualTo("VENDEDOR");
+    }
+
+    @Test
+    void siFallaLaAuditoriaElRolRevocadoSigueAsignado() {
+        UUID admin = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID objetivo = cuenta("ACTIVO", Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
+        FALLA.set("auditoria");
+
+        assertThatThrownBy(() -> gestionRoles.revocar(asignar(admin, objetivo, "GESTOR_DESPACHO")))
+                .isInstanceOf(GestionRolesNoDisponibleException.class);
+
+        assertThat(rolesEnLaBase(objetivo)).containsExactlyInAnyOrder(Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
+        assertThat(filas("prueba_revocacion", objetivo)).isZero();
+    }
+
+    @Test
+    void elUnicoAdministradorActivoQuedaProtegidoSinCambiosNiEfectos() {
+        // Esquema propio de la clase: se retiran los administradores de otras pruebas para que este sea el único.
+        jdbc.update("UPDATE prueba_cuenta SET estado = 'INACTIVO'");
+        UUID unico = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID bloqueado = cuenta("BLOQUEADO", Rol.ADMIN_SISTEMA);
+
+        assertThatThrownBy(() -> gestionRoles.revocar(asignar(unico, unico, "ADMIN_SISTEMA")))
+                .isInstanceOf(AdministradorProtegidoException.class)
+                .extracting("motivo").isEqualTo(AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR);
+
+        assertThat(rolesEnLaBase(unico)).containsExactly(Rol.ADMIN_SISTEMA);
+        assertThat(rolesEnLaBase(bloqueado)).containsExactly(Rol.ADMIN_SISTEMA);
+        assertThat(filas("prueba_revocacion", unico)).isZero();
+        assertThat(filas("prueba_auditoria", unico)).isZero();
+    }
+
+    @Test
+    void dosRevocacionesCruzadasSimultaneasNuncaDejanCeroAdministradoresActivos() throws Exception {
+        jdbc.update("UPDATE prueba_cuenta SET estado = 'INACTIVO'");
+        UUID a = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID b = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        CountDownLatch salida = new CountDownLatch(1);
+
+        // A le quita el rol a B y B a A, a la vez. Sin el lock del catálogo, cada una
+        // contaría al otro como activo y ambas confirmarían: cero administradores.
+        CompletableFuture<Object> aQuitaB = CompletableFuture.supplyAsync(() -> intentar(salida,
+                () -> gestionRoles.revocar(asignar(a, b, "ADMIN_SISTEMA"))));
+        CompletableFuture<Object> bQuitaA = CompletableFuture.supplyAsync(() -> intentar(salida,
+                () -> gestionRoles.revocar(asignar(b, a, "ADMIN_SISTEMA"))));
+        salida.countDown();
+        List<Object> resultados = List.of(aQuitaB.get(20, TimeUnit.SECONDS), bQuitaA.get(20, TimeUnit.SECONDS));
+
+        assertThat(resultados).filteredOn(r -> r instanceof RolesCambiados).hasSize(1);
+        assertThat(resultados).filteredOn(r -> r instanceof RuntimeException).singleElement()
+                .isInstanceOfAny(AccesoDenegadoException.class, AdministradorProtegidoException.class);
+        long administradoresActivos = jdbc.queryForObject("SELECT count(*) FROM usuario_rol ur JOIN prueba_cuenta c"
+                + " ON c.id = ur.usuario_id WHERE ur.rol_codigo = 'ADMIN_SISTEMA' AND c.estado = 'ACTIVO'", Long.class);
+        assertThat(administradoresActivos).isEqualTo(1);
+    }
+
+    private static Object intentar(CountDownLatch salida, java.util.function.Supplier<RolesCambiados> operacion) {
+        esperar(salida);
+        try {
+            return operacion.get();
+        } catch (RuntimeException e) {
+            return e;
         }
     }
 }

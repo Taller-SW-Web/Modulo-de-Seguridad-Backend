@@ -21,6 +21,11 @@ final class RolesWebMapper {
         return new CambioRolCommand(actor, usuarioId, cuerpo == null ? null : cuerpo.rol(), contexto);
     }
 
+    static CambioRolCommand aComando(ActorUsuario actor, UUID usuarioId, String rolDeLaRuta,
+                                     ContextoPeticion contexto) {
+        return new CambioRolCommand(actor, usuarioId, rolDeLaRuta, contexto);
+    }
+
     static UsuarioRolesResponse aRespuesta(RolesCambiados resultado) {
         var cuenta = resultado.cuenta();
         return new UsuarioRolesResponse(cuenta.id(), cuenta.nombreCompleto(), cuenta.correo(), cuenta.estado(),

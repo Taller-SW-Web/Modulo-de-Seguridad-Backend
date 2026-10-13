@@ -61,4 +61,15 @@ public class AutorizacionJpaAdapter implements AsociacionesRolPort {
         usuarioRol.saveAndFlush(new UsuarioRolJpaEntity(usuarioId, rol));
         return true;
     }
+
+    @Override
+    public boolean quitar(UUID usuarioId, Rol rol) {
+        UsuarioRolJpaEntity.Id id = new UsuarioRolJpaEntity.Id(usuarioId, rol);
+        if (!usuarioRol.existsById(id)) {
+            return false;
+        }
+        usuarioRol.deleteById(id);
+        usuarioRol.flush();
+        return true;
+    }
 }

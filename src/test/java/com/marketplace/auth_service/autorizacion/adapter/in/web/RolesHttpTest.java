@@ -7,6 +7,7 @@ import com.marketplace.auth_service.autorizacion.application.dto.CuentaRoles;
 import com.marketplace.auth_service.autorizacion.application.dto.RolesCambiados;
 import com.marketplace.auth_service.autorizacion.application.port.in.GestionRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
+import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
 import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
@@ -57,6 +58,7 @@ class RolesHttpTest {
     /** Lo que hará el caso de uso en la próxima petición; recibe el comando que armó el controlador. */
     static final AtomicReference<Function<CambioRolCommand, RolesCambiados>> COMPORTAMIENTO = new AtomicReference<>();
     static final AtomicReference<CambioRolCommand> RECIBIDO = new AtomicReference<>();
+    static final AtomicReference<String> OPERACION = new AtomicReference<>();
 
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
@@ -67,9 +69,20 @@ class RolesHttpTest {
 
         @Bean
         GestionRolesPort gestionRolesPort() {
-            return comando -> {
-                RECIBIDO.set(comando);
-                return COMPORTAMIENTO.get().apply(comando);
+            return new GestionRolesPort() {
+                @Override
+                public RolesCambiados asignar(CambioRolCommand comando) {
+                    RECIBIDO.set(comando);
+                    OPERACION.set("asignar");
+                    return COMPORTAMIENTO.get().apply(comando);
+                }
+
+                @Override
+                public RolesCambiados revocar(CambioRolCommand comando) {
+                    RECIBIDO.set(comando);
+                    OPERACION.set("revocar");
+                    return COMPORTAMIENTO.get().apply(comando);
+                }
             };
         }
     }
@@ -256,5 +269,80 @@ class RolesHttpTest {
         JsonNode p = problema(respuesta);
         assertThat(p.get("code").asText()).isEqualTo("NO_DISPONIBLE");
         assertThat(respuesta.body()).as("no revela qué falta en el servidor").doesNotContain("CuentasRolesPort");
+    }
+
+    // ── DELETE /usuarios/{id}/roles/{rol} (EP-05-T004) ────────
+
+    private HttpResponse<String> borrar(String ruta, String bearer) throws IOException, InterruptedException {
+        HttpRequest.Builder peticion = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta)).DELETE();
+        if (bearer != null) {
+            peticion.header("Authorization", "Bearer " + bearer);
+        }
+        return http.send(peticion.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void revocaYResponde204SinCuerpo() throws Exception {
+        HttpResponse<String> respuesta = borrar("/api/v1/usuarios/" + objetivo + "/roles/GESTOR_DESPACHO", token(admin));
+
+        assertThat(respuesta.statusCode()).isEqualTo(204);
+        assertThat(respuesta.body()).isEmpty();
+        assertThat(OPERACION.get()).isEqualTo("revocar");
+        assertThat(RECIBIDO.get().rol()).isEqualTo("GESTOR_DESPACHO");
+        assertThat(RECIBIDO.get().actor().sub()).isEqualTo(admin);
+        assertThat(RECIBIDO.get().usuarioObjetivo()).isEqualTo(objetivo);
+    }
+
+    @Test
+    void elUltimoAdministradorResponde422ConElMensajeDeLaSpec() throws Exception {
+        COMPORTAMIENTO.set(c -> {
+            throw new AdministradorProtegidoException(AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR);
+        });
+
+        HttpResponse<String> respuesta = borrar("/api/v1/usuarios/" + admin + "/roles/ADMIN_SISTEMA", token(admin));
+
+        assertThat(respuesta.statusCode()).isEqualTo(422);
+        JsonNode p = problema(respuesta);
+        assertThat(p.get("type").asText()).isEqualTo("https://g7.unmsm.pe/errores/administrador-protegido");
+        assertThat(p.get("title").asText()).isEqualTo("Operación no permitida sobre este administrador");
+        assertThat(p.get("code").asText()).isEqualTo("ADMINISTRADOR_PROTEGIDO");
+        assertThat(p.get("detail").asText()).isEqualTo("No se puede eliminar el único administrador del sistema");
+    }
+
+    @Test
+    void quitarseElPropioRolDeAdministradorResponde422() throws Exception {
+        COMPORTAMIENTO.set(c -> {
+            throw new AdministradorProtegidoException(AdministradorProtegidoException.Motivo.PROPIO);
+        });
+
+        HttpResponse<String> respuesta = borrar("/api/v1/usuarios/" + admin + "/roles/ADMIN_SISTEMA", token(admin));
+
+        assertThat(respuesta.statusCode()).isEqualTo(422);
+        assertThat(problema(respuesta).get("code").asText()).isEqualTo("ADMINISTRADOR_PROTEGIDO");
+    }
+
+    @Test
+    void unRolInvalidoEnLaRutaResponde400() throws Exception {
+        COMPORTAMIENTO.set(c -> {
+            Rol.desdeCodigo(c.rol());
+            throw new AssertionError("no debía llegar aquí");
+        });
+
+        HttpResponse<String> respuesta = borrar("/api/v1/usuarios/" + objetivo + "/roles/SUPER_ADMIN", token(admin));
+
+        assertThat(respuesta.statusCode()).isEqualTo(400);
+        assertThat(problema(respuesta).get("errores").get(0).get("campo").asText()).isEqualTo("rol");
+    }
+
+    @Test
+    void revocarSinTokenResponde401YSinPermiso403() throws Exception {
+        assertThat(borrar("/api/v1/usuarios/" + objetivo + "/roles/VENDEDOR", null).statusCode()).isEqualTo(401);
+
+        COMPORTAMIENTO.set(c -> {
+            throw new AccesoDenegadoException(c.actor().sub(), Permiso.ROL_ASIGNAR);
+        });
+        HttpResponse<String> sinPermiso = borrar("/api/v1/usuarios/" + objetivo + "/roles/VENDEDOR", token(admin));
+        assertThat(sinPermiso.statusCode()).isEqualTo(403);
+        assertThat(problema(sinPermiso).get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
     }
 }

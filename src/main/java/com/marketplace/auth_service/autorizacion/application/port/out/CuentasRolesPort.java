@@ -3,6 +3,7 @@ package com.marketplace.auth_service.autorizacion.application.port.out;
 import com.marketplace.auth_service.autorizacion.application.dto.CuentaRoles;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -19,4 +20,12 @@ public interface CuentasRolesPort {
      * de locks) y devuelve su copia, o vacío si no existe. Requiere transacción.
      */
     Optional<CuentaRoles> bloquear(UUID usuarioId);
+
+    /**
+     * Cuántas de esas cuentas están en estado efectivo {@code ACTIVO}
+     * ({@code CuentasPort.contarActivos} de Eva). Los UUID los aporta Sergio
+     * ({@code usuario_rol}); el estado, Eva. Se llama con el lock del catálogo
+     * de administrador tomado, que serializa también bloqueos y bajas.
+     */
+    long contarActivos(Set<UUID> usuarioIds);
 }

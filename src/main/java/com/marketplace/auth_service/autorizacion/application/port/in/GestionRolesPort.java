@@ -26,4 +26,18 @@ public interface GestionRolesPort {
      *         falta un proveedor o no se pudo guardar la auditoría crítica o el outbox
      */
     RolesCambiados asignar(CambioRolCommand comando);
+
+    /**
+     * Revoca un rol (DELETE {@code /usuarios/{id}/roles/{rol}}), conservando los demás.
+     *
+     * @throws com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException
+     *         quitarse a sí mismo {@code ADMIN_SISTEMA} o quitárselo al último administrador activo
+     * @throws com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException
+     *         sin {@code rol.asignar} actual
+     * @throws com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException
+     *         código fuera del catálogo
+     * @throws com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException
+     *         la cuenta objetivo no existe
+     */
+    RolesCambiados revocar(CambioRolCommand comando);
 }
