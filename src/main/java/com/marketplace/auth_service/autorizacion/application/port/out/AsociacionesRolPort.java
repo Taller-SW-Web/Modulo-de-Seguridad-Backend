@@ -35,4 +35,11 @@ public interface AsociacionesRolPort {
      * @throws IllegalStateException si la fila no existe (catálogo sin sembrar)
      */
     void bloquearFilaAdministrador();
+
+    /**
+     * Añade la fila {@code (usuario, rol)} en la transacción en curso.
+     *
+     * @return {@code true} si se añadió; {@code false} si la persona ya tenía el rol
+     */
+    boolean asignar(UUID usuarioId, Rol rol);
 }
