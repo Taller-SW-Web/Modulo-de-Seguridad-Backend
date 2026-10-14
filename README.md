@@ -57,7 +57,8 @@ Las reservas de migración H3 están en el diseño SDD, no aplicadas a la base.
 Ver `.env.example`. El archivo `.env` está ignorado por Git.
 
 ```bash
-# Levantar backend (runtime, sin migrar)
+# Levantar backend (runtime, sin migrar). Antes: copiar .env.example a .env
+# y completar con los valores privados (el .env nunca entra a Git).
 .\gradlew.bat bootRun
 # Ejecutar migraciones revisadas (paso controlado, identidad migradora)
 $env:SPRING_PROFILES_ACTIVE='migration'; .\gradlew.bat bootRun
