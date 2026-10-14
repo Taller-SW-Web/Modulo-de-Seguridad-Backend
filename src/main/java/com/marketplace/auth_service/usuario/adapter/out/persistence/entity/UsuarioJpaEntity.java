@@ -1,13 +1,10 @@
 package com.marketplace.auth_service.usuario.adapter.out.persistence.entity;
 
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -26,15 +23,6 @@ public class UsuarioJpaEntity {
 
     @Column(name = "correo", nullable = false, length = 254, unique = true)
     private String correo;
-
-    @Column(name = "correo_normalizado", nullable = false, length = 254, unique = true)
-    private String correoNormalizado;
-
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
-
-    @Column(name = "password_algoritmo", nullable = false, length = 50)
-    private String passwordAlgoritmo;
 
     @Column(name = "celular", length = 30)
     private String celular;
@@ -56,10 +44,8 @@ public class UsuarioJpaEntity {
     @Column(name = "fecha_nacimiento")
     private java.time.LocalDate fechaNacimiento;
 
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "tipo_documento")
-    private CodigoRol tipoDocumento;
+    @Column(name = "tipo_documento", length = 20)
+    private String tipoDocumento;
 
     @Column(name = "documento_cifrado")
     private String documentoCifrado;
@@ -101,13 +87,6 @@ public class UsuarioJpaEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "usuario_rol", joinColumns = @JoinColumn(name = "usuario_id"))
-    @Column(name = "rol", nullable = false)
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    private Set<CodigoRol> roles = new HashSet<>();
-
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public String getNombres() { return nombres; }
@@ -116,12 +95,6 @@ public class UsuarioJpaEntity {
     public void setApellidos(String apellidos) { this.apellidos = apellidos; }
     public String getCorreo() { return correo; }
     public void setCorreo(String correo) { this.correo = correo; }
-    public String getCorreoNormalizado() { return correoNormalizado; }
-    public void setCorreoNormalizado(String correoNormalizado) { this.correoNormalizado = correoNormalizado; }
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
-    public String getPasswordAlgoritmo() { return passwordAlgoritmo; }
-    public void setPasswordAlgoritmo(String passwordAlgoritmo) { this.passwordAlgoritmo = passwordAlgoritmo; }
     public String getCelular() { return celular; }
     public void setCelular(String celular) { this.celular = celular; }
     public EstadoCuenta getEstado() { return estado; }
@@ -134,8 +107,8 @@ public class UsuarioJpaEntity {
     public void setMfaHabilitado(boolean mfaHabilitado) { this.mfaHabilitado = mfaHabilitado; }
     public java.time.LocalDate getFechaNacimiento() { return fechaNacimiento; }
     public void setFechaNacimiento(java.time.LocalDate fechaNacimiento) { this.fechaNacimiento = fechaNacimiento; }
-    public CodigoRol getTipoDocumento() { return tipoDocumento; }
-    public void setTipoDocumento(CodigoRol tipoDocumento) { this.tipoDocumento = tipoDocumento; }
+    public String getTipoDocumento() { return tipoDocumento; }
+    public void setTipoDocumento(String tipoDocumento) { this.tipoDocumento = tipoDocumento; }
     public String getDocumentoCifrado() { return documentoCifrado; }
     public void setDocumentoCifrado(String documentoCifrado) { this.documentoCifrado = documentoCifrado; }
     public String getDocumentoHmac() { return documentoHmac; }
@@ -162,6 +135,4 @@ public class UsuarioJpaEntity {
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
     public Long getVersion() { return version; }
     public void setVersion(Long version) { this.version = version; }
-    public Set<CodigoRol> getRoles() { return roles; }
-    public void setRoles(Set<CodigoRol> roles) { this.roles = roles; }
 }

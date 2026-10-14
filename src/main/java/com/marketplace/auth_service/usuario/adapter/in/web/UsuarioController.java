@@ -9,8 +9,6 @@ import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
 import com.marketplace.auth_service.usuario.application.dto.Paginacion;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
-import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,11 +33,7 @@ public class UsuarioController {
             @RequestParam(defaultValue = "1") int pagina,
             @RequestParam(defaultValue = "20") int tamano) {
 
-        FiltroCuenta filtro = new FiltroCuenta(
-                estado != null ? EstadoCuenta.valueOf(estado) : null,
-                rol != null ? CodigoRol.valueOf(rol) : null,
-                correo
-        );
+        FiltroCuenta filtro = new FiltroCuenta(estado, rol, correo);
         Paginacion paginacion = new Paginacion(pagina, tamano);
 
         PaginaResultado<CuentaSnapshot> resultado = cuentasPort.consultar(filtro, paginacion);

@@ -1,8 +1,6 @@
 package com.marketplace.auth_service.usuario.adapter.out.persistence.repository;
 
 import com.marketplace.auth_service.usuario.adapter.out.persistence.entity.UsuarioEstadoEfectivoJpaEntity;
-import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,16 +17,17 @@ import java.util.UUID;
 public interface UsuarioEstadoEfectivoRepository extends JpaRepository<UsuarioEstadoEfectivoJpaEntity, UUID> {
     Optional<UsuarioEstadoEfectivoJpaEntity> findById(UUID id);
 
-    @Query("SELECT u FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) AND (:rolIds IS NULL OR u.id IN (SELECT ur.usuarioId FROM UsuarioRolJpaEntity ur WHERE ur.rol IN :rolIds)) ORDER BY u.createdAt DESC")
+    @Query("SELECT u FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) ORDER BY u.createdAt DESC")
     Page<UsuarioEstadoEfectivoJpaEntity> findByFiltro(
             @Param("estado") EstadoCuenta estado,
             @Param("correoFragmento") String correoFragmento,
-            @Param("rolIds") Set<UUID> rolIds,
             Pageable pageable);
 
-    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) AND (:rolIds IS NULL OR u.id IN (SELECT ur.usuarioId FROM UsuarioRolJpaEntity ur WHERE ur.rol IN :rolIds))")
+    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%')))")
     long countByFiltro(
             @Param("estado") EstadoCuenta estado,
-            @Param("correoFragmento") String correoFragmento,
-            @Param("rolIds") Set<UUID> rolIds);
+            @Param("correoFragmento") String correoFragmento);
+
+    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE u.id IN :ids AND u.estadoEfectivo = 'ACTIVO'")
+    long countActiveByIds(@Param("ids") Set<UUID> ids);
 }

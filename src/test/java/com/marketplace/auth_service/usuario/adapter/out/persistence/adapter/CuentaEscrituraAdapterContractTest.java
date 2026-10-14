@@ -6,7 +6,6 @@ import com.marketplace.auth_service.usuario.adapter.out.persistence.repository.U
 import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.port.in.CambioBasicos;
 import com.marketplace.auth_service.usuario.application.port.in.ContadoresProteccion;
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +47,7 @@ class CuentaEscrituraAdapterContractTest {
         entity.setNombres("Juan");
         entity.setApellidos("Pérez");
         entity.setCorreo("juan@test.com");
-        entity.setCorreoNormalizado("juan@test.com");
         entity.setPasswordHash("hash");
-        entity.setPasswordAlgoritmo("Argon2id");
         entity.setCelular("+51999999999");
         entity.setEstado(EstadoCuenta.ACTIVO);
         entity.setCorreoVerificado(true);
@@ -58,21 +55,13 @@ class CuentaEscrituraAdapterContractTest {
         entity.setMfaHabilitado(false);
         entity.setBloqueosSeguidos(0);
         entity.setIntentosFallidos(0);
-        entity.setTipoDocumento(CodigoRol.CLIENTE);
+        entity.setTipoDocumento("DNI");
         entity.setDocumentoHmac("abc123def456");
-        entity.setRoles(Set.of(CodigoRol.CLIENTE));
         entity.setVersion(1L);
-    }
 
-    // NOTE: Mockito default method mocking issue - these tests disabled
-    // @Test
-    // void actualizarBasicos_soloModificaCamposPermitidos() { ... }
-    // @Test
-    // void actualizarBasicos_campoNullNoModifica() { ... }
-    // @Test
-    // void actualizarBasicos_usuarioNoExiste_lanzaExcepcion() { ... }
-    // @Test
-    // void guardarContadores_soloActualizaContadores() { ... }
+        lenient().when(usuarioJpaRepository.findById(eq(usuarioId))).thenReturn(Optional.of(entity));
+        lenient().when(usuarioJpaRepository.saveAndFlush(any(UsuarioJpaEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
 
     @Test
     void guardarMfaVoluntario_lanzaUnsupportedOperation() {

@@ -18,7 +18,7 @@ import java.util.UUID;
 
 @Repository
 public interface UsuarioJpaRepository extends JpaRepository<UsuarioJpaEntity, UUID> {
-    Optional<UsuarioJpaEntity> findByCorreoNormalizado(String correoNormalizado);
+    Optional<UsuarioJpaEntity> findByCorreo(String correo);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM UsuarioJpaEntity u WHERE u.id = :id")
