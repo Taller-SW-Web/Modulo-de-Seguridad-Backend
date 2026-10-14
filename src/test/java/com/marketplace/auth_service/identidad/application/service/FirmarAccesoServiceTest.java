@@ -1,9 +1,16 @@
 package com.marketplace.auth_service.identidad.application.service;
 
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
+import com.marketplace.auth_service.identidad.application.dto.AccesoValidado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ClaimsVerificados;
+import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.dto.ContenidoAcceso;
+import com.marketplace.auth_service.identidad.application.dto.Descubrimiento;
+import com.marketplace.auth_service.identidad.application.port.out.FirmadorJws;
 import com.marketplace.auth_service.identidad.domain.exception.FirmaNoDisponibleException;
+import com.marketplace.auth_service.identidad.domain.exception.TokenInvalidoException;
+import com.marketplace.auth_service.identidad.domain.exception.TokenNoAplicableException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -22,10 +29,56 @@ class FirmarAccesoServiceTest {
     private static final String ISSUER = "https://g7.example.test/api/v1/auth";
     private static final UUID USUARIO = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
+    private static final ClavePublica CLAVE = new ClavePublica("kid-1", "bW9kdWxv", "AQAB");
+
+    private static final Instant AHORA = Instant.parse("2026-10-12T20:00:00.750Z");
+
     private final List<ContenidoAcceso> firmados = new ArrayList<>();
-    private final Clock reloj = Clock.fixed(Instant.parse("2026-10-12T20:00:00.750Z"), ZoneOffset.UTC);
-    private final FirmarAccesoService servicio =
-            new FirmarAccesoService(contenido -> { firmados.add(contenido); return "jws"; }, ISSUER, reloj);
+    /** Lo que devolverá el doble al verificar; cada prueba de validación lo ajusta. */
+    private ClaimsVerificados verificados;
+    private final Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
+    private final FirmarAccesoService servicio = new FirmarAccesoService(new FirmadorFalso(), ISSUER, reloj);
+
+    /** Doble del puerto de salida: registra lo que se pidió firmar. */
+    private class FirmadorFalso implements FirmadorJws {
+        @Override
+        public String firmar(ContenidoAcceso contenido) {
+            firmados.add(contenido);
+            return "jws";
+        }
+
+        @Override
+        public List<ClavePublica> clavesPublicas() {
+            return List.of(CLAVE);
+        }
+
+        @Override
+        public ClaimsVerificados verificar(String token) {
+            if ("roto".equals(token)) {
+                throw new TokenInvalidoException("firma inválida");
+            }
+            return verificados;
+        }
+    }
+
+    /** Claims de un acceso correcto que vence dentro de un minuto. */
+    private static ClaimsVerificados acceso(String tipo, Instant exp) {
+        return claims(ISSUER, tipo, USUARIO.toString(), UUID.randomUUID().toString(),
+                List.of("CLIENTE"), List.of(), exp);
+    }
+
+    /** Claims con email válido, sin nbf y emitidos exactamente 900 s antes de {@code exp}. */
+    private static ClaimsVerificados claims(String iss, String tipo, String sub, String jti,
+                                            List<String> roles, List<String> permisos, Instant exp) {
+        return new ClaimsVerificados(iss, tipo, sub, jti, "p@ejemplo.com", roles, permisos,
+                exp.minus(FirmarAccesoService.DURACION_ACCESO), null, exp);
+    }
+
+    /** Acceso de persona con los tiempos y el email dados. */
+    private static ClaimsVerificados persona(String email, Instant iat, Instant nbf, Instant exp) {
+        return new ClaimsVerificados(ISSUER, "acceso", USUARIO.toString(), UUID.randomUUID().toString(),
+                email, List.of("CLIENTE"), List.of(), iat, nbf, exp);
+    }
 
     @Test
     void firmaUnAccesoDe900SegundosConElRelojInyectado() {
@@ -85,12 +138,35 @@ class FirmarAccesoServiceTest {
     }
 
     @Test
-    void laFirmaDenegadaNoEmiteNada() {
+    void laFirmaDenegadaNoEmiteNiPublicaNada() {
         FirmaDenegada denegada = new FirmaDenegada("no hay clave privada configurada");
 
         assertThatThrownBy(() -> denegada.firmar(new ClaimsAcceso(USUARIO, "a@ejemplo.com", List.of(), List.of())))
                 .isInstanceOf(FirmaNoDisponibleException.class)
                 .hasMessage("no hay clave privada configurada");
+        assertThatThrownBy(denegada::jwks).isInstanceOf(FirmaNoDisponibleException.class);
+        assertThatThrownBy(denegada::descubrimiento).isInstanceOf(FirmaNoDisponibleException.class);
+    }
+
+    @Test
+    void elJwksPublicaLasClavesDelFirmador() {
+        assertThat(servicio.jwks()).containsExactly(CLAVE);
+    }
+
+    @Test
+    void elDescubrimientoDerivaElJwksDelIssuerConfigurado() {
+        Descubrimiento descubrimiento = servicio.descubrimiento();
+
+        assertThat(descubrimiento.issuer()).isEqualTo(ISSUER);
+        assertThat(descubrimiento.jwksUri()).isEqualTo(ISSUER + "/.well-known/jwks.json");
+        assertThat(descubrimiento.algoritmosFirma()).containsExactly("RS256");
+    }
+
+    @Test
+    void elIssuerDelDescubrimientoEsElMismoQueElIssDeLosAccesos() {
+        servicio.firmar(new ClaimsAcceso(USUARIO, "a@ejemplo.com", List.of(), List.of()));
+
+        assertThat(servicio.descubrimiento().issuer()).isEqualTo(firmados.getFirst().issuer());
     }
 
     @Test
@@ -99,5 +175,159 @@ class FirmarAccesoServiceTest {
                 Instant.EPOCH, Instant.EPOCH.plusSeconds(900));
 
         assertThat(acceso.toString()).doesNotContain("eyJ");
+    }
+
+    // ── validar (TEC-IDENTIDAD-T002) ──────────────────────────
+
+    @Test
+    void unAccesoVigenteSeValidaConSusClaims() {
+        verificados = acceso("acceso", AHORA.plusSeconds(60));
+
+        AccesoValidado validado = servicio.validar("jws");
+
+        assertThat(validado.sub()).isEqualTo(USUARIO);
+        assertThat(validado.roles()).containsExactly("CLIENTE");
+        assertThat(validado.permisos()).isEmpty();
+        assertThat(validado.expiraEn()).isEqualTo(AHORA.plusSeconds(60));
+    }
+
+    @Test
+    void venceExactamenteEnExpSinTolerancia() {
+        verificados = acceso("acceso", AHORA);
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+
+        verificados = acceso("acceso", AHORA.minusSeconds(1));
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+
+        verificados = acceso("acceso", AHORA.plusMillis(1));
+        assertThat(servicio.validar("jws").sub()).isEqualTo(USUARIO);
+    }
+
+    @Test
+    void unTokenDeServicioVigenteNoEsAplicableAOperacionesDePersona() {
+        verificados = acceso("servicio", AHORA.plusSeconds(60));
+
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenNoAplicableException.class);
+    }
+
+    @Test
+    void unTokenDeServicioVencidoEsSimplementeInvalido() {
+        verificados = acceso("servicio", AHORA.minusSeconds(1));
+
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+    }
+
+    @Test
+    void otrosPerfilesSonInvalidos() {
+        for (String tipo : new String[]{"refresco", "ACCESO", "", null}) {
+            verificados = acceso(tipo, AHORA.plusSeconds(60));
+            assertThatThrownBy(() -> servicio.validar("jws")).as("tipo %s", tipo)
+                    .isInstanceOf(TokenInvalidoException.class);
+        }
+    }
+
+    @Test
+    void elIssuerDebeSerExactamenteElDelEntorno() {
+        for (String iss : new String[]{ISSUER + "/", "https://otro.example.test/api/v1/auth", null}) {
+            verificados = claims(iss, "acceso", USUARIO.toString(), UUID.randomUUID().toString(),
+                    List.of(), List.of(), AHORA.plusSeconds(60));
+            assertThatThrownBy(() -> servicio.validar("jws")).as("iss %s", iss)
+                    .isInstanceOf(TokenInvalidoException.class);
+        }
+    }
+
+    @Test
+    void subYJtiDebenSerUuid() {
+        verificados = claims(ISSUER, "acceso", "modulo-ventas", UUID.randomUUID().toString(),
+                List.of(), List.of(), AHORA.plusSeconds(60));
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+
+        verificados = claims(ISSUER, "acceso", USUARIO.toString(), null,
+                List.of(), List.of(), AHORA.plusSeconds(60));
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+    }
+
+    @Test
+    void rolesYPermisosDebenSerArrays() {
+        verificados = claims(ISSUER, "acceso", USUARIO.toString(), UUID.randomUUID().toString(),
+                null, List.of(), AHORA.plusSeconds(60));
+
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenInvalidoException.class);
+    }
+
+    // ── tiempos, duración y email (revisión de Luis en #8) ────
+
+    @Test
+    void iatEsObligatorioYNoPuedeSerFuturo() {
+        verificados = persona("p@ejemplo.com", null, null, AHORA.plusSeconds(60));
+        assertThatThrownBy(() -> servicio.validar("jws")).as("sin iat").isInstanceOf(TokenInvalidoException.class);
+
+        Instant futuro = AHORA.plusMillis(1);
+        verificados = persona("p@ejemplo.com", futuro, null, futuro.plusSeconds(900));
+        assertThatThrownBy(() -> servicio.validar("jws")).as("iat futuro").isInstanceOf(TokenInvalidoException.class);
+
+        verificados = persona("p@ejemplo.com", AHORA, null, AHORA.plusSeconds(900));
+        assertThat(servicio.validar("jws").sub()).as("iat = ahora").isEqualTo(USUARIO);
+    }
+
+    @Test
+    void nbfSoloSeExigeSiVieneYSinTolerancia() {
+        Instant iat = AHORA.minusSeconds(10);
+        verificados = persona("p@ejemplo.com", iat, AHORA.plusMillis(1), iat.plusSeconds(900));
+        assertThatThrownBy(() -> servicio.validar("jws")).as("nbf futuro").isInstanceOf(TokenInvalidoException.class);
+
+        verificados = persona("p@ejemplo.com", iat, AHORA, iat.plusSeconds(900));
+        assertThat(servicio.validar("jws").sub()).as("nbf = ahora").isEqualTo(USUARIO);
+
+        verificados = persona("p@ejemplo.com", iat, null, iat.plusSeconds(900));
+        assertThat(servicio.validar("jws").sub()).as("sin nbf").isEqualTo(USUARIO);
+    }
+
+    @Test
+    void elAccesoDuraExactamente900Segundos() {
+        Instant iat = AHORA.minusSeconds(10);
+        for (long segundos : new long[]{899, 901, 1800, 3600}) {
+            verificados = persona("p@ejemplo.com", iat, null, iat.plusSeconds(segundos));
+            assertThatThrownBy(() -> servicio.validar("jws")).as("%d s", segundos)
+                    .isInstanceOf(TokenInvalidoException.class);
+        }
+        verificados = persona("p@ejemplo.com", iat, null, iat.plusSeconds(900));
+        assertThat(servicio.validar("jws").sub()).isEqualTo(USUARIO);
+    }
+
+    @Test
+    void elEmailEsObligatorioYConFormatoDeCorreo() {
+        Instant iat = AHORA.minusSeconds(10);
+        for (String email : new String[]{null, "", " ", "sin-arroba", "a @ejemplo.com", "a@"}) {
+            verificados = persona(email, iat, null, iat.plusSeconds(900));
+            assertThatThrownBy(() -> servicio.validar("jws")).as("email '%s'", email)
+                    .isInstanceOf(TokenInvalidoException.class);
+        }
+    }
+
+    @Test
+    void elPerfilDeServicioSigueSeparadoAunqueNoTengaEmailNi900Segundos() {
+        Instant iat = AHORA.minusSeconds(10);
+        verificados = new ClaimsVerificados(ISSUER, "servicio", "modulo-ventas", UUID.randomUUID().toString(),
+                null, null, null, iat, null, iat.plusSeconds(3600));
+        assertThatThrownBy(() -> servicio.validar("jws")).isInstanceOf(TokenNoAplicableException.class);
+
+        verificados = new ClaimsVerificados(ISSUER, "servicio", "modulo-ventas", UUID.randomUUID().toString(),
+                null, null, null, AHORA.plusSeconds(5), null, AHORA.plusSeconds(3605));
+        assertThatThrownBy(() -> servicio.validar("jws")).as("servicio emitido en el futuro")
+                .isInstanceOf(TokenInvalidoException.class);
+    }
+
+    @Test
+    void sinTokenOConFirmaInvalidaEsInvalido() {
+        assertThatThrownBy(() -> servicio.validar(null)).isInstanceOf(TokenInvalidoException.class);
+        assertThatThrownBy(() -> servicio.validar(" ")).isInstanceOf(TokenInvalidoException.class);
+        assertThatThrownBy(() -> servicio.validar("roto")).isInstanceOf(TokenInvalidoException.class);
+    }
+
+    @Test
+    void sinClaveTampocoSeValida() {
+        assertThatThrownBy(() -> new FirmaDenegada("sin clave").validar("jws"))
+                .isInstanceOf(FirmaNoDisponibleException.class);
     }
 }
