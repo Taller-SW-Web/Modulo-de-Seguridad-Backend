@@ -4,8 +4,8 @@ import com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity.
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.UsuarioRolJpaRepository;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import org.junit.jupiter.api.Test;

@@ -26,9 +26,11 @@ public interface FirmaPort {
 
     /**
      * Valida un acceso de persona (TEC-IDENTIDAD-T002): firma RS256 con la clave
-     * local (sin HTTP a nuestro propio JWKS), {@code kid}, issuer exacto, vigencia
-     * sin tolerancia ({@code exp <= ahora} es vencido) y perfil {@code tipo=acceso}
-     * con {@code sub}/{@code jti} UUID y {@code roles}/{@code permisos} como arrays.
+     * local (sin HTTP a nuestro propio JWKS), {@code kid}, issuer exacto, tiempos
+     * sin tolerancia ({@code exp <= ahora} es vencido; {@code iat} obligatorio y no
+     * futuro; {@code nbf} no futuro si viene) y perfil {@code tipo=acceso} con
+     * {@code exp - iat = 900 s}, {@code email}, {@code sub}/{@code jti} UUID y
+     * {@code roles}/{@code permisos} como arrays.
      *
      * @throws TokenInvalidoException    → {@code 401 TOKEN_INVALIDO}
      * @throws TokenNoAplicableException token de servicio válido → {@code 403 TOKEN_NO_APLICABLE}

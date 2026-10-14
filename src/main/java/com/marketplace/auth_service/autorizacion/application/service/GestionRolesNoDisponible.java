@@ -5,7 +5,7 @@ import com.marketplace.auth_service.autorizacion.application.dto.RolesCambiados;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.autorizacion.application.port.in.GestionRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
+import com.marketplace.auth_service.shared.domain.Permiso;
 
 import java.util.List;
 import java.util.Objects;

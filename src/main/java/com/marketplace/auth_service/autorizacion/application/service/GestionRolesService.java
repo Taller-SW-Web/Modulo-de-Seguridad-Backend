@@ -13,8 +13,9 @@ import com.marketplace.auth_service.autorizacion.application.port.out.CuentasRol
 import com.marketplace.auth_service.autorizacion.application.port.out.EventosRolesPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.SesionesRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.autorizacion.domain.model.CatalogoAutorizacion;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -69,7 +70,7 @@ public class GestionRolesService implements GestionRolesPort {
     @Override
     public RolesCambiados asignar(CambioRolCommand comando) {
         autorizacion.exigirPermiso(comando.actor(), Permiso.ROL_ASIGNAR);
-        Rol rol = Rol.desdeCodigo(comando.rol());
+        Rol rol = CatalogoAutorizacion.rol(comando.rol());
         CuentaRoles cuenta = bloquearYReautorizar(comando);
 
         boolean nuevo = asociaciones.asignar(cuenta.id(), rol);

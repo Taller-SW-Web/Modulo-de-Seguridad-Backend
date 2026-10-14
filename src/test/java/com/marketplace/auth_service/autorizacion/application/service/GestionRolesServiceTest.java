@@ -15,8 +15,8 @@ import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegado
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import org.junit.jupiter.api.Test;
@@ -103,7 +103,7 @@ class GestionRolesServiceTest {
         private final AutorizacionService real = new AutorizacionService(asociaciones);
 
         @Override
-        public com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos resolver(UUID usuarioId) {
+        public com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos resolver(UUID usuarioId) {
             return real.resolver(usuarioId);
         }
 

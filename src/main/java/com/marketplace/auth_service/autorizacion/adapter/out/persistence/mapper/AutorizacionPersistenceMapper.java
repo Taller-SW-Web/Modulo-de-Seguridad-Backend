@@ -1,7 +1,7 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence.mapper;
 
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity.RolPermisoJpaEntity;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.Collection;
 import java.util.EnumMap;

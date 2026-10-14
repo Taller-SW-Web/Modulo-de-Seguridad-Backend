@@ -31,10 +31,15 @@ login pone en los claims `roles` y `permisos` del acceso.
 
 ## Cómo se usa desde otra capacidad
 
-Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`:
+Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`,
+desde un **puente** en el `adapter.out.capacidad` de quien lo consume (regla de
+ArchUnit). El puerto expone únicamente tipos exportables: el DTO
+`autorizacion.application.dto.PermisosResueltos` y el vocabulario común
+`shared.domain.Rol` / `shared.domain.Permiso`. El modelo interno
+`PermisosEfectivos` no sale de autorización.
 
 ```java
-PermisosEfectivos efectivos = autorizacionPort.resolver(usuarioId);
+PermisosResueltos efectivos = autorizacionPort.resolver(usuarioId);
 efectivos.codigosRoles();     // ["ADMIN_SISTEMA", "VENDEDOR"]  → claim roles
 efectivos.codigosPermisos();  // ["atributos.editar", ...]      → claim permisos
 efectivos.tiene(Rol.ADMIN_SISTEMA);
@@ -47,9 +52,14 @@ efectivos.tiene(Permiso.ROL_ASIGNAR);
 - Listas en orden alfabético: los mismos roles producen siempre el mismo token.
 - Si `rol_permiso` contuviera un permiso que no es de Seguridad, `resolver`
   lanza `IllegalStateException` en vez de meterlo en un token.
-- Para convertir un código externo: `Rol.desdeCodigo("VENDEDOR")`; un código
-  fuera del catálogo (`"BUYER"`, `"admin_sistema"`) lanza `RolInvalidoException`
-  (el adaptador HTTP lo traducirá a `400 VALIDACION`).
+- `Rol` y `Permiso` están en `shared.domain` porque varios puertos los usan
+  (`exigirPermiso`, `usuariosConRol`, `MfaPort.esEfectivo`…). `Rol.esDeGestion()`
+  es la fuente única de «rol de gestión» para el MFA obligatorio.
+- Para convertir un código externo: `Rol.buscar("VENDEDOR")` devuelve `Optional`.
+  Autorización valida con `CatalogoAutorizacion.rol(codigo)`, que lanza
+  `RolInvalidoException` (el adaptador HTTP lo traduce a `400 VALIDACION`).
+- Ejemplo de puente probado: `src/test/.../sesion/adapter/out/capacidad/fixture/PuenteAutorizacionDeEjemplo.java`
+  (`ConsumoAutorizacionTest`).
 
 ### Decidir si alguien puede hacer algo
 
@@ -182,14 +192,15 @@ una prueba compara la base con la clase.
 
 ```text
 autorizacion/
-  domain/model/            Rol, Permiso, CatalogoAutorizacion, PermisosEfectivos
+  domain/model/            CatalogoAutorizacion, PermisosEfectivos (internos)
   domain/exception/        RolInvalidoException, AccesoDenegadoException,
                            UsuarioNoEncontradoException, GestionRolesNoDisponibleException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
                            GestionRolesPort          ← solo lo usa RolesController
   application/port/out/    AsociacionesRolPort, CuentasRolesPort, SesionesRolesPort,
                            AuditoriaRolesPort, EventosRolesPort
-  application/dto/         CambioRolCommand, CuentaRoles, RolesCambiados, RegistroRol,
+  application/dto/         PermisosResueltos         ← lo que devuelve resolver
+                           CambioRolCommand, CuentaRoles, RolesCambiados, RegistroRol,
                            RolesCambiadosEvento
   application/service/     AutorizacionService, GestionRolesService (Java puro),
                            GestionRolesNoDisponible
@@ -198,7 +209,7 @@ autorizacion/
   adapter/out/persistence/ AutorizacionJpaAdapter, entity/, repository/, mapper/
   adapter/out/capacidad/   (pendiente) puentes hacia Eva, Jose Luis y Christian
 configuration/             AutorizacionConfig, RolesConfig
-shared/domain/             ActorUsuario, ContextoPeticion (tipos comunes)
+shared/domain/             Rol, Permiso (vocabulario común), ActorUsuario, ContextoPeticion
 shared/adapter/web/        Problemas, ContextoPeticiones
 ```
 
@@ -206,7 +217,9 @@ shared/adapter/web/        Problemas, ContextoPeticiones
 
 Unitarias (sin base): `CatalogoYRolesTest`, `PermisosEfectivosTest`,
 `AutorizacionServiceTest` y `GestionRolesServiceTest`, que comprueba el orden
-exacto de locks y efectos.
+exacto de locks y efectos. De arquitectura: `ConsumoAutorizacionTest` evalúa la
+regla de consumo entre capacidades sobre un puente de ejemplo de `sesion`
+(pasa) y sobre un puente con el modelo interno y un consumo sin puente (fallan).
 
 HTTP (`RolesHttpTest`): servidor real con el filtro de acceso, para el formato
 de 200/400/401/403/404/503.

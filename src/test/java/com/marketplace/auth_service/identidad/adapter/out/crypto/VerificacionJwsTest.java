@@ -6,6 +6,7 @@ import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsVerificados;
 import com.marketplace.auth_service.identidad.application.service.FirmarAccesoService;
 import com.marketplace.auth_service.identidad.domain.exception.TokenInvalidoException;
+import com.marketplace.auth_service.identidad.domain.exception.TokenNoAplicableException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jwt.JWTClaimsSet;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +51,49 @@ class VerificacionJwsTest {
         assertThat(claims.roles()).containsExactly("ADMIN_SISTEMA");
         assertThat(claims.permisos()).containsExactly("rol.asignar");
         assertThat(claims.exp()).isEqualTo(acceso.expiraEn());
+        assertThat(claims.email()).isEqualTo("a@ejemplo.com");
+        assertThat(claims.iat()).isEqualTo(acceso.emitidoEn());
+        assertThat(claims.nbf()).isNull();
+    }
+
+    @Test
+    void unIatAusenteLlegaComoAusenteYNoSeCompleta() {
+        JWTClaimsSet sinIat = TokensDePrueba.accesoValido(ISSUER).issueTime(null).build();
+
+        assertThat(cripto.verificar(TokensDePrueba.firmarRs256(sinIat)).iat()).isNull();
+    }
+
+    @Test
+    void tiemposYEmailInvalidosFirmadosDeVerdadSeRechazan() {
+        FirmarAccesoService casoDeUso = new FirmarAccesoService(cripto, ISSUER, Clock.systemUTC());
+        Instant ahora = Instant.now();
+        Map<String, JWTClaimsSet> casos = new LinkedHashMap<>();
+        casos.put("sin iat", TokensDePrueba.accesoValido(ISSUER).issueTime(null).build());
+        casos.put("iat futuro", TokensDePrueba.accesoValido(ISSUER).issueTime(Date.from(ahora.plusSeconds(120)))
+                .expirationTime(Date.from(ahora.plusSeconds(1020))).build());
+        casos.put("nbf futuro", TokensDePrueba.accesoValido(ISSUER).notBeforeTime(Date.from(ahora.plusSeconds(120))).build());
+        casos.put("dura 1800 s", TokensDePrueba.accesoValido(ISSUER).expirationTime(Date.from(ahora.plusSeconds(1800))).build());
+        casos.put("dura 899 s", TokensDePrueba.accesoValido(ISSUER).expirationTime(Date.from(ahora.plusSeconds(899))).build());
+        casos.put("sin email", TokensDePrueba.accesoValido(ISSUER).claim("email", null).build());
+        casos.put("email no texto", TokensDePrueba.accesoValido(ISSUER).claim("email", 42).build());
+        casos.put("email sin formato", TokensDePrueba.accesoValido(ISSUER).claim("email", "no-es-correo").build());
+
+        for (var caso : casos.entrySet()) {
+            String token = TokensDePrueba.firmarRs256(caso.getValue());
+            assertThatThrownBy(() -> casoDeUso.validar(token)).as(caso.getKey())
+                    .isInstanceOf(TokenInvalidoException.class);
+        }
+    }
+
+    @Test
+    void unNbfPasadoYElPerfilDeServicioFirmadosDeVerdad() {
+        FirmarAccesoService casoDeUso = new FirmarAccesoService(cripto, ISSUER, Clock.systemUTC());
+        String conNbf = TokensDePrueba.firmarRs256(TokensDePrueba.accesoValido(ISSUER)
+                .notBeforeTime(Date.from(Instant.now().minusSeconds(5))).build());
+        String servicio = TokensDePrueba.firmarRs256(TokensDePrueba.servicioValido(ISSUER).build());
+
+        assertThat(casoDeUso.validar(conNbf).sub()).isNotNull();
+        assertThatThrownBy(() -> casoDeUso.validar(servicio)).isInstanceOf(TokenNoAplicableException.class);
     }
 
     @Test

@@ -86,7 +86,8 @@ Qué comprueba `validar` (y por tanto el filtro):
 | `kid` = el de nuestra clave | 401 |
 | `iss` = `AUTH_ISSUER` exacto | 401 |
 | `exp` posterior a ahora, **sin tolerancia** (`exp <= ahora` es vencido) | 401 |
-| `tipo = acceso`, `sub` y `jti` UUID, `roles`/`permisos` arrays | 401 |
+| `iat` presente y no futuro; `nbf`, si viene, no futuro (mismo `Clock`, tolerancia cero). Se leen del token tal cual: Spring completaría un `iat` ausente | 401 |
+| `tipo = acceso`, `exp - iat` = 900 s exactos, `email` con formato de correo, `sub` y `jti` UUID, `roles`/`permisos` arrays | 401 |
 | `tipo = servicio` con firma válida (token de un módulo) | **403 `TOKEN_NO_APLICABLE`** |
 | Sin clave configurada: no se puede validar | 503 `NO_DISPONIBLE` |
 

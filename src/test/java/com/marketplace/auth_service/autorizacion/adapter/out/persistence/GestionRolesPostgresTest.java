@@ -15,7 +15,7 @@ import com.marketplace.auth_service.autorizacion.application.port.out.EventosRol
 import com.marketplace.auth_service.autorizacion.application.port.out.SesionesRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
 import com.marketplace.auth_service.configuration.RolesConfig;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;

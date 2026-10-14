@@ -7,9 +7,9 @@ import com.marketplace.auth_service.autorizacion.adapter.out.persistence.reposit
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
 import com.marketplace.auth_service.autorizacion.domain.model.CatalogoAutorizacion;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -143,7 +143,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
     @Test
     void sinRolesLasListasSonVacias() {
-        PermisosEfectivos efectivos = autorizacion.resolver(UUID.randomUUID());
+        PermisosResueltos efectivos = autorizacion.resolver(UUID.randomUUID());
 
         assertThat(efectivos.codigosRoles()).isEmpty();
         assertThat(efectivos.codigosPermisos()).isEmpty();
@@ -151,7 +151,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
     @Test
     void esc11_4_adminYVendedorSumanDiezPermisosSinDuplicados() {
-        PermisosEfectivos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA, Rol.VENDEDOR));
+        PermisosResueltos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA, Rol.VENDEDOR));
 
         assertThat(efectivos.codigosRoles()).containsExactly("ADMIN_SISTEMA", "VENDEDOR");
         assertThat(efectivos.codigosPermisos()).hasSize(10).doesNotHaveDuplicates()
@@ -161,7 +161,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
     @Test
     void esc11_7_unAdministradorTieneLosOchoPermisosDeAdministracion() {
-        PermisosEfectivos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA));
+        PermisosResueltos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA));
 
         assertThat(efectivos.codigosPermisos()).hasSize(8)
                 .doesNotContain("cliente.registrar", "cliente.buscar")
@@ -170,7 +170,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
     @Test
     void losRolesDeGestionDeOtrosModulosNoAportanPermisosDeSeguridad() {
-        PermisosEfectivos efectivos = autorizacion.resolver(
+        PermisosResueltos efectivos = autorizacion.resolver(
                 personaCon(Rol.ADMIN_VENTAS, Rol.GESTOR_DESPACHO, Rol.GESTOR_COMERCIAL, Rol.CLIENTE));
 
         assertThat(efectivos.codigosRoles()).hasSize(4);

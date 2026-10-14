@@ -4,7 +4,7 @@ import com.marketplace.auth_service.autorizacion.adapter.in.web.dto.AsignarRolRe
 import com.marketplace.auth_service.autorizacion.adapter.in.web.dto.UsuarioRolesResponse;
 import com.marketplace.auth_service.autorizacion.application.dto.CambioRolCommand;
 import com.marketplace.auth_service.autorizacion.application.dto.RolesCambiados;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 
