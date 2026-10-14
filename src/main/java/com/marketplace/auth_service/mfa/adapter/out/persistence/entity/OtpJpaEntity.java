@@ -11,11 +11,13 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-/** Columnas de V2 real + propuesta V103: canal varchar, expira_en y motivo se conservan. */
+/** Esquema manual observado el 14-oct-2026 + propuesta V103. */
 @Entity
 @Table(name = "otp")
 @Getter
@@ -28,11 +30,11 @@ public class OtpJpaEntity {
     @Column(name = "hash_codigo", nullable = false, length = 255) private String hashCodigo;
     @Column(name = "hash_key_id", length = 50) private String hashKeyId;
     @Column(nullable = false, length = 255) private String destino;
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50) private CanalOtp canal;
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false, columnDefinition = "canal_otp") private CanalOtp canal;
     @Column(nullable = false, length = 50) private String motivo;
     @Column(name = "creado_en", nullable = false) private OffsetDateTime creadoEn;
-    @Column(name = "expira_en", nullable = false) private OffsetDateTime expiraEn;
+    @Column(name = "expiracion", nullable = false) private OffsetDateTime expiraEn;
     @Column(nullable = false) private boolean usado;
     @Column(nullable = false) private int intentos;
     @Column(name = "invalidado_en") private OffsetDateTime invalidadoEn;
