@@ -16,6 +16,10 @@ Implementar una tarea autorizada por vez; no marcar pruebas/evidencia inexistent
   Puertos definidos dentro; adaptadores implementan los puertos; wiring fuera.
 - DTO HTTP separados de DTO de aplicación y modelos; mappers manuales.
   Entidades JpaEntity y repositorios JpaRepository solo dentro de persistencia.
+- Los puertos de entrada y DTO exportados solo usan tipos Java/shared.domain y
+  puertos/DTO propios, incluidos campos y genéricos. No envolver un modelo interno
+  en un DTO ni devolver Page de Spring. CI lo verifica aun sin consumidores;
+  los puertos de salida internos sí pueden usar su dominio. Ver .github/CI.md.
 - Cada tabla tiene un único dueño físico. Consumir al otro por puertos/DTO
   exportados mediante un puente; sin repositorios, SQL o entidades ajenos.
 - Transacciones en decoradores, conservando orden de locks y commit de defensas;
