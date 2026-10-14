@@ -1,5 +1,7 @@
 package com.marketplace.auth_service.autorizacion.domain.model;
 
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
