@@ -2,7 +2,10 @@ package com.marketplace.auth_service.identidad.application.service;
 
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.dto.ContenidoAcceso;
+import com.marketplace.auth_service.identidad.application.dto.Descubrimiento;
+import com.marketplace.auth_service.identidad.application.port.out.FirmadorJws;
 import com.marketplace.auth_service.identidad.domain.exception.FirmaNoDisponibleException;
 import org.junit.jupiter.api.Test;
 
@@ -22,10 +25,25 @@ class FirmarAccesoServiceTest {
     private static final String ISSUER = "https://g7.example.test/api/v1/auth";
     private static final UUID USUARIO = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
+    private static final ClavePublica CLAVE = new ClavePublica("kid-1", "bW9kdWxv", "AQAB");
+
     private final List<ContenidoAcceso> firmados = new ArrayList<>();
     private final Clock reloj = Clock.fixed(Instant.parse("2026-10-12T20:00:00.750Z"), ZoneOffset.UTC);
-    private final FirmarAccesoService servicio =
-            new FirmarAccesoService(contenido -> { firmados.add(contenido); return "jws"; }, ISSUER, reloj);
+    private final FirmarAccesoService servicio = new FirmarAccesoService(new FirmadorFalso(), ISSUER, reloj);
+
+    /** Doble del puerto de salida: registra lo que se pidió firmar. */
+    private class FirmadorFalso implements FirmadorJws {
+        @Override
+        public String firmar(ContenidoAcceso contenido) {
+            firmados.add(contenido);
+            return "jws";
+        }
+
+        @Override
+        public List<ClavePublica> clavesPublicas() {
+            return List.of(CLAVE);
+        }
+    }
 
     @Test
     void firmaUnAccesoDe900SegundosConElRelojInyectado() {
@@ -85,12 +103,35 @@ class FirmarAccesoServiceTest {
     }
 
     @Test
-    void laFirmaDenegadaNoEmiteNada() {
+    void laFirmaDenegadaNoEmiteNiPublicaNada() {
         FirmaDenegada denegada = new FirmaDenegada("no hay clave privada configurada");
 
         assertThatThrownBy(() -> denegada.firmar(new ClaimsAcceso(USUARIO, "a@ejemplo.com", List.of(), List.of())))
                 .isInstanceOf(FirmaNoDisponibleException.class)
                 .hasMessage("no hay clave privada configurada");
+        assertThatThrownBy(denegada::jwks).isInstanceOf(FirmaNoDisponibleException.class);
+        assertThatThrownBy(denegada::descubrimiento).isInstanceOf(FirmaNoDisponibleException.class);
+    }
+
+    @Test
+    void elJwksPublicaLasClavesDelFirmador() {
+        assertThat(servicio.jwks()).containsExactly(CLAVE);
+    }
+
+    @Test
+    void elDescubrimientoDerivaElJwksDelIssuerConfigurado() {
+        Descubrimiento descubrimiento = servicio.descubrimiento();
+
+        assertThat(descubrimiento.issuer()).isEqualTo(ISSUER);
+        assertThat(descubrimiento.jwksUri()).isEqualTo(ISSUER + "/.well-known/jwks.json");
+        assertThat(descubrimiento.algoritmosFirma()).containsExactly("RS256");
+    }
+
+    @Test
+    void elIssuerDelDescubrimientoEsElMismoQueElIssDeLosAccesos() {
+        servicio.firmar(new ClaimsAcceso(USUARIO, "a@ejemplo.com", List.of(), List.of()));
+
+        assertThat(servicio.descubrimiento().issuer()).isEqualTo(firmados.getFirst().issuer());
     }
 
     @Test
