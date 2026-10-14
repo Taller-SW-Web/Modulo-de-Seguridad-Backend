@@ -1,6 +1,6 @@
 package com.marketplace.auth_service.autorizacion.application.dto;
 
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.List;
 import java.util.Objects;

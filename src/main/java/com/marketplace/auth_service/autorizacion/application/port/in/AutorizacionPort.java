@@ -1,10 +1,10 @@
 package com.marketplace.auth_service.autorizacion.application.port.in;
 
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.Set;
 import java.util.UUID;
@@ -17,6 +17,14 @@ import java.util.UUID;
  * protegida se toma con los permisos actuales de la base, porque pudieron
  * cambiar después de emitirse el acceso. Ocultar un botón en la interfaz o
  * tener un scope de servicio tampoco concede un permiso de persona.
+ *
+ * <p>Solo expone tipos exportables: DTO de {@code application.dto} y
+ * vocabulario común de {@code shared.domain}. Un consumidor lo usa desde un
+ * puente en su {@code adapter.out.capacidad}.
+ *
+ * <p>EP-05-T001 entrega {@code resolver}. EP-05-T002 añade
+ * {@code exigirPermiso}, {@code exigirTitularOPrivilegio},
+ * {@code bloquearCatalogoAdministrador} y {@code usuariosConRol}.
  */
 public interface AutorizacionPort {
 
@@ -26,7 +34,7 @@ public interface AutorizacionPort {
      *
      * @return listas vacías si la persona no tiene roles; nunca null
      */
-    PermisosEfectivos resolver(UUID usuarioId);
+    PermisosResueltos resolver(UUID usuarioId);
 
     /**
      * Exige que el actor tenga hoy {@code permiso}, revalidado contra la base

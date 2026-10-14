@@ -31,10 +31,15 @@ login pone en los claims `roles` y `permisos` del acceso.
 
 ## Cómo se usa desde otra capacidad
 
-Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`:
+Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`,
+desde un **puente** en el `adapter.out.capacidad` de quien lo consume (regla de
+ArchUnit). El puerto expone únicamente tipos exportables: el DTO
+`autorizacion.application.dto.PermisosResueltos` y el vocabulario común
+`shared.domain.Rol` / `shared.domain.Permiso`. El modelo interno
+`PermisosEfectivos` no sale de autorización.
 
 ```java
-PermisosEfectivos efectivos = autorizacionPort.resolver(usuarioId);
+PermisosResueltos efectivos = autorizacionPort.resolver(usuarioId);
 efectivos.codigosRoles();     // ["ADMIN_SISTEMA", "VENDEDOR"]  → claim roles
 efectivos.codigosPermisos();  // ["atributos.editar", ...]      → claim permisos
 efectivos.tiene(Rol.ADMIN_SISTEMA);
@@ -47,9 +52,14 @@ efectivos.tiene(Permiso.ROL_ASIGNAR);
 - Listas en orden alfabético: los mismos roles producen siempre el mismo token.
 - Si `rol_permiso` contuviera un permiso que no es de Seguridad, `resolver`
   lanza `IllegalStateException` en vez de meterlo en un token.
-- Para convertir un código externo: `Rol.desdeCodigo("VENDEDOR")`; un código
-  fuera del catálogo (`"BUYER"`, `"admin_sistema"`) lanza `RolInvalidoException`
-  (el adaptador HTTP lo traducirá a `400 VALIDACION`).
+- `Rol` y `Permiso` están en `shared.domain` porque varios puertos los usan
+  (`exigirPermiso`, `usuariosConRol`, `MfaPort.esEfectivo`…). `Rol.esDeGestion()`
+  es la fuente única de «rol de gestión» para el MFA obligatorio.
+- Para convertir un código externo: `Rol.buscar("VENDEDOR")` devuelve `Optional`.
+  Autorización valida con `CatalogoAutorizacion.rol(codigo)`, que lanza
+  `RolInvalidoException` (el adaptador HTTP lo traduce a `400 VALIDACION`).
+- Ejemplo de puente probado: `src/test/.../sesion/adapter/out/capacidad/fixture/PuenteAutorizacionDeEjemplo.java`
+  (`ConsumoAutorizacionTest`).
 
 ### Decidir si alguien puede hacer algo
 
@@ -115,15 +125,19 @@ sola transacción** (`REQUIRED`, `READ_COMMITTED`), en este orden
    mirar el código o la cuenta, y `ACCESO_DENEGADO` se audita después del rollback.
 2. Código de rol: si no es uno de los seis, 400 `VALIDACION` con `errores[{campo: "rol"}]`.
 3. Nivel 1: lock de `rol.ADMIN_SISTEMA`.
-4. Nivel 2: lock de la cuenta objetivo (Eva). Si no existe, 404 `NO_ENCONTRADO`.
+4. Nivel 2: lock de las cuentas de **actor y objetivo** (Eva), una sola vez si
+   son la misma y ordenadas por UUID como las ordena PostgreSQL (texto en
+   minúsculas; `UUID.compareTo` de Java compara con signo y da otro orden).
+   Si el objetivo no existe, 404 `NO_ENCONTRADO`.
 5. Reautorización bajo lock: si otra transacción le quitó el permiso al actor
    mientras esperaba, 403 y nada cambia.
-6. Fila en `usuario_rol`. Si ya tenía el rol, responde 200 sin más efectos.
+6. Si ya tenía el rol, responde 200 sin revocar, escribir, auditar ni publicar.
 7. Nivel 3: revoca **todas** las familias de refresco del objetivo (Jose Luis).
-8. Auditoría crítica `ROL_ASIGNADO` y evento `usuario.roles_cambiados` en el
-   outbox, con la lista completa resultante (Christian).
+8. Nivel 4: fila en `usuario_rol` (fila interna propia).
+9. Nivel 5: auditoría crítica `ROL_ASIGNADO` y evento `usuario.roles_cambiados`
+   en el outbox, con la lista completa resultante (Christian).
 
-Cualquier fallo en 7–8 revierte también la fila de `usuario_rol`. Un fallo
+Ningún paso vuelve a un nivel anterior. Cualquier fallo en 7–9 revierte todo. Un fallo
 técnico responde 503 `NO_DISPONIBLE`. La respuesta 200 es el esquema `Usuario`
 con sus campos obligatorios (`id`, `nombreCompleto`, `correo`, `estado`,
 `roles`); la pantalla recarga el detalle completo después.
@@ -134,9 +148,11 @@ actuales. Las operaciones privilegiadas de G7 ya revalidan los permisos en cada 
 
 ## Revocar un rol — `DELETE /api/v1/usuarios/{id}/roles/{rol}` (EP-05-T004)
 
-Los mismos pasos 1–5 y 7–8 que la asignación, con `ROL_REVOCADO`. Responde
-204 y conserva los demás roles. Si la persona no tenía el rol, responde 204
-sin efectos. Quitar el último rol deja `roles: []` y el evento lleva un array vacío.
+El mismo orden de locks que la asignación (pasos 1–5, luego familias → fila de
+`usuario_rol` → auditoría/outbox), con `ROL_REVOCADO`. Responde 204 y conserva
+los demás roles. Si la persona no tenía el rol, responde 204 sin revocar,
+escribir, auditar ni publicar. Quitar el último rol deja `roles: []` y el
+evento lleva un array vacío.
 
 Si el rol es `ADMIN_SISTEMA`, después de reautorizar y con el lock del catálogo
 tomado se aplica RF-11.7, que responde 422 `ADMINISTRADOR_PROTEGIDO`:
@@ -170,7 +186,7 @@ responde 503. El arranque deja este aviso:
 
 | Puerto de salida (Sergio) | Método | Puerto del dueño (ACUERDOS §2) | Requisito |
 |---|---|---|---|
-| `CuentasRolesPort` | `bloquear(UUID)` → `Optional<CuentaRoles>`; `contarActivos(Set<UUID>)` | `CuentasPort.bloquear` / `contarActivos` (Eva) | Lock de fila en la transacción; `estado` = estado **efectivo** |
+| `CuentasRolesPort` | `bloquear(List<UUID>)` → `Map<UUID, CuentaRoles>`; `contarActivos(Set<UUID>)` | `CuentasPort.bloquear` / `contarActivos` (Eva) | Lock de filas en la transacción, exactamente en el orden recibido; `estado` = estado **efectivo** |
 | `SesionesRolesPort` | `revocarTodas(UUID)` | `SesionesPort.revocarTodas` (Jose Luis) | `MANDATORY`; bloquea raíces en orden |
 | `AuditoriaRolesPort` | `registrarCritica(RegistroRol)` / `registrarNoCritica(RegistroRol)` | `AuditoriaPort.registrarCritica` / `registrarNoCriticaTrasCommit` (Christian) | Crítica en el mismo commit; si falla, lanzar `GestionRolesNoDisponibleException` |
 | `EventosRolesPort` | `guardar(RolesCambiadosEvento)` | `MensajeriaPort.guardarEvento` (Christian) | Outbox en el mismo commit; `datos.roles` = lista completa |
@@ -209,14 +225,15 @@ una prueba compara la base con la clase.
 
 ```text
 autorizacion/
-  domain/model/            Rol, Permiso, CatalogoAutorizacion, PermisosEfectivos
+  domain/model/            CatalogoAutorizacion, PermisosEfectivos (internos)
   domain/exception/        RolInvalidoException, AccesoDenegadoException, AdministradorProtegidoException,
                            UsuarioNoEncontradoException, GestionRolesNoDisponibleException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
                            GestionRolesPort          ← solo lo usa RolesController
   application/port/out/    AsociacionesRolPort, CuentasRolesPort, SesionesRolesPort,
                            AuditoriaRolesPort, EventosRolesPort
-  application/dto/         CambioRolCommand, CuentaRoles, RolesCambiados, RegistroRol,
+  application/dto/         PermisosResueltos         ← lo que devuelve resolver
+                           CambioRolCommand, CuentaRoles, RolesCambiados, RegistroRol,
                            RolesCambiadosEvento
   application/service/     AutorizacionService, GestionRolesService (Java puro),
                            GestionRolesNoDisponible
@@ -225,7 +242,7 @@ autorizacion/
   adapter/out/persistence/ AutorizacionJpaAdapter, entity/, repository/, mapper/
   adapter/out/capacidad/   (pendiente) puentes hacia Eva, Jose Luis y Christian
 configuration/             AutorizacionConfig, RolesConfig
-shared/domain/             ActorUsuario, ContextoPeticion (tipos comunes)
+shared/domain/             Rol, Permiso (vocabulario común), ActorUsuario, ContextoPeticion
 shared/adapter/web/        Problemas, ContextoPeticiones
 ```
 
@@ -233,7 +250,9 @@ shared/adapter/web/        Problemas, ContextoPeticiones
 
 Unitarias (sin base): `CatalogoYRolesTest`, `PermisosEfectivosTest`,
 `AutorizacionServiceTest` y `GestionRolesServiceTest`, que comprueba el orden
-exacto de locks y efectos.
+exacto de locks y efectos. De arquitectura: `ConsumoAutorizacionTest` evalúa la
+regla de consumo entre capacidades sobre un puente de ejemplo de `sesion`
+(pasa) y sobre un puente con el modelo interno y un consumo sin puente (fallan).
 
 HTTP (`RolesHttpTest`): servidor real con el filtro de acceso, para el formato
 de 200/400/401/403/404/503.

@@ -10,8 +10,9 @@ import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegado
 import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.autorizacion.domain.model.CatalogoAutorizacion;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
@@ -170,7 +171,7 @@ class RolesHttpTest {
     @Test
     void unRolFueraDelCatalogoResponde400ConElCampo() throws Exception {
         COMPORTAMIENTO.set(c -> {
-            Rol.desdeCodigo(c.rol());
+            CatalogoAutorizacion.rol(c.rol());
             throw new AssertionError("no debía llegar aquí");
         });
 
@@ -188,7 +189,7 @@ class RolesHttpTest {
     @Test
     void sinRolResponde400EsObligatorio() throws Exception {
         COMPORTAMIENTO.set(c -> {
-            Rol.desdeCodigo(c.rol());
+            CatalogoAutorizacion.rol(c.rol());
             throw new AssertionError("no debía llegar aquí");
         });
 
@@ -324,7 +325,7 @@ class RolesHttpTest {
     @Test
     void unRolInvalidoEnLaRutaResponde400() throws Exception {
         COMPORTAMIENTO.set(c -> {
-            Rol.desdeCodigo(c.rol());
+            CatalogoAutorizacion.rol(c.rol());
             throw new AssertionError("no debía llegar aquí");
         });
 
