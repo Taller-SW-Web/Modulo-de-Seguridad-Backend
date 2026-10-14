@@ -93,6 +93,16 @@ class ArquitecturaHexagonalTest {
         return paquete.equals(prefijo) || paquete.startsWith(prefijo + ".");
     }
 
+    @Test
+    void puertosDeEntradaNoExponenTiposInternosAunqueNoTenganConsumidores() {
+        ContratosExportados.puertosDeEntrada().check(PRODUCCION);
+    }
+
+    @Test
+    void dtoExportadosNoOcultanTiposInternos() {
+        ContratosExportados.dtoDeAplicacion().check(PRODUCCION);
+    }
+
     private static String capacidad(String paquete) {
         if (!paquete.startsWith(RAIZ)) return null;
         String primerSegmento = paquete.substring(RAIZ.length()).split("\\.")[0];
