@@ -5,7 +5,7 @@ import com.marketplace.auth_service.autorizacion.adapter.out.persistence.reposit
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.RolPermisoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.UsuarioRolJpaRepository;
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.Map;
 import java.util.Set;

@@ -1,5 +1,7 @@
 package com.marketplace.auth_service.autorizacion.domain.model;
 
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,7 +28,7 @@ class CatalogoYRolesTest {
     @Test
     void cadaCodigoValidoSeConvierteEnSuRol() {
         for (Rol rol : Rol.values()) {
-            assertThat(Rol.desdeCodigo(rol.name())).isSameAs(rol);
+            assertThat(CatalogoAutorizacion.rol(rol.name())).isSameAs(rol);
         }
     }
 
@@ -34,7 +36,7 @@ class CatalogoYRolesTest {
     @ValueSource(strings = {"BUYER", "SELLER", "SUPER_ADMIN", "SYSTEM_ADMIN", "admin_sistema", "REPARTIDOR", " CLIENTE"})
     @NullAndEmptySource
     void esc11_2_codigosFueraDelCatalogoSeRechazan(String codigo) {
-        assertThatThrownBy(() -> Rol.desdeCodigo(codigo)).isInstanceOf(RolInvalidoException.class);
+        assertThatThrownBy(() -> CatalogoAutorizacion.rol(codigo)).isInstanceOf(RolInvalidoException.class);
     }
 
     @Test

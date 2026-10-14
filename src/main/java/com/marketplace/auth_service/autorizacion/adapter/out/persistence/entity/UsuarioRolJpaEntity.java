@@ -1,6 +1,6 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity;
 
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;

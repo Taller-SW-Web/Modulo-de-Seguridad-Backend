@@ -63,5 +63,27 @@ la clave). `.gitignore` excluye `*.pem` y `*.key`.
 Guía completa de la capacidad, para quien la consume o la revisa:
 [docs/capacidades/identidad.md](docs/capacidades/identidad.md).
 
+## Variables de entorno y perfiles (TEC-INFRA-T001)
+
+| Variable | Uso |
+|---|---|
+| `DB_JDBC_URL` | JDBC del runtime, con `sslmode=verify-full`. Host/usuario de Connect del proyecto G7 real |
+| `DB_USERNAME` / `DB_PASSWORD` | Credencial runtime (`g7_runtime`), sin privilegios de migración ni borrado |
+| `DB_MIGRATION_JDBC_URL` / `DB_MIGRATION_USERNAME` / `DB_MIGRATION_PASSWORD` | Credencial migradora, solo para el perfil `migration` |
+| `SPRING_PROFILES_ACTIVE` | `migration` para migrar; vacío por defecto en runtime |
+
+Ver `.env.example`. El archivo `.env` está ignorado por Git.
+
+```bash
+# Levantar backend (runtime, sin migrar). Antes: copiar .env.example a .env
+# y completar con los valores privados (el .env nunca entra a Git).
+.\gradlew.bat bootRun
+# Ejecutar migraciones revisadas (paso controlado, identidad migradora)
+$env:SPRING_PROFILES_ACTIVE='migration'; .\gradlew.bat bootRun
+```
+
+Hikari fijo: máx 5, idle 1, timeout 10 s, vida 10 min, keepalive 2 min. Una
+instancia H3, sin autoscaling.
+
 Estado: scaffold y dependencias; casos de uso, configuración operativa y
 recorridos funcionales siguen pendientes en los tableros de cada dueño.

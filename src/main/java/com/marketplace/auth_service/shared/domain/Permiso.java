@@ -1,4 +1,4 @@
-package com.marketplace.auth_service.autorizacion.domain.model;
+package com.marketplace.auth_service.shared.domain;
 
 import java.util.Optional;
 
