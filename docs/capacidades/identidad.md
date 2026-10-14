@@ -177,6 +177,7 @@ ejecución.
 | Payload alterado para escalar a ADMIN_SISTEMA, otra clave con nuestro kid, otra clave con su kid, RSA 2048, sin kid, kid desconocido, RS512, PS256, HS256 con la clave pública como secreto, `alg: none` | 401 `TOKEN_INVALIDO` |
 | Vencido en el segundo actual (una tolerancia de 60 s lo aceptaría), sin `exp`, issuer de otro entorno, issuer con barra final | 401 `TOKEN_INVALIDO` |
 | `sub` que no es UUID, sin `jti`, `roles` como texto, sin `permisos`, sin `tipo`, `tipo` refresco | 401 `TOKEN_INVALIDO` |
+| Sin `iat` (Spring lo completaría), `iat` futuro, `nbf` futuro, duración de 1800 s, sin `email` | 401 `TOKEN_INVALIDO` |
 | Token de servicio firmado con nuestra clave (fixture aislada, sin clientes A10) | 403 `TOKEN_NO_APLICABLE` |
 | Reinicio con el mismo archivo de clave | Mismo `kid` publicado; un acceso emitido antes del reinicio sigue entrando |
 | Otro entorno con otra clave | `kid` distinto; nuestros accesos dan 401 allí |

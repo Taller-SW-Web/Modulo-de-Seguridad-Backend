@@ -254,6 +254,17 @@ class ValidacionCriptograficaRuntimeTest {
                 claimsValidos().claim("tipo", null).build()));
         casos.put("tipo refresco", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
                 claimsValidos().claim("tipo", "refresco").build()));
+        casos.put("sin iat (Spring lo completaría)", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
+                claimsValidos().issueTime(null).build()));
+        casos.put("iat futuro", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
+                claimsValidos().issueTime(Date.from(ahora.plusSeconds(120)))
+                        .expirationTime(Date.from(ahora.plusSeconds(1020))).build()));
+        casos.put("nbf futuro", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
+                claimsValidos().notBeforeTime(Date.from(ahora.plusSeconds(120))).build()));
+        casos.put("dura 1800 s en vez de 900", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
+                claimsValidos().expirationTime(Date.from(ahora.plusSeconds(1800))).build()));
+        casos.put("sin email", firmarConLaClaveDelEntorno(JWSAlgorithm.RS256, kidDelEntorno(),
+                claimsValidos().claim("email", null).build()));
 
         for (var caso : casos.entrySet()) {
             HttpResponse<String> respuesta = get(base(backend), PROTEGIDA, "Bearer " + caso.getValue());
