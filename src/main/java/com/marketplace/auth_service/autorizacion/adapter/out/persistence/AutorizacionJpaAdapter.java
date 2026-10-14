@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence;
 
+import com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity.UsuarioRolJpaEntity;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.mapper.AutorizacionPersistenceMapper;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.CatalogoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.RolPermisoJpaRepository;
@@ -50,5 +51,14 @@ public class AutorizacionJpaAdapter implements AsociacionesRolPort {
         if (catalogo.bloquearFilaAdministrador().isEmpty()) {
             throw new IllegalStateException("La tabla rol no contiene ADMIN_SISTEMA: el catálogo no está sembrado");
         }
+    }
+
+    @Override
+    public boolean asignar(UUID usuarioId, Rol rol) {
+        if (usuarioRol.existsById(new UsuarioRolJpaEntity.Id(usuarioId, rol))) {
+            return false;
+        }
+        usuarioRol.saveAndFlush(new UsuarioRolJpaEntity(usuarioId, rol));
+        return true;
     }
 }
