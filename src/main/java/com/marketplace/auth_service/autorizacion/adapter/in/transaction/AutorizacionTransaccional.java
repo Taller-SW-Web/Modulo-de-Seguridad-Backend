@@ -1,10 +1,10 @@
 package com.marketplace.auth_service.autorizacion.adapter.in.transaction;
 
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +33,7 @@ public class AutorizacionTransaccional implements AutorizacionPort {
 
     @Override
     @Transactional(readOnly = true)
-    public PermisosEfectivos resolver(UUID usuarioId) {
+    public PermisosResueltos resolver(UUID usuarioId) {
         return casoDeUso.resolver(usuarioId);
     }
 

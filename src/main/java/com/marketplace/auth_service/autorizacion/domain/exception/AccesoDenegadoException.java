@@ -1,6 +1,6 @@
 package com.marketplace.auth_service.autorizacion.domain.exception;
 
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
+import com.marketplace.auth_service.shared.domain.Permiso;
 
 import java.util.UUID;
 

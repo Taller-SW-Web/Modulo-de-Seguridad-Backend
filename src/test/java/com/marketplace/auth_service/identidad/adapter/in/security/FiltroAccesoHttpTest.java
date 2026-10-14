@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.autorizacion.adapter.in.web.AutorizacionErroresAdvice;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
+import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
@@ -81,9 +81,10 @@ class FiltroAccesoHttpTest {
         AutorizacionPort autorizacionPort() {
             return new AutorizacionPort() {
                 @Override
-                public PermisosEfectivos resolver(UUID usuarioId) {
+                public PermisosResueltos resolver(UUID usuarioId) {
                     return ADMINISTRADORES.contains(usuarioId)
-                            ? PermisosEfectivos.desdeCatalogo(List.of(Rol.ADMIN_SISTEMA)) : PermisosEfectivos.ninguno();
+                            ? new PermisosResueltos(Set.of(Rol.ADMIN_SISTEMA), Set.of(Permiso.ROL_ASIGNAR))
+                            : PermisosResueltos.ninguno();
                 }
 
                 @Override

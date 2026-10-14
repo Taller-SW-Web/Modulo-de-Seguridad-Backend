@@ -1,5 +1,8 @@
 package com.marketplace.auth_service.autorizacion.domain.model;
 
+import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -39,6 +42,15 @@ public final class CatalogoAutorizacion {
     /** Permisos que concede un rol; vacío si no concede ninguno de este módulo. */
     public static Set<Permiso> permisosDe(Rol rol) {
         return MATRIZ.get(rol);
+    }
+
+    /**
+     * Valida un código de rol recibido de fuera (cuerpo o ruta HTTP).
+     *
+     * @throws RolInvalidoException si no es uno de los seis (ESC-11.2 → 400 VALIDACION)
+     */
+    public static Rol rol(String codigo) {
+        return Rol.buscar(codigo).orElseThrow(() -> new RolInvalidoException(codigo));
     }
 
     /** La matriz completa, para sembrar o comparar con la base. */

@@ -41,9 +41,46 @@ bash ./gradlew --no-daemon --console=plain clean build
 Para comprobar solo arquitectura, sin Docker:
 
 ```bash
-bash ./gradlew --no-daemon test --tests '*ArquitecturaHexagonalTest'
+bash ./gradlew --no-daemon test --tests '*ArquitecturaHexagonalTest' --tests '*ContratosExportadosRegresionTest'
 ```
 
 Las reglas permiten paquetes aún sin clases en el scaffold y se aplican cuando
 se implementan. Comprueban dependencias de clases, no el SQL ni la propiedad de
 tablas por sí solos; esa parte también requiere revisión y pruebas funcionales.
+
+## Contratos internos exportados
+
+El check existente `Backend - build y pruebas` ejecuta también las reglas de
+`ContratosExportados`, aplicadas desde ArquitecturaHexagonalTest. No se crea
+otro check obligatorio ni se cambian los nombres configurados en GitHub.
+
+Los puertos de entrada (`application.port.in`) y los DTO de aplicación
+(`application.dto`) solo dependen de tipos Java, shared.domain y los puertos/DTO
+exportados de su propia capacidad. No exponen modelos internos del dominio,
+entidades, repositorios ni tipos Spring/JPA. Esto refuerza la frontera existente
+sin necesitar que un consumidor ya invoque el contrato.
+
+La comprobación incluye retornos, parámetros, campos, arrays, tipos heredados y
+genéricos, también los anidados. Un DTO con un campo privado de dominio tampoco
+es un envoltorio válido. El mensaje identifica la dependencia y sugiere usar
+un DTO exportado. Los puertos de salida propios pueden usar modelos del dominio:
+esta restricción no se aplica a application.port.out.
+
+ContratosExportadosRegresionTest verifica casos válidos e inválidos: la forma del
+PR #5 (retorno directo de dominio sin consumidor), genéricos, parámetros, arrays,
+herencia, persistencia, Page de Spring y DTO que ocultan dominio. Las fixtures
+intencionalmente inválidas están únicamente en src/test; la revisión de producción
+las excluye. No son implementaciones de roles ni ejemplos para copiar a src/main.
+
+CI verde acredita las verificaciones presentes, no ausencia de todos los defectos.
+Los tipos dinámicos dentro de Object/contenedores sin tipar, SQL, propiedad de tablas,
+reglas funcionales e integración real necesitan pruebas específicas y revisión.
+Se mantiene la aprobación humana obligatoria; no fusionar solo por ver checks verdes.
+
+### Evidencia inicial — 14-oct-2026
+
+Preparado en codex/ci-contratos-internos desde develop 52fd0e6.
+Java 21.0.10 / Gradle 8.14.3: comprobación de arquitectura 18/18 y clean build
+completo 51/51, sin fallos ni omisiones, con bootJar y contextLoads correctos.
+Contenedores locales desechables; no conexión a Supabase. No acredita aún una
+ejecución en GitHub Actions: la rama debe publicarse mediante PR a develop.
