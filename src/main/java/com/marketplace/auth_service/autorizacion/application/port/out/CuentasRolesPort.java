@@ -2,7 +2,8 @@ package com.marketplace.auth_service.autorizacion.application.port.out;
 
 import com.marketplace.auth_service.autorizacion.application.dto.CuentaRoles;
 
-import java.util.Optional;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -15,8 +16,11 @@ import java.util.UUID;
 public interface CuentasRolesPort {
 
     /**
-     * Bloquea la fila de la cuenta en la transacción en curso (nivel 2 del orden
-     * de locks) y devuelve su copia, o vacío si no existe. Requiere transacción.
+     * Bloquea las filas de esas cuentas en la transacción en curso (nivel 2 del
+     * orden de locks), una a una y <b>exactamente en el orden recibido</b>: el
+     * coordinador ya las entrega sin repetir y ordenadas por UUID (actor y
+     * objetivo, ACUERDOS-INTERNOS §3). Devuelve las que existen, por id.
+     * Requiere transacción.
      */
-    Optional<CuentaRoles> bloquear(UUID usuarioId);
+    Map<UUID, CuentaRoles> bloquear(List<UUID> usuarioIds);
 }

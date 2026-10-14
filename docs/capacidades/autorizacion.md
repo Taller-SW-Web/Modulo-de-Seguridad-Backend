@@ -125,15 +125,19 @@ sola transacción** (`REQUIRED`, `READ_COMMITTED`), en este orden
    mirar el código o la cuenta, y `ACCESO_DENEGADO` se audita después del rollback.
 2. Código de rol: si no es uno de los seis, 400 `VALIDACION` con `errores[{campo: "rol"}]`.
 3. Nivel 1: lock de `rol.ADMIN_SISTEMA`.
-4. Nivel 2: lock de la cuenta objetivo (Eva). Si no existe, 404 `NO_ENCONTRADO`.
+4. Nivel 2: lock de las cuentas de **actor y objetivo** (Eva), una sola vez si
+   son la misma y ordenadas por UUID como las ordena PostgreSQL (texto en
+   minúsculas; `UUID.compareTo` de Java compara con signo y da otro orden).
+   Si el objetivo no existe, 404 `NO_ENCONTRADO`.
 5. Reautorización bajo lock: si otra transacción le quitó el permiso al actor
    mientras esperaba, 403 y nada cambia.
-6. Fila en `usuario_rol`. Si ya tenía el rol, responde 200 sin más efectos.
+6. Si ya tenía el rol, responde 200 sin revocar, escribir, auditar ni publicar.
 7. Nivel 3: revoca **todas** las familias de refresco del objetivo (Jose Luis).
-8. Auditoría crítica `ROL_ASIGNADO` y evento `usuario.roles_cambiados` en el
-   outbox, con la lista completa resultante (Christian).
+8. Nivel 4: fila en `usuario_rol` (fila interna propia).
+9. Nivel 5: auditoría crítica `ROL_ASIGNADO` y evento `usuario.roles_cambiados`
+   en el outbox, con la lista completa resultante (Christian).
 
-Cualquier fallo en 7–8 revierte también la fila de `usuario_rol`. Un fallo
+Ningún paso vuelve a un nivel anterior. Cualquier fallo en 7–9 revierte todo. Un fallo
 técnico responde 503 `NO_DISPONIBLE`. La respuesta 200 es el esquema `Usuario`
 con sus campos obligatorios (`id`, `nombreCompleto`, `correo`, `estado`,
 `roles`); la pantalla recarga el detalle completo después.
@@ -153,7 +157,7 @@ responde 503. El arranque deja este aviso:
 
 | Puerto de salida (Sergio) | Método | Puerto del dueño (ACUERDOS §2) | Requisito |
 |---|---|---|---|
-| `CuentasRolesPort` | `bloquear(UUID)` → `Optional<CuentaRoles>` | `CuentasPort.bloquear` (Eva) | Lock de fila en la transacción; `estado` = estado **efectivo** |
+| `CuentasRolesPort` | `bloquear(List<UUID>)` → `Map<UUID, CuentaRoles>` | `CuentasPort.bloquear` (Eva) | Lock de filas en la transacción, exactamente en el orden recibido; `estado` = estado **efectivo** |
 | `SesionesRolesPort` | `revocarTodas(UUID)` | `SesionesPort.revocarTodas` (Jose Luis) | `MANDATORY`; bloquea raíces en orden |
 | `AuditoriaRolesPort` | `registrarCritica(RegistroRol)` / `registrarNoCritica(RegistroRol)` | `AuditoriaPort.registrarCritica` / `registrarNoCriticaTrasCommit` (Christian) | Crítica en el mismo commit; si falla, lanzar `GestionRolesNoDisponibleException` |
 | `EventosRolesPort` | `guardar(RolesCambiadosEvento)` | `MensajeriaPort.guardarEvento` (Christian) | Outbox en el mismo commit; `datos.roles` = lista completa |

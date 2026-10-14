@@ -36,7 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -77,11 +79,15 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
 
         @Bean
         CuentasRolesPort cuentasRolesPort(JdbcTemplate jdbc) {
-            return usuarioId -> {
+            return ids -> {
                 exigirTransaccion();
-                return jdbc.query("SELECT id, estado FROM prueba_cuenta WHERE id = ? FOR UPDATE",
-                        (fila, n) -> new CuentaRoles(fila.getObject("id", UUID.class), "Nombre", "c@ejemplo.test",
-                                fila.getString("estado")), usuarioId).stream().findFirst();
+                Map<UUID, CuentaRoles> bloqueadas = new LinkedHashMap<>();
+                for (UUID id : ids) {
+                    jdbc.query("SELECT id, estado FROM prueba_cuenta WHERE id = ? FOR UPDATE",
+                            (fila, n) -> new CuentaRoles(fila.getObject("id", UUID.class), "Nombre", "c@ejemplo.test",
+                                    fila.getString("estado")), id).forEach(c -> bloqueadas.put(c.id(), c));
+                }
+                return bloqueadas;
             };
         }
 
@@ -89,7 +95,9 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
         SesionesRolesPort sesionesRolesPort(JdbcTemplate jdbc) {
             return usuarioId -> {
                 exigirTransaccion();
-                jdbc.update("INSERT INTO prueba_revocacion (usuario_id) VALUES (?)", usuarioId);
+                // Cuántos roles tenía al revocar: prueba que las familias van antes que usuario_rol.
+                jdbc.update("INSERT INTO prueba_revocacion (usuario_id, roles_al_revocar)"
+                        + " SELECT ?, count(*) FROM usuario_rol WHERE usuario_id = ?", usuarioId, usuarioId);
             };
         }
 
@@ -154,7 +162,7 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
     void preparar() {
         FALLA.set(null);
         jdbc.execute("CREATE TABLE IF NOT EXISTS prueba_cuenta (id uuid PRIMARY KEY, estado varchar(30) NOT NULL)");
-        jdbc.execute("CREATE TABLE IF NOT EXISTS prueba_revocacion (usuario_id uuid NOT NULL)");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS prueba_revocacion (usuario_id uuid NOT NULL, roles_al_revocar int)");
         jdbc.execute("CREATE TABLE IF NOT EXISTS prueba_auditoria (accion varchar(30), resultado varchar(10),"
                 + " actor uuid, objetivo uuid, rol varchar(30), ip varchar(50))");
         jdbc.execute("CREATE TABLE IF NOT EXISTS prueba_outbox (evento_id uuid, usuario_id uuid, roles text)");
@@ -258,6 +266,44 @@ class GestionRolesPostgresTest extends PostgresDePrueba {
                     assertThat(fila.get("actor")).isEqualTo(adminVentas);
                     assertThat(fila.get("rol")).isNull();
                 });
+    }
+
+    @Test
+    void lasFamiliasSeRevocanAntesDeEscribirUsuarioRol() {
+        UUID admin = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID vendedor = cuenta("ACTIVO", Rol.VENDEDOR);
+
+        gestionRoles.asignar(asignar(admin, vendedor, "GESTOR_DESPACHO"));
+
+        assertThat(jdbc.queryForObject("SELECT roles_al_revocar FROM prueba_revocacion WHERE usuario_id = ?",
+                Integer.class, vendedor)).as("solo VENDEDOR: aún no se había escrito GESTOR_DESPACHO").isEqualTo(1);
+        assertThat(rolesEnLaBase(vendedor)).containsExactlyInAnyOrder(Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
+    }
+
+    @Test
+    void laCuentaDelActorTambienSeBloquea() throws Exception {
+        UUID admin = cuenta("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID vendedor = cuenta("ACTIVO", Rol.VENDEDOR);
+        TransactionTemplate tx = new TransactionTemplate(transacciones);
+        CountDownLatch tieneElLock = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+
+        // Otra operación de cuentas (nivel 2) tiene la fila del actor, no la del objetivo.
+        CompletableFuture<Void> otra = CompletableFuture.runAsync(() -> tx.executeWithoutResult(estado -> {
+            jdbc.query("SELECT id FROM prueba_cuenta WHERE id = ? FOR UPDATE", (fila, n) -> 1, admin);
+            tieneElLock.countDown();
+            esperar(soltar);
+        }));
+        assertThat(tieneElLock.await(10, TimeUnit.SECONDS)).isTrue();
+
+        CompletableFuture<RolesCambiados> asignacion = CompletableFuture.supplyAsync(
+                () -> gestionRoles.asignar(asignar(admin, vendedor, "GESTOR_DESPACHO")));
+        Thread.sleep(700);
+        assertThat(asignacion).as("espera la fila del actor").isNotDone();
+
+        soltar.countDown();
+        otra.get(10, TimeUnit.SECONDS);
+        assertThat(asignacion.get(10, TimeUnit.SECONDS).huboCambio()).isTrue();
     }
 
     @Test

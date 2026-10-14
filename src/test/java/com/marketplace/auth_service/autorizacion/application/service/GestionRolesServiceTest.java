@@ -129,9 +129,15 @@ class GestionRolesServiceTest {
         }
     };
 
-    private final CuentasRolesPort cuentas = usuarioId -> {
-        llamadas.add("lock cuenta");
-        return Optional.ofNullable(cuentasExistentes.get(usuarioId));
+    /** Orden en que se pidieron bloquear las cuentas en la última operación. */
+    private List<UUID> bloqueadas = List.of();
+
+    private final CuentasRolesPort cuentas = ids -> {
+        llamadas.add("lock cuentas");
+        bloqueadas = ids;
+        Map<UUID, CuentaRoles> existentes = new HashMap<>();
+        ids.forEach(id -> Optional.ofNullable(cuentasExistentes.get(id)).ifPresent(c -> existentes.put(id, c)));
+        return existentes;
     };
 
     private final SesionesRolesPort sesiones = usuarioId -> llamadas.add("revocar sesiones");
@@ -166,7 +172,10 @@ class GestionRolesServiceTest {
     }
 
     private UUID persona(String estado, Rol... asignados) {
-        UUID id = UUID.randomUUID();
+        return persona(UUID.randomUUID(), estado, asignados);
+    }
+
+    private UUID persona(UUID id, String estado, Rol... asignados) {
         roles.put(id, asignados.length == 0 ? EnumSet.noneOf(Rol.class) : EnumSet.copyOf(List.of(asignados)));
         cuentasExistentes.put(id, new CuentaRoles(id, "Persona " + id, id + "@ejemplo.test", estado));
         return id;
@@ -190,8 +199,9 @@ class GestionRolesServiceTest {
         RolesCambiados resultado = servicio.asignar(asignar(admin, vendedor, "GESTOR_DESPACHO"));
 
         assertThat(llamadas).containsExactly(
-                "exigir rol.asignar", "lock catálogo", "lock cuenta", "exigir rol.asignar",
-                "asignar GESTOR_DESPACHO", "revocar sesiones", "auditar ROL_ASIGNADO", "evento");
+                "exigir rol.asignar", "lock catálogo", "lock cuentas", "exigir rol.asignar",
+                "revocar sesiones", "asignar GESTOR_DESPACHO", "auditar ROL_ASIGNADO", "evento");
+        assertThat(bloqueadas).as("actor y objetivo").containsExactlyInAnyOrder(admin, vendedor);
         assertThat(resultado.huboCambio()).isTrue();
         assertThat(resultado.roles()).containsExactly(Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
         assertThat(resultado.cuenta().id()).isEqualTo(vendedor);
@@ -249,7 +259,47 @@ class GestionRolesServiceTest {
 
         assertThat(resultado.huboCambio()).isFalse();
         assertThat(resultado.roles()).containsExactly(Rol.VENDEDOR);
-        assertThat(llamadas).doesNotContain("revocar sesiones", "evento").noneMatch(l -> l.startsWith("auditar"));
+        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuentas", "exigir rol.asignar");
+    }
+
+    // ── Orden de locks (ACUERDOS-INTERNOS §3) ─────────────────
+
+    @Test
+    void bloqueaActorYObjetivoOrdenadosComoPostgresqlNoComoUuidCompareTo() {
+        // compareTo de Java pone primero 8000… (bits con signo); PostgreSQL, 1000…
+        UUID alto = UUID.fromString("80000000-0000-0000-0000-000000000001");
+        UUID bajo = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        assertThat(alto.compareTo(bajo)).isNegative();
+
+        persona(alto, "ACTIVO", Rol.ADMIN_SISTEMA);
+        persona(bajo, "ACTIVO", Rol.VENDEDOR);
+        servicio.asignar(asignar(alto, bajo, "GESTOR_DESPACHO"));
+        assertThat(bloqueadas).containsExactly(bajo, alto);
+
+        roles.get(alto).remove(Rol.ADMIN_SISTEMA);
+        roles.get(bajo).add(Rol.ADMIN_SISTEMA);
+        servicio.asignar(asignar(bajo, alto, "GESTOR_DESPACHO"));
+        assertThat(bloqueadas).as("mismo orden aunque cambien los papeles").containsExactly(bajo, alto);
+    }
+
+    @Test
+    void sobreSuPropiaCuentaLaBloqueaUnaSolaVez() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+
+        servicio.asignar(asignar(admin, admin, "VENDEDOR"));
+
+        assertThat(bloqueadas).containsExactly(admin);
+    }
+
+    @Test
+    void lasFamiliasSeRevocanAntesDeEscribirLaAsociacion() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID vendedor = persona("ACTIVO", Rol.VENDEDOR);
+
+        servicio.asignar(asignar(admin, vendedor, "GESTOR_DESPACHO"));
+
+        assertThat(llamadas.indexOf("revocar sesiones")).isLessThan(llamadas.indexOf("asignar GESTOR_DESPACHO"));
+        assertThat(llamadas.indexOf("lock cuentas")).isLessThan(llamadas.indexOf("revocar sesiones"));
     }
 
     // ── ESC-11.2 ──────────────────────────────────────────────
@@ -304,7 +354,7 @@ class GestionRolesServiceTest {
 
         assertThatThrownBy(() -> servicio.asignar(asignar(admin, vendedor, "GESTOR_DESPACHO")))
                 .isInstanceOf(AccesoDenegadoException.class);
-        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuenta", "exigir rol.asignar");
+        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuentas", "exigir rol.asignar");
         assertThat(roles.get(vendedor)).containsExactly(Rol.VENDEDOR);
     }
 
@@ -317,7 +367,7 @@ class GestionRolesServiceTest {
 
         assertThatThrownBy(() -> servicio.asignar(asignar(admin, inexistente, "VENDEDOR")))
                 .isInstanceOf(UsuarioNoEncontradoException.class);
-        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuenta");
+        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuentas");
         assertThat(roles).doesNotContainKey(inexistente);
     }
 
