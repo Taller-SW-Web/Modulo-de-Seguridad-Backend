@@ -161,6 +161,36 @@ servidor real y recorre todos los casos de la tabla anterior;
 `VerificacionJwsTest` firma tokens falsos (otra clave, otro kid, RS512, HS256,
 `none`) y comprueba que se rechazan.
 
+### Matriz criptográfica en runtime (TEC-IDENTIDAD-T004)
+
+`ValidacionCriptograficaRuntimeTest` arranca el backend como en un entorno:
+clave PKCS8 de 3072 bits leída de **archivo** e issuer externo fijo, igual
+que detrás de un proxy. No usa JWT de ejemplo: los accesos válidos los emite
+`FirmaPort` y los inválidos se firman en la prueba con claves generadas en la
+ejecución.
+
+| Comprueba | Resultado esperado |
+|---|---|
+| Perfil del acceso emitido | RS256, `typ` JWT, `kid` = huella SHA-256; exactamente `iss sub email tipo roles permisos iat exp jti`; `exp = iat + 900`; sin `aud`; arrays aunque estén vacíos |
+| Verificación de un tercero | Con solo el JWKS publicado por HTTP (`n`/`e`/`kid`, 3072 bits, sin parte privada), la firma verifica |
+| Acceso válido, roles y permisos vacíos | 200 y el controlador recibe el `sub` |
+| Payload alterado para escalar a ADMIN_SISTEMA, otra clave con nuestro kid, otra clave con su kid, RSA 2048, sin kid, kid desconocido, RS512, PS256, HS256 con la clave pública como secreto, `alg: none` | 401 `TOKEN_INVALIDO` |
+| Vencido en el segundo actual (una tolerancia de 60 s lo aceptaría), sin `exp`, issuer de otro entorno, issuer con barra final | 401 `TOKEN_INVALIDO` |
+| `sub` que no es UUID, sin `jti`, `roles` como texto, sin `permisos`, sin `tipo`, `tipo` refresco | 401 `TOKEN_INVALIDO` |
+| Sin `iat` (Spring lo completaría), `iat` futuro, `nbf` futuro, duración de 1800 s, sin `email` | 401 `TOKEN_INVALIDO` |
+| Token de servicio firmado con nuestra clave (fixture aislada, sin clientes A10) | 403 `TOKEN_NO_APLICABLE` |
+| Reinicio con el mismo archivo de clave | Mismo `kid` publicado; un acceso emitido antes del reinicio sigue entrando |
+| Otro entorno con otra clave | `kid` distinto; nuestros accesos dan 401 allí |
+| Logs de todo lo anterior | Sin `PRIVATE KEY`, sin el cuerpo del PEM, sin tokens ni firmas |
+
+El borde exacto `exp == ahora` se prueba con reloj fijo en
+`FirmarAccesoServiceTest.venceExactamenteEnExpSinTolerancia` y
+`VerificacionJwsTest.elRelojDelCasoDeUsoRechazaElAccesoAlVencer`. Con el reloj
+real, «ahora» siempre queda unos milisegundos por delante.
+
+Estas pruebas son locales: la verificación con el validador de Ventas (G5)
+contra el entorno desplegado es TEC-IDENTIDAD-T005.
+
 ## Fuera de alcance en H3
 
 Rotación de claves (clave nueva y anterior a la vez), emisión de tokens de
