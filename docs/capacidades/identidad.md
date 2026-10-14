@@ -1,15 +1,16 @@
-# Capacidad `identidad` — firma, JWKS y descubrimiento
+# Capacidad `identidad` — firma, validación, JWKS y descubrimiento
 
 **Dueño:** Sergio Osorio · **Tareas:** TEC-IDENTIDAD-T001 (firma), T003 (JWKS y
-descubrimiento).
+descubrimiento), T002 (validación y filtro de acceso).
 **Fuentes:** SPEC-17 RF-17.1/17.2/17.14, SPEC-05 RF-05.6, contrato
 `tokenUsuario`, `plan/hito-3/ENTORNO-Y-REACT.md` §2 y `plan/transversales/TEC-IDENTIDAD.md`
 en el repo de documentación.
 
 ## Qué hace, en una frase
 
-Firma los tokens de acceso de las personas con una clave RSA persistente y
-publica la parte pública para que cualquiera los verifique sin llamarnos.
+Firma los tokens de acceso de las personas con una clave RSA persistente,
+publica la parte pública para que cualquiera los verifique sin llamarnos, y
+valida los accesos que llegan a nuestro propio backend.
 
 ## Cómo se usa desde otra capacidad
 
@@ -19,6 +20,7 @@ Solo a través del puerto exportado
 | Operación | Quién la usa | Qué devuelve |
 |---|---|---|
 | `firmar(ClaimsAcceso)` | Login (Jose Luis, EP-02) y OTP (Luis, EP-04) | `AccesoFirmado`: token, `jti`, `emitidoEn`, `expiraEn`, `expiresIn()` = 900 |
+| `validar(String token)` | El filtro de acceso (nadie más lo necesita) | `AccesoValidado`: `sub`, `jti`, roles, permisos, `expiraEn` |
 | `jwks()` | El controlador de descubrimiento | Claves públicas vigentes |
 | `descubrimiento()` | El controlador de descubrimiento | `issuer`, `jwks_uri`, algoritmos |
 
@@ -61,6 +63,46 @@ No lleva `aud`: el perfil de persona no la exige (contrato, A10).
 - Sin firma configurada: `503` con el problema `NO_DISPONIBLE` y
   `detail: "Usa tu copia en caché del JWKS."`.
 
+## Cómo se protege una ruta de nuestro backend (TEC-IDENTIDAD-T002)
+
+El filtro (`configuration/SeguridadConfig`) ya está puesto: **toda ruta exige
+un acceso de persona válido**, salvo las públicas listadas una a una. Un
+controlador recibe a la persona así:
+
+```java
+@PostMapping("/api/v1/usuarios/{id}/roles")
+ResponseEntity<?> asignar(@AuthenticationPrincipal ActorUsuario actor, ...) {
+    autorizacionPort.exigirPermiso(actor, Permiso.ROL_ASIGNAR); // permisos ACTUALES, no los del token
+    ...
+}
+```
+
+Qué comprueba `validar` (y por tanto el filtro):
+
+| Comprobación | Si falla |
+|---|---|
+| Cabecera `Authorization: Bearer …` (nunca `?access_token=` ni cookie) | 401 `TOKEN_INVALIDO` |
+| Firma RS256 con la clave **local** (sin HTTP a nuestro JWKS); otros algoritmos, `none` y HS256 se rechazan | 401 |
+| `kid` = el de nuestra clave | 401 |
+| `iss` = `AUTH_ISSUER` exacto | 401 |
+| `exp` posterior a ahora, **sin tolerancia** (`exp <= ahora` es vencido) | 401 |
+| `iat` presente y no futuro; `nbf`, si viene, no futuro (mismo `Clock`, tolerancia cero). Se leen del token tal cual: Spring completaría un `iat` ausente | 401 |
+| `tipo = acceso`, `exp - iat` = 900 s exactos, `email` con formato de correo, `sub` y `jti` UUID, `roles`/`permisos` arrays | 401 |
+| `tipo = servicio` con firma válida (token de un módulo) | **403 `TOKEN_NO_APLICABLE`** |
+| Sin clave configurada: no se puede validar | 503 `NO_DISPONIBLE` |
+
+- Todos los errores salen en RFC 7807 con el `code` del contrato, nunca HTML;
+  el 401 lleva `WWW-Authenticate: Bearer`. Solo el 401 `TOKEN_INVALIDO`
+  autoriza a la SPA a intentar renovar la sesión.
+- Sin sesión HTTP ni cookies (stateless), y por eso sin CSRF.
+- En las rutas públicas no se lee el `Authorization`: un token caducado no
+  impide descargar el JWKS.
+- `AccesoDenegadoException` de cualquier controlador → 403 `SCOPE_INSUFICIENTE`
+  sin decir qué permiso faltaba (`AutorizacionErroresAdvice`).
+- Un scope de servicio **nunca** se convierte en rol ni permiso.
+- **Para añadir una ruta pública** (login, refresh, OTP…), su dueño la agrega
+  a `SeguridadConfig` de forma explícita, sin comodines.
+
 ## Cómo lo valida un consumidor (Ventas y los demás módulos)
 
 Con Spring Security basta una línea; Spring descubre el JWKS y comprueba el issuer:
@@ -95,12 +137,14 @@ Sin issuer o sin clave válida la aplicación **arranca igual**, registra el mot
 
 ```text
 identidad/
-  domain/exception/FirmaNoDisponibleException
-  application/dto/        ClaimsAcceso, AccesoFirmado, ContenidoAcceso, ClavePublica, Descubrimiento
+  domain/exception/FirmaNoDisponibleException, TokenInvalidoException, TokenNoAplicableException
+  application/dto/        ClaimsAcceso, AccesoFirmado, ContenidoAcceso, ClavePublica, Descubrimiento,
+                          ClaimsVerificados, AccesoValidado
   application/port/in/    FirmaPort            ← lo único que consumen los demás
   application/port/out/   FirmadorJws
   application/service/    FirmarAccesoService (Java puro), FirmaDenegada
-  adapter/out/crypto/     ClaveFirmaRsa (carga PKCS8, kid), NimbusFirmadorJws
+  adapter/out/crypto/     ClaveFirmaRsa (carga PKCS8, kid), NimbusFirmadorJws (firma y verifica)
+  adapter/in/security/    AccesoAuthenticationManager, ActorAutenticado, RespuestasAcceso
   adapter/in/web/         DescubrimientoController, IdentidadWebMapper, dto/
 configuration/            IdentidadConfig (wiring), IdentidadProperties, SeguridadConfig
 shared/adapter/web/       Problemas (errores RFC 7807 del contrato)
@@ -112,9 +156,13 @@ shared/adapter/web/       Problemas (errores RFC 7807 del contrato)
 ./gradlew test --tests 'com.marketplace.auth_service.identidad.*' --tests 'com.marketplace.auth_service.configuration.*'
 ```
 
-No necesitan Docker ni base de datos.
+No necesitan Docker ni base de datos. `FiltroAccesoHttpTest` levanta un
+servidor real y recorre todos los casos de la tabla anterior;
+`VerificacionJwsTest` firma tokens falsos (otra clave, otro kid, RS512, HS256,
+`none`) y comprueba que se rechazan.
 
 ## Fuera de alcance en H3
 
-Rotación de claves (clave nueva y anterior a la vez), tokens de servicio,
-introspección y consultas SPEC-18.
+Rotación de claves (clave nueva y anterior a la vez), emisión de tokens de
+servicio, introspección y consultas SPEC-18. La auditoría `ACCESO_DENEGADO`
+se conectará cuando exista `AuditoriaPort` (Christian).
