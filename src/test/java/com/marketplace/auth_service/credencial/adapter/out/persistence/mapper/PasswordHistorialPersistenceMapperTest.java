@@ -32,7 +32,7 @@ class PasswordHistorialPersistenceMapperTest {
         List<PasswordHistorialJpaEntity> rows = PasswordHistorialPersistenceMapper.aEntidades(credentialId, model);
         PasswordHistorial roundTrip = PasswordHistorialPersistenceMapper.aDominio(rows.reversed());
 
-        assertThat(rows).allSatisfy(row -> assertThat(row.getCredencialId()).isEqualTo(credentialId));
+        assertThat(rows).allSatisfy(row -> assertThat(row.getUsuarioId()).isEqualTo(credentialId));
         assertThat(roundTrip.entradas()).extracting(PasswordHistorial.Entrada::id)
                 .containsExactly(olderId, newerId);
         assertThat(roundTrip.entradas().get(0).hash().algoritmo()).isEqualTo(AlgoritmoHash.ARGON2ID);

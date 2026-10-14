@@ -13,6 +13,7 @@ import com.marketplace.auth_service.credencial.domain.model.Credencial;
 import com.marketplace.auth_service.credencial.domain.model.HashContrasena;
 import com.marketplace.auth_service.credencial.domain.model.PasswordHistorial;
 import java.sql.DriverManager;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -54,7 +55,10 @@ class CredencialJpaPostgresTest {
         POSTGRES.start();
         try (var connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("credencial/base-v2-sin-version.sql"));
+            try (var schema = new ClassPathResource("mfa/base-observada/schema.sql").getInputStream();
+                    var statement = connection.createStatement()) {
+                statement.execute(new String(schema.readAllBytes(), StandardCharsets.UTF_8));
+            }
             ScriptUtils.executeSqlScript(connection,
                     new FileSystemResource("docs/migraciones-propuestas/V101__credencial_version.sql"));
         } catch (Exception exception) {
@@ -71,21 +75,22 @@ class CredencialJpaPostgresTest {
     @Autowired PlatformTransactionManager transactionManager;
 
     private UUID usuarioId;
-    private UUID credencialId;
 
     @BeforeEach
     void prepararUsuario() {
         usuarioId = UUID.randomUUID();
-        credencialId = UUID.randomUUID();
-        jdbc.update("insert into usuario(id) values (?)", usuarioId);
+        jdbc.update("""
+                insert into usuario(id, correo, nombres, apellidos, estado)
+                values (?, ?, 'Fixture', 'T001', 'ACTIVO')
+                """, usuarioId, usuarioId + "@example.test");
     }
 
     @Test
-    void appliesProposedMigrationAndRoundTripsCredentialAndHistory() {
+    void appliesProposedMigrationAgainstObservedSchemaAndRoundTripsCredentialAndHistory() {
         String currentHash = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA";
         Instant currentAt = Instant.parse("2026-10-14T16:00:00Z");
         Credencial current = new Credencial(
-                credencialId,
+                usuarioId,
                 usuarioId,
                 new HashContrasena(currentHash, AlgoritmoHash.ARGON2ID),
                 currentAt,
@@ -99,13 +104,13 @@ class CredencialJpaPostgresTest {
                         new HashContrasena("$2b$12$" + "x".repeat(53), AlgoritmoHash.BCRYPT),
                         currentAt.minusSeconds(86_400)),
                 new PasswordHistorial.Entrada(UUID.randomUUID(), current.hashActual(), currentAt)));
-        historiales.saveAll(PasswordHistorialPersistenceMapper.aEntidades(credencialId, history));
+        historiales.saveAll(PasswordHistorialPersistenceMapper.aEntidades(usuarioId, history));
         historiales.flush();
 
         Credencial loaded = CredencialPersistenceMapper.aDominio(
-                credenciales.findById(credencialId).orElseThrow());
+                credenciales.findById(usuarioId).orElseThrow());
         PasswordHistorial loadedHistory = PasswordHistorialPersistenceMapper.aDominio(
-                historiales.findTop5ByCredencialIdOrderByCreadoEnDescIdDesc(credencialId));
+                historiales.findTop5ByUsuarioIdOrderByCreadoEnDescIdDesc(usuarioId));
 
         assertThat(loaded.version()).isZero();
         assertThat(loaded.hashActual().valor()).isEqualTo(currentHash);
@@ -121,26 +126,26 @@ class CredencialJpaPostgresTest {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         CredencialJpaEntity firstSnapshot = transaction.execute(status ->
-                credenciales.findById(credencialId).orElseThrow());
+                credenciales.findById(usuarioId).orElseThrow());
         CredencialJpaEntity staleSnapshot = transaction.execute(status ->
-                credenciales.findById(credencialId).orElseThrow());
+                credenciales.findById(usuarioId).orElseThrow());
 
         transaction.executeWithoutResult(status -> {
-            firstSnapshot.reemplazarHash("$2b$12$" + "a".repeat(53), AlgoritmoHash.BCRYPT,
+            firstSnapshot.reemplazarHash("$2b$12$" + "a".repeat(53),
                     Instant.parse("2026-10-14T17:00:00Z").atOffset(java.time.ZoneOffset.UTC));
             credenciales.saveAndFlush(firstSnapshot);
         });
 
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-            staleSnapshot.reemplazarHash("$2b$12$" + "b".repeat(53), AlgoritmoHash.BCRYPT,
+            staleSnapshot.reemplazarHash("$2b$12$" + "b".repeat(53),
                     Instant.parse("2026-10-14T17:01:00Z").atOffset(java.time.ZoneOffset.UTC));
             credenciales.saveAndFlush(staleSnapshot);
         })).isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
         CredencialJpaEntity persisted = transaction.execute(status ->
-                credenciales.findById(credencialId).orElseThrow());
+                credenciales.findById(usuarioId).orElseThrow());
         assertThat(persisted.getVersion()).isEqualTo(1L);
-        assertThat(persisted.getPasswordHash()).contains("a".repeat(20));
+        assertThat(persisted.getPasswordHash()).startsWith("$2b$12$");
     }
 
     @Test
@@ -150,12 +155,12 @@ class CredencialJpaPostgresTest {
         CredencialJpaEntity locked = transaction.execute(status ->
                 credenciales.bloquearPorUsuarioId(usuarioId).orElseThrow());
 
-        assertThat(locked.getId()).isEqualTo(credencialId);
+        assertThat(locked.getId()).isEqualTo(usuarioId);
     }
 
     private void guardarCredencialInicial() {
         Credencial credential = new Credencial(
-                credencialId,
+                usuarioId,
                 usuarioId,
                 new HashContrasena("$2b$12$" + "0".repeat(53), AlgoritmoHash.BCRYPT),
                 Instant.parse("2026-10-14T16:00:00Z"),

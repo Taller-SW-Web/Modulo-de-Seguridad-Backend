@@ -6,5 +6,5 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PasswordHistorialJpaRepository extends JpaRepository<PasswordHistorialJpaEntity, UUID> {
-    List<PasswordHistorialJpaEntity> findTop5ByCredencialIdOrderByCreadoEnDescIdDesc(UUID credencialId);
+    List<PasswordHistorialJpaEntity> findTop5ByUsuarioIdOrderByCreadoEnDescIdDesc(UUID usuarioId);
 }

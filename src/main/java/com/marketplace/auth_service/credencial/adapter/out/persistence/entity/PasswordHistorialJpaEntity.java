@@ -15,10 +15,10 @@ public class PasswordHistorialJpaEntity {
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "credencial_id", nullable = false)
-    private UUID credencialId;
+    @Column(name = "usuario_id", nullable = false)
+    private UUID usuarioId;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "hash_contrasena", nullable = false, length = 255)
     private String passwordHash;
 
     @Column(name = "creado_en", nullable = false)
@@ -27,9 +27,9 @@ public class PasswordHistorialJpaEntity {
     protected PasswordHistorialJpaEntity() {
     }
 
-    public PasswordHistorialJpaEntity(UUID id, UUID credencialId, String passwordHash, OffsetDateTime creadoEn) {
+    public PasswordHistorialJpaEntity(UUID id, UUID usuarioId, String passwordHash, OffsetDateTime creadoEn) {
         this.id = Objects.requireNonNull(id, "id");
-        this.credencialId = Objects.requireNonNull(credencialId, "credencialId");
+        this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
         this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
         this.creadoEn = Objects.requireNonNull(creadoEn, "creadoEn");
     }
@@ -38,8 +38,8 @@ public class PasswordHistorialJpaEntity {
         return id;
     }
 
-    public UUID getCredencialId() {
-        return credencialId;
+    public UUID getUsuarioId() {
+        return usuarioId;
     }
 
     public String getPasswordHash() {
@@ -52,6 +52,6 @@ public class PasswordHistorialJpaEntity {
 
     @Override
     public String toString() {
-        return "PasswordHistorialJpaEntity[id=" + id + ", credencialId=" + credencialId + ", REDACTADO]";
+        return "PasswordHistorialJpaEntity[id=" + id + ", usuarioId=" + usuarioId + ", REDACTADO]";
     }
 }

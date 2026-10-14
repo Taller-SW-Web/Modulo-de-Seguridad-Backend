@@ -13,11 +13,12 @@ import org.junit.jupiter.api.Test;
 
 class CredencialPersistenceMapperTest {
     @Test
-    void mapsNewCredentialToV2ColumnsWithoutChangingSecretOrHash() {
+    void mapsNewCredentialToObservedColumnsWithoutChangingSecretOrHash() {
         String encoded = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA";
         Instant changedAt = Instant.parse("2026-10-14T16:00:00Z");
+        UUID usuarioId = UUID.randomUUID();
         Credencial model = new Credencial(
-                UUID.randomUUID(), UUID.randomUUID(), new HashContrasena(encoded, AlgoritmoHash.ARGON2ID), changedAt, 0);
+                usuarioId, usuarioId, new HashContrasena(encoded, AlgoritmoHash.ARGON2ID), changedAt, 0);
 
         CredencialJpaEntity entity = CredencialPersistenceMapper.aNuevaEntidad(model);
 
@@ -31,14 +32,29 @@ class CredencialPersistenceMapperTest {
 
     @Test
     void refusesToTreatAnExistingRevisionAsANewCredential() {
+        UUID usuarioId = UUID.randomUUID();
         Credencial model = new Credencial(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                usuarioId,
+                usuarioId,
                 new HashContrasena("$2a$12$" + "x".repeat(53), AlgoritmoHash.BCRYPT),
                 Instant.EPOCH,
                 1);
 
         assertThatThrownBy(() -> CredencialPersistenceMapper.aNuevaEntidad(model))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void refusesIdentityDifferentFromObservedPrimaryKey() {
+        Credencial model = new Credencial(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new HashContrasena("$2a$12$" + "x".repeat(53), AlgoritmoHash.BCRYPT),
+                Instant.EPOCH,
+                0);
+
+        assertThatThrownBy(() -> CredencialPersistenceMapper.aNuevaEntidad(model))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("usuario_id");
     }
 }

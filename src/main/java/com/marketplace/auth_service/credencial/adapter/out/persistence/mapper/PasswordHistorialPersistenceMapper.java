@@ -25,13 +25,13 @@ public final class PasswordHistorialPersistenceMapper {
                 .toList());
     }
 
-    public static List<PasswordHistorialJpaEntity> aEntidades(UUID credencialId, PasswordHistorial modelo) {
-        Objects.requireNonNull(credencialId, "credencialId");
+    public static List<PasswordHistorialJpaEntity> aEntidades(UUID usuarioId, PasswordHistorial modelo) {
+        Objects.requireNonNull(usuarioId, "usuarioId");
         Objects.requireNonNull(modelo, "modelo");
         return modelo.entradas().stream()
                 .map(entrada -> new PasswordHistorialJpaEntity(
                         entrada.id(),
-                        credencialId,
+                        usuarioId,
                         entrada.hash().valor(),
                         entrada.creadoEn().atOffset(ZoneOffset.UTC)))
                 .toList();

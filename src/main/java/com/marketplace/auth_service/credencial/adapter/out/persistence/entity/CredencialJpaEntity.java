@@ -3,8 +3,6 @@ package com.marketplace.auth_service.credencial.adapter.out.persistence.entity;
 import com.marketplace.auth_service.credencial.domain.model.AlgoritmoHash;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -16,20 +14,13 @@ import java.util.UUID;
 @Table(name = "credencial")
 public class CredencialJpaEntity {
     @Id
-    @Column(name = "id", nullable = false)
-    private UUID id;
-
-    @Column(name = "usuario_id", nullable = false, unique = true)
+    @Column(name = "usuario_id", nullable = false)
     private UUID usuarioId;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "hash_contrasena", nullable = false, length = 255)
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "algoritmo", nullable = false, length = 50)
-    private AlgoritmoHash algoritmo;
-
-    @Column(name = "actualizado_en", nullable = false)
+    @Column(name = "ultimo_cambio", nullable = false)
     private OffsetDateTime actualizadoEn;
 
     @Version
@@ -40,26 +31,21 @@ public class CredencialJpaEntity {
     }
 
     public CredencialJpaEntity(
-            UUID id,
             UUID usuarioId,
             String passwordHash,
-            AlgoritmoHash algoritmo,
             OffsetDateTime actualizadoEn) {
-        this.id = Objects.requireNonNull(id, "id");
         this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
         this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
-        this.algoritmo = Objects.requireNonNull(algoritmo, "algoritmo");
         this.actualizadoEn = Objects.requireNonNull(actualizadoEn, "actualizadoEn");
     }
 
-    public void reemplazarHash(String passwordHash, AlgoritmoHash algoritmo, OffsetDateTime actualizadoEn) {
+    public void reemplazarHash(String passwordHash, OffsetDateTime actualizadoEn) {
         this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
-        this.algoritmo = Objects.requireNonNull(algoritmo, "algoritmo");
         this.actualizadoEn = Objects.requireNonNull(actualizadoEn, "actualizadoEn");
     }
 
     public UUID getId() {
-        return id;
+        return usuarioId;
     }
 
     public UUID getUsuarioId() {
@@ -71,7 +57,7 @@ public class CredencialJpaEntity {
     }
 
     public AlgoritmoHash getAlgoritmo() {
-        return algoritmo;
+        return AlgoritmoHash.desdeHashCodificado(passwordHash);
     }
 
     public OffsetDateTime getActualizadoEn() {
@@ -84,6 +70,6 @@ public class CredencialJpaEntity {
 
     @Override
     public String toString() {
-        return "CredencialJpaEntity[id=" + id + ", usuarioId=" + usuarioId + ", REDACTADO]";
+        return "CredencialJpaEntity[usuarioId=" + usuarioId + ", REDACTADO]";
     }
 }
