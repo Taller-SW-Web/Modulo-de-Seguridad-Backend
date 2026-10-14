@@ -18,6 +18,7 @@ import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jwt.JWTClaimsSet;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -212,6 +213,26 @@ class FiltroAccesoHttpTest {
 
         for (var caso : casos.entrySet()) {
             HttpResponse<String> respuesta = get("/api/v1/prueba/actor", caso.getValue());
+            assertThat(respuesta.statusCode()).as(caso.getKey()).isEqualTo(401);
+            assertThat(json.readTree(respuesta.body()).get("code").asText()).as(caso.getKey()).isEqualTo("TOKEN_INVALIDO");
+        }
+    }
+
+    @Test
+    void tiemposYEmailInvalidosResponden401TokenInvalido() throws Exception {
+        Instant ahora = Instant.now();
+        Map<String, JWTClaimsSet> casos = Map.of(
+                "sin iat", TokensDePrueba.accesoValido(ISSUER).issueTime(null).build(),
+                "iat futuro", TokensDePrueba.accesoValido(ISSUER).issueTime(Date.from(ahora.plusSeconds(120)))
+                        .expirationTime(Date.from(ahora.plusSeconds(1020))).build(),
+                "nbf futuro", TokensDePrueba.accesoValido(ISSUER).notBeforeTime(Date.from(ahora.plusSeconds(120))).build(),
+                "dura 1800 s", TokensDePrueba.accesoValido(ISSUER).expirationTime(Date.from(ahora.plusSeconds(1800))).build(),
+                "sin email", TokensDePrueba.accesoValido(ISSUER).claim("email", null).build(),
+                "email sin formato", TokensDePrueba.accesoValido(ISSUER).claim("email", "no-es-correo").build());
+
+        for (var caso : casos.entrySet()) {
+            HttpResponse<String> respuesta = get("/api/v1/prueba/actor",
+                    "Bearer " + TokensDePrueba.firmarRs256(caso.getValue()));
             assertThat(respuesta.statusCode()).as(caso.getKey()).isEqualTo(401);
             assertThat(json.readTree(respuesta.body()).get("code").asText()).as(caso.getKey()).isEqualTo("TOKEN_INVALIDO");
         }

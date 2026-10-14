@@ -9,6 +9,8 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -22,6 +24,9 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
+import java.text.ParseException;
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -92,14 +97,34 @@ public class NimbusFirmadorJws implements FirmadorJws {
         } catch (JwtException e) {
             throw new TokenInvalidoException("firma, formato, algoritmo o kid inválidos");
         }
+        JWTClaimsSet crudos = crudos(token);
         return new ClaimsVerificados(
                 texto(jwt.getClaims().get("iss")),
                 texto(jwt.getClaims().get("tipo")),
                 texto(jwt.getClaims().get("sub")),
                 texto(jwt.getClaims().get("jti")),
+                crudos.getClaim("email") instanceof String email ? email : null,
                 listaDeTextos(jwt.getClaims().get("roles")),
                 listaDeTextos(jwt.getClaims().get("permisos")),
-                jwt.getExpiresAt());
+                instante(crudos.getIssueTime()),
+                instante(crudos.getNotBeforeTime()),
+                instante(crudos.getExpirationTime()));
+    }
+
+    /**
+     * Claims tal como vienen en el token ya verificado. Los tiempos se toman de
+     * aquí y no del {@link Jwt} de Spring, que completa {@code iat} cuando falta.
+     */
+    private static JWTClaimsSet crudos(String token) {
+        try {
+            return SignedJWT.parse(token).getJWTClaimsSet();
+        } catch (ParseException e) {
+            throw new TokenInvalidoException("claims ilegibles");
+        }
+    }
+
+    private static Instant instante(Date fecha) {
+        return fecha == null ? null : fecha.toInstant();
     }
 
     /** Rechaza tokens sin {@code kid} o con uno que no es el de nuestra clave. */
