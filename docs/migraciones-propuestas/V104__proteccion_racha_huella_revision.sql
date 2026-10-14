@@ -1,5 +1,6 @@
 -- PROPUESTA EP-07-T001. No se ejecuta automáticamente ni acredita esquema remoto.
--- Requiere usuario/bloqueo de la base previamente contrastada con Christian.
+-- Base manual contrastada por SELECT el 14-oct-2026; ver INVENTARIO-V104-20261014.json.
+-- Repetir contraste y revisar backup/historial con Christian antes de aplicar.
 -- No edita usuario, credencial, sesión ni token_un_uso.
 ALTER TABLE bloqueo
     ADD COLUMN revision uuid NOT NULL DEFAULT gen_random_uuid();

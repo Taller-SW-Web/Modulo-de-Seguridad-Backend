@@ -57,7 +57,8 @@ El mapping char(64) declara JDBC CHAR explícitamente para Hibernate/PostgreSQL.
 Las nuevas tablas tienen RLS activada; grants y políticas del runtime quedan
 bajo TEC-INFRA-T002. Las pruebas con owner no demuestran esos grants.
 
-Las pruebas usan V1–V4 exactas conservadas en recursos de test y PostgreSQL 16.6
-desechable. No se usa el antiguo backend como aplicación ni se ejecuta V100.
-No acreditan el DDL manual remoto, PostgreSQL 17.6, despliegue o APIs. Consultar
-REVISION-V104 y la evidencia antes de aplicar/promover la migración.
+Las pruebas actuales usan una copia del esquema manual de docs/arquitectura/schema.sql
+y PostgreSQL 17.6 desechable. Las tablas de protección se contrastaron por SELECT
+contra Supabase; el inventario está en INVENTARIO-V104-20261014.json. No se usa
+Supabase en tests ni se acredita aplicación remota, grants, despliegue o APIs.
+Consultar REVISION-V104 y la evidencia antes de aplicar/promover la migración.

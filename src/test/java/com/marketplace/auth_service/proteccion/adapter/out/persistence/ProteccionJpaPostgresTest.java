@@ -8,6 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,22 +38,24 @@ import static org.assertj.core.api.Assertions.*;
 @DataJpaTest(properties={"spring.flyway.enabled=false","spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC"}, showSql=false)
 @AutoConfigureTestDatabase(replace=AutoConfigureTestDatabase.Replace.NONE)
-@Import(ProteccionJpaAdapter.class)
+@Import({ProteccionJpaAdapter.class, ProteccionJpaPostgresTest.PersistenciaPropia.class})
 @Testcontainers
 class ProteccionJpaPostgresTest {
-    @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:16.6");
+    @TestConfiguration(proxyBeanMethods = false)
+    @EntityScan("com.marketplace.auth_service.proteccion.adapter.out.persistence.entity")
+    @EnableJpaRepositories("com.marketplace.auth_service.proteccion.adapter.out.persistence.repository")
+    static class PersistenciaPropia { }
+
+    @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:17.6");
     private static final Instant AHORA=Instant.parse("2026-10-14T05:00:00Z");
     private static final UUID LEGACY=UUID.fromString("00000000-0000-0000-0000-000000000071");
 
     @DynamicPropertySource static void baseDePrueba(DynamicPropertyRegistry registro) {
         POSTGRES.start();
         try(var c=DriverManager.getConnection(POSTGRES.getJdbcUrl(),POSTGRES.getUsername(),POSTGRES.getPassword())) {
-            for(String archivo:new String[]{"V1__usuario_y_roles.sql","V2__credenciales_otp_tokens.sql",
-                    "V3__sesion_y_bloqueo.sql","V4__auditoria_y_integracion.sql"}) {
-                try(var entrada=new ClassPathResource("proteccion/base-historica/"+archivo).getInputStream();
+            try(var entrada=new ClassPathResource("proteccion/base-observada/schema.sql").getInputStream();
                     var sentencia=c.createStatement()) {
-                    sentencia.execute(new String(entrada.readAllBytes(),StandardCharsets.UTF_8));
-                }
+                sentencia.execute(new String(entrada.readAllBytes(),StandardCharsets.UTF_8));
             }
             try(var sentencia=c.createStatement()) {
                 sentencia.execute("insert into usuario(id,correo,nombres,apellidos,estado) "

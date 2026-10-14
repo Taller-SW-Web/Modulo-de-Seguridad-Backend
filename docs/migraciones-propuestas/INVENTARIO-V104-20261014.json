@@ -1,0 +1,173 @@
+{
+  "fecha": "2026-10-14",
+  "fuente": "Catálogos PostgreSQL, Supabase sghqhbakbnaapxdapmbc; solo lectura; sin filas de negocio",
+  "columnas": [
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "bloqueo",
+      "column_name": "usuario_id",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "tipo_bloqueo",
+      "data_type": "USER-DEFINED",
+      "table_name": "bloqueo",
+      "column_name": "tipo",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "bloqueo",
+      "column_name": "bloqueado_hasta",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "bloqueo",
+      "column_name": "motivo",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": 500
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "bloqueo",
+      "column_name": "creado_en",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "intento_login",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "intento_login",
+      "column_name": "usuario_id",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "intento_login",
+      "column_name": "correo_intentado",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": 254
+    },
+    {
+      "udt_name": "resultado",
+      "data_type": "USER-DEFINED",
+      "table_name": "intento_login",
+      "column_name": "resultado",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "intento_login",
+      "column_name": "ip",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": 45
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "intento_login",
+      "column_name": "user_agent",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": 255
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "intento_login",
+      "column_name": "fecha",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "character_maximum_length": null
+    }
+  ],
+  "constraints": [
+    {
+      "tabla": "bloqueo",
+      "nombre": "bloqueo_pkey",
+      "validada": true,
+      "definicion": "PRIMARY KEY (usuario_id)"
+    },
+    {
+      "tabla": "bloqueo",
+      "nombre": "bloqueo_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE"
+    },
+    {
+      "tabla": "bloqueo",
+      "nombre": "ck_bloqueo_tipo",
+      "validada": true,
+      "definicion": "CHECK ((((tipo = 'MANUAL'::tipo_bloqueo) AND (motivo IS NOT NULL) AND (bloqueado_hasta IS NULL)) OR ((tipo = 'AUTOMATICO'::tipo_bloqueo) AND (motivo IS NULL))))"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "intento_login_pkey",
+      "validada": true,
+      "definicion": "PRIMARY KEY (id)"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "intento_login_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE SET NULL"
+    }
+  ],
+  "indices": [
+    {
+      "tabla": "bloqueo",
+      "nombre": "bloqueo_pkey",
+      "definicion": "CREATE UNIQUE INDEX bloqueo_pkey ON public.bloqueo USING btree (usuario_id)"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "intento_login_pkey",
+      "definicion": "CREATE UNIQUE INDEX intento_login_pkey ON public.intento_login USING btree (id)"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "idx_intento_login_usuario_fecha",
+      "definicion": "CREATE INDEX idx_intento_login_usuario_fecha ON public.intento_login USING btree (usuario_id, fecha)"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "idx_intento_login_ip_fecha",
+      "definicion": "CREATE INDEX idx_intento_login_ip_fecha ON public.intento_login USING btree (ip, fecha)"
+    },
+    {
+      "tabla": "intento_login",
+      "nombre": "idx_intento_login_fecha",
+      "definicion": "CREATE INDEX idx_intento_login_fecha ON public.intento_login USING btree (fecha)"
+    }
+  ]
+}

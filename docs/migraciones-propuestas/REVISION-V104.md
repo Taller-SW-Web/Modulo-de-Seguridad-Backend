@@ -1,45 +1,29 @@
-# Revisión antes de promover V104
+# Entrega V104 — EP-07-T001
 
-El PR #13 de Christian confirma DDL manual sin Flyway, 22 tablas y PostgreSQL
-17.6. Las V1–V4 conservadas son un antecedente de 21 tablas; se ejecutan solo
-en tests locales. No se supone que la nueva propuesta pueda aplicarse tal cual
-a Supabase por haber pasado esas pruebas.
+## Contraste real (14-oct-2026)
+Solo lectura de catálogos de Supabase `sghqhbakbnaapxdapmbc`; inventario en
+`INVENTARIO-V104-20261014.json`, sin filas ni secretos.
+Bloqueo tiene PK usuario_id, tipo_bloqueo, bloqueado_hasta, motivo y creado_en,
+sin revision. Intento_login y sus tipos/índices coinciden con los mappings de
+protección. La revisión añade revision al bloqueo y racha_fallo/huella_fallo;
+no modifica usuario, credencial, sesiones ni tokens.
 
-Christian debe adjuntar el inventario de las tablas de protección, el historial
-o ausencia de historial, los índices/constraints de bloqueo y si ya existen
-racha_fallo, huella_fallo o revision. Consultas de lectura para TEC-INFRA-T002:
+V104 conserva filas previas (incluidos bloqueos manuales/automáticos), asigna
+una revisión UUID a cada bloqueo existente y deja activada RLS en tablas nuevas.
+No elimina índices ni altera el estado del usuario. PK/FK cubren búsquedas de
+racha/huella. Grants runtime pertenecen a Christian, no anon/authenticated.
 
-```sql
-SELECT table_name, column_name, data_type, udt_name, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name IN ('bloqueo', 'intento_login', 'racha_fallo', 'huella_fallo')
-ORDER BY table_name, ordinal_position;
+## Prueba y límites
+Copia de docs/arquitectura/schema.sql, SHA-256 `5f771377b423b3e201044706902b1e2313adeb3e3f4d1b8ace35cddead93b62c`, en
+`proteccion/base-observada/schema.sql`. Solo las tablas relevantes se contrastaron:
+no es un dump ni certifica toda la base. Contenedor PostgreSQL 17.6 desechable;
+casos y resultado real en `docs/evidencia/EP-07-T001.md`.
 
-SELECT c.relname AS tabla, k.conname, k.convalidated,
-       pg_get_constraintdef(k.oid) AS definicion
-FROM pg_constraint k
-JOIN pg_class c ON c.oid = k.conrelid
-JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'public'
-  AND c.relname IN ('bloqueo', 'intento_login', 'racha_fallo', 'huella_fallo')
-ORDER BY c.relname, k.conname;
-
-SELECT tablename, indexname, indexdef
-FROM pg_indexes
-WHERE schemaname = 'public'
-  AND tablename IN ('bloqueo', 'intento_login', 'racha_fallo', 'huella_fallo')
-ORDER BY tablename, indexname;
-```
-
-Estas consultas no se ejecutaron desde EP-07-T001; no contienen filas de negocio.
-Con ese resultado Luis ajusta el camino de migración y lo prueba sobre una copia
-local del esquema observado, incluida su versión PostgreSQL. Christian revisa
-el costo del ALTER DEFAULT gen_random_uuid() en bloqueo, respaldo, grants/RLS y
-ventana de aplicación. No baseline automático, repair, DROP ni IF NOT EXISTS para
-ocultar incompatibilidades; si V104 ya está ocupada se acuerda nueva versión.
-
-El rol g7_runtime requiere acceso acotado a tablas nuevas y políticas para sus
-operaciones de servidor, sin grants a anon/authenticated. Los índices PK/UNIQUE
-cubren consultas/FK de huellas por usuario/racha; no añadir índices duplicados.
-La migración no escribe contadores en usuario ni intenta purgar rachas por fecha.
+## Entrega a Christian
+Revisión de este PR/SHA, SQL V104, inventario y evidencia. Repetir lectura antes
+de la ventana para confirmar ausencia de revision/tablas nuevas. Si ya existen,
+parar y reconciliar historial; no ocultarlo con IF NOT EXISTS ni repair.
+Con backup y paquete V101–V106 coordinados, aplicar con identidad migradora.
+Después verificar revision NOT NULL, integridad/RLS, grants g7_runtime y validate
+de mappings. Aplicación remota y grants siguen pendientes; no se hizo DDL remoto.
+V104 permanece en docs/migraciones-propuestas hasta esa decisión.
