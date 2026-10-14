@@ -26,4 +26,7 @@ public interface UsuarioRolJpaRepository extends JpaRepository<UsuarioRolJpaEnti
             WHERE ur.usuario_id = :usuarioId
             """, nativeQuery = true)
     List<String> permisosDe(@Param("usuarioId") UUID usuarioId);
+
+    @Query("SELECT ur.id.usuarioId FROM UsuarioRolJpaEntity ur WHERE ur.id.rol = :rol")
+    List<UUID> usuariosConRol(@Param("rol") Rol rol);
 }

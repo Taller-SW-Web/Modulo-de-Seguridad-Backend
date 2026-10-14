@@ -5,6 +5,7 @@ import com.marketplace.auth_service.autorizacion.application.port.in.Autorizacio
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.fixture.PuenteAutorizacionDeEjemplo;
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.fixture.PuenteConModeloInterno;
 import com.marketplace.auth_service.sesion.application.service.fixture.ConsumoSinPuente;
+import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.Permiso;
 import com.marketplace.auth_service.shared.domain.Rol;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -47,8 +48,8 @@ class ConsumoAutorizacionTest {
 
     @Test
     void elPuenteUsaElContratoReal() {
-        AutorizacionPort doble = id -> new PermisosResueltos(Set.of(Rol.ADMIN_SISTEMA, Rol.VENDEDOR),
-                Set.of(Permiso.USUARIO_VER, Permiso.CLIENTE_BUSCAR));
+        AutorizacionPort doble = new SoloResolver(new PermisosResueltos(Set.of(Rol.ADMIN_SISTEMA, Rol.VENDEDOR),
+                Set.of(Permiso.USUARIO_VER, Permiso.CLIENTE_BUSCAR)));
         PuenteAutorizacionDeEjemplo puente = new PuenteAutorizacionDeEjemplo(doble);
 
         assertThat(puente.claimsDe(UUID.randomUUID())).containsExactly(
@@ -86,5 +87,33 @@ class ConsumoAutorizacionTest {
 
         assertThat(resultado.hasViolation()).isTrue();
         assertThat(resultado.getFailureReport().toString()).contains("ConsumoSinPuente");
+    }
+
+    /** Doble del puerto: el puente de ejemplo solo usa {@code resolver}. */
+    private record SoloResolver(PermisosResueltos permisos) implements AutorizacionPort {
+        @Override
+        public PermisosResueltos resolver(UUID usuarioId) {
+            return permisos;
+        }
+
+        @Override
+        public void exigirPermiso(ActorUsuario actor, Permiso permiso) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void exigirTitularOPrivilegio(ActorUsuario actor, UUID usuarioObjetivo, Permiso permiso) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void bloquearCatalogoAdministrador() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Set<UUID> usuariosConRol(Rol rol) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

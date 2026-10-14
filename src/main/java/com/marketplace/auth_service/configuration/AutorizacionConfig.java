@@ -2,6 +2,7 @@ package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.autorizacion.adapter.in.transaction.AutorizacionTransaccional;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.AutorizacionJpaAdapter;
+import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.CatalogoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.RolPermisoJpaRepository;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository.UsuarioRolJpaRepository;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
@@ -19,8 +20,9 @@ import org.springframework.context.annotation.Configuration;
 public class AutorizacionConfig {
 
     @Bean
-    AsociacionesRolPort asociacionesRolPort(UsuarioRolJpaRepository usuarioRol, RolPermisoJpaRepository rolPermiso) {
-        return new AutorizacionJpaAdapter(usuarioRol, rolPermiso);
+    AsociacionesRolPort asociacionesRolPort(UsuarioRolJpaRepository usuarioRol, RolPermisoJpaRepository rolPermiso,
+                                            CatalogoJpaRepository catalogo) {
+        return new AutorizacionJpaAdapter(usuarioRol, rolPermiso, catalogo);
     }
 
     @Bean

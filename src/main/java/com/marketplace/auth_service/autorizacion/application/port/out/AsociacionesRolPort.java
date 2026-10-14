@@ -24,4 +24,15 @@ public interface AsociacionesRolPort {
 
     /** Matriz rol → códigos de permiso guardada en la base, para compararla con el catálogo. */
     Map<Rol, Set<String>> matrizPersistida();
+
+    /** Personas que tienen el rol. */
+    Set<UUID> usuariosConRol(Rol rol);
+
+    /**
+     * {@code SELECT ... FROM rol WHERE codigo = 'ADMIN_SISTEMA' FOR UPDATE} en la
+     * transacción en curso.
+     *
+     * @throws IllegalStateException si la fila no existe (catálogo sin sembrar)
+     */
+    void bloquearFilaAdministrador();
 }
