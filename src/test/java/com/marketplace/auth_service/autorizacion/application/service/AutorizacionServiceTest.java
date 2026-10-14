@@ -1,8 +1,8 @@
 package com.marketplace.auth_service.autorizacion.application.service;
 
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -46,7 +46,7 @@ class AutorizacionServiceTest {
         roles.put(id, Set.of(Rol.ADMIN_SISTEMA));
         permisos.put(id, Set.of("rol.asignar", "usuario.ver"));
 
-        PermisosEfectivos efectivos = servicio.resolver(id);
+        PermisosResueltos efectivos = servicio.resolver(id);
 
         assertThat(efectivos.codigosRoles()).containsExactly("ADMIN_SISTEMA");
         assertThat(efectivos.codigosPermisos()).containsExactly("rol.asignar", "usuario.ver");
@@ -54,9 +54,9 @@ class AutorizacionServiceTest {
 
     @Test
     void sinRolesNoConsultaPermisos() {
-        PermisosEfectivos efectivos = servicio.resolver(UUID.randomUUID());
+        PermisosResueltos efectivos = servicio.resolver(UUID.randomUUID());
 
-        assertThat(efectivos).isEqualTo(PermisosEfectivos.ninguno());
+        assertThat(efectivos).isEqualTo(PermisosResueltos.ninguno());
         assertThat(consultasDePermisos).isZero();
     }
 

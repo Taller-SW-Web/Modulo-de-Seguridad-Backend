@@ -1,10 +1,10 @@
 package com.marketplace.auth_service.autorizacion.application.service;
 
+import com.marketplace.auth_service.autorizacion.application.dto.PermisosResueltos;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
-import com.marketplace.auth_service.autorizacion.domain.model.Permiso;
-import com.marketplace.auth_service.autorizacion.domain.model.PermisosEfectivos;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.EnumSet;
 import java.util.Objects;
@@ -28,17 +28,17 @@ public class AutorizacionService implements AutorizacionPort {
     }
 
     @Override
-    public PermisosEfectivos resolver(UUID usuarioId) {
+    public PermisosResueltos resolver(UUID usuarioId) {
         Objects.requireNonNull(usuarioId, "usuarioId");
         Set<Rol> roles = asociaciones.rolesDe(usuarioId);
         if (roles.isEmpty()) {
-            return PermisosEfectivos.ninguno();
+            return PermisosResueltos.ninguno();
         }
         Set<Permiso> permisos = EnumSet.noneOf(Permiso.class);
         for (String codigo : asociaciones.permisosDe(usuarioId)) {
             permisos.add(Permiso.desdeCodigo(codigo).orElseThrow(() -> new IllegalStateException(
                     "rol_permiso contiene un permiso fuera del catálogo de Seguridad: " + codigo)));
         }
-        return new PermisosEfectivos(roles, permisos);
+        return new PermisosResueltos(roles, permisos);
     }
 }

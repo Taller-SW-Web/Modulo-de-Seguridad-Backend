@@ -1,11 +1,16 @@
-package com.marketplace.auth_service.autorizacion.domain.model;
+package com.marketplace.auth_service.shared.domain;
 
-import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
+import java.util.Optional;
 
 /**
  * Catálogo cerrado de los seis roles del sistema (SPEC-11 RF-11.1). Los
  * nombres coinciden con el enum {@code codigo_rol} de PostgreSQL y con el
  * contrato; no hay códigos en inglés (ADR-004) ni roles de otros módulos.
+ *
+ * <p>Es vocabulario común, como {@link ActorUsuario}: los acuerdos lo usan en
+ * puertos de varios dueños ({@code exigirPermiso}, {@code usuariosConRol},
+ * {@code MfaPort.esEfectivo}, {@code CredencialesPort.evaluarCaducidad}).
+ * La matriz rol → permisos y la asignación siguen siendo de autorización.
  *
  * <p>La etiqueta es la canónica de FRONT-00, la misma que muestra la interfaz.
  */
@@ -39,19 +44,18 @@ public enum Rol {
     }
 
     /**
-     * Convierte un código externo, distinguiendo mayúsculas: {@code "admin_sistema"},
-     * {@code "BUYER"} o {@code "SUPER_ADMIN"} no son roles.
-     *
-     * @throws RolInvalidoException si el código no es uno de los seis
+     * Busca un código externo, distinguiendo mayúsculas: {@code "admin_sistema"},
+     * {@code "BUYER"} o {@code "SUPER_ADMIN"} no son roles. Quien necesite un
+     * error de validación lo decide (autorización usa {@code CatalogoAutorizacion.rol}).
      */
-    public static Rol desdeCodigo(String codigo) {
+    public static Optional<Rol> buscar(String codigo) {
         if (codigo != null) {
             for (Rol rol : values()) {
                 if (rol.name().equals(codigo)) {
-                    return rol;
+                    return Optional.of(rol);
                 }
             }
         }
-        throw new RolInvalidoException(codigo);
+        return Optional.empty();
     }
 }

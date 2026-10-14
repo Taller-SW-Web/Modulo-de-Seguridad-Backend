@@ -1,6 +1,6 @@
 package com.marketplace.auth_service.autorizacion.application.port.out;
 
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 import java.util.Map;
 import java.util.Set;

@@ -1,7 +1,7 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository;
 
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity.RolJpaEntity;
-import com.marketplace.auth_service.autorizacion.domain.model.Rol;
+import com.marketplace.auth_service.shared.domain.Rol;
 import org.springframework.data.repository.Repository;
 
 import java.util.List;

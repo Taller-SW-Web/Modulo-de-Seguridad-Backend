@@ -30,10 +30,15 @@ login pone en los claims `roles` y `permisos` del acceso.
 
 ## Cómo se usa desde otra capacidad
 
-Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`:
+Solo por el puerto exportado `autorizacion.application.port.in.AutorizacionPort`,
+desde un **puente** en el `adapter.out.capacidad` de quien lo consume (regla de
+ArchUnit). El puerto expone únicamente tipos exportables: el DTO
+`autorizacion.application.dto.PermisosResueltos` y el vocabulario común
+`shared.domain.Rol` / `shared.domain.Permiso`. El modelo interno
+`PermisosEfectivos` no sale de autorización.
 
 ```java
-PermisosEfectivos efectivos = autorizacionPort.resolver(usuarioId);
+PermisosResueltos efectivos = autorizacionPort.resolver(usuarioId);
 efectivos.codigosRoles();     // ["ADMIN_SISTEMA", "VENDEDOR"]  → claim roles
 efectivos.codigosPermisos();  // ["atributos.editar", ...]      → claim permisos
 efectivos.tiene(Rol.ADMIN_SISTEMA);
@@ -46,9 +51,14 @@ efectivos.tiene(Permiso.ROL_ASIGNAR);
 - Listas en orden alfabético: los mismos roles producen siempre el mismo token.
 - Si `rol_permiso` contuviera un permiso que no es de Seguridad, `resolver`
   lanza `IllegalStateException` en vez de meterlo en un token.
-- Para convertir un código externo: `Rol.desdeCodigo("VENDEDOR")`; un código
-  fuera del catálogo (`"BUYER"`, `"admin_sistema"`) lanza `RolInvalidoException`
-  (el adaptador HTTP lo traducirá a `400 VALIDACION`).
+- `Rol` y `Permiso` están en `shared.domain` porque varios puertos los usan
+  (`exigirPermiso`, `usuariosConRol`, `MfaPort.esEfectivo`…). `Rol.esDeGestion()`
+  es la fuente única de «rol de gestión» para el MFA obligatorio.
+- Para convertir un código externo: `Rol.buscar("VENDEDOR")` devuelve `Optional`.
+  Autorización valida con `CatalogoAutorizacion.rol(codigo)`, que lanza
+  `RolInvalidoException` (el adaptador HTTP lo traduce a `400 VALIDACION`).
+- Ejemplo de puente probado: `src/test/.../sesion/adapter/out/capacidad/fixture/PuenteAutorizacionDeEjemplo.java`
+  (`ConsumoAutorizacionTest`).
 
 Siguientes tareas: EP-05-T002 añade `exigirPermiso`, `exigirTitularOPrivilegio`,
 `bloquearCatalogoAdministrador` y `usuariosConRol`; T003/T004 asignan y revocan.
@@ -84,20 +94,24 @@ una prueba compara la base con la clase.
 
 ```text
 autorizacion/
-  domain/model/            Rol, Permiso, CatalogoAutorizacion, PermisosEfectivos
+  domain/model/            CatalogoAutorizacion, PermisosEfectivos (internos)
   domain/exception/        RolInvalidoException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
+  application/dto/         PermisosResueltos         ← lo que devuelve resolver
   application/port/out/    AsociacionesRolPort
   application/service/     AutorizacionService (Java puro)
   adapter/in/transaction/  AutorizacionTransaccional (frontera @Transactional)
   adapter/out/persistence/ AutorizacionJpaAdapter, entity/, repository/, mapper/
 configuration/             AutorizacionConfig (wiring: un único bean AutorizacionPort)
+shared/domain/             Rol, Permiso (vocabulario común)
 ```
 
 ## Pruebas
 
 Unitarias (sin base): `CatalogoYRolesTest`, `PermisosEfectivosTest`,
-`AutorizacionServiceTest`.
+`AutorizacionServiceTest`. De arquitectura: `ConsumoAutorizacionTest` evalúa la
+regla de consumo entre capacidades sobre un puente de ejemplo de `sesion`
+(pasa) y sobre un puente con el modelo interno y un consumo sin puente (fallan).
 
 De persistencia (`AutorizacionPersistenciaTest`): PostgreSQL real, nunca H2.
 Usan un esquema aleatorio nuevo por clase, crean las tablas de V1 desde
