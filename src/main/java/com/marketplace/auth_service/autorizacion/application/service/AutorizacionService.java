@@ -8,7 +8,10 @@ import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.Permiso;
 import com.marketplace.auth_service.shared.domain.Rol;
 
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -74,5 +77,20 @@ public class AutorizacionService implements AutorizacionPort {
     @Override
     public Set<UUID> usuariosConRol(Rol rol) {
         return asociaciones.usuariosConRol(Objects.requireNonNull(rol, "rol"));
+    }
+
+    @Override
+    public Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+        Objects.requireNonNull(usuarioIds, "usuarioIds");
+        if (usuarioIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Set<Rol>> encontrados = asociaciones.rolesDe(usuarioIds);
+        Map<UUID, Set<Rol>> roles = new HashMap<>();
+        for (UUID id : usuarioIds) {
+            Set<Rol> suyos = encontrados.getOrDefault(id, Set.of());
+            roles.put(id, Collections.unmodifiableSet(suyos.isEmpty() ? EnumSet.noneOf(Rol.class) : EnumSet.copyOf(suyos)));
+        }
+        return roles;
     }
 }
