@@ -25,7 +25,7 @@ public final class UsuarioPersistenceMapper {
                 entity.isMfaHabilitado(),
                 entity.getBloqueosSeguidos(),
                 entity.getTipoDocumento(),
-                enmascararDocumento(entity.getDocumentoHmac()),
+                enmascararDocumento(null), // documento_hmac está en perfil_cliente, no en usuario
                 roles != null ? roles : Set.of()
         );
     }
@@ -44,7 +44,7 @@ public final class UsuarioPersistenceMapper {
                 entity.isMfaHabilitado(),
                 entity.getBloqueosSeguidos(),
                 entity.getTipoDocumento(),
-                enmascararDocumento(entity.getDocumentoHmac()),
+                enmascararDocumento(null), // documento_hmac está en perfil_cliente, no en usuario
                 roles != null ? roles : Set.of()
         );
     }

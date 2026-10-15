@@ -11,8 +11,6 @@ import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioEstadoEfectivoPort;
 import com.marketplace.auth_service.usuario.application.service.ConsultaCuentasService;
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
-import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,8 +53,8 @@ class CuentasPortTransaccionalTest {
         usuarioId = UUID.randomUUID();
         snapshot = new CuentaSnapshot(
                 usuarioId, "Juan", "Pérez", "juan@test.com", "+51999999999",
-                EstadoCuenta.ACTIVO, EstadoCuenta.ACTIVO, true, false, 0,
-                "DNI", "*****456", Set.of(CodigoRol.CLIENTE)
+                "ACTIVO", "ACTIVO", true, false, 0,
+                "DNI", "*****456", Set.of("CLIENTE")
         );
     }
 

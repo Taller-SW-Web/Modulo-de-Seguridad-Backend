@@ -1,6 +1,5 @@
 package com.marketplace.auth_service.usuario.adapter.out.persistence.entity;
 
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Immutable;
@@ -9,7 +8,6 @@ import org.hibernate.annotations.Subselect;
 import org.hibernate.annotations.Synchronize;
 import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -32,7 +30,7 @@ public class UsuarioEstadoEfectivoJpaEntity {
     @Column(name = "correo", nullable = false, length = 254)
     private String correo;
 
-    @Column(name = "celular", length = 30)
+    @Column(name = "celular", length = 12)
     private String celular;
 
     @Enumerated(EnumType.STRING)
@@ -54,17 +52,14 @@ public class UsuarioEstadoEfectivoJpaEntity {
     @Column(name = "bloqueos_seguidos", nullable = false)
     private int bloqueosSeguidos;
 
-    @Column(name = "tipo_documento")
-    private CodigoRol tipoDocumento;
+    @Column(name = "tipo_documento", length = 20)
+    private String tipoDocumento;
 
-    @Column(name = "documento_hmac", length = 64)
-    private String documentoHmac;
+    @Column(name = "creado_en", nullable = false, updatable = false)
+    private OffsetDateTime creadoEn;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    @Column(name = "actualizado_en", nullable = false)
+    private OffsetDateTime actualizadoEn;
 
     public UUID getId() { return id; }
     public String getNombres() { return nombres; }
@@ -76,8 +71,7 @@ public class UsuarioEstadoEfectivoJpaEntity {
     public boolean isCorreoVerificado() { return correoVerificado; }
     public boolean isMfaHabilitado() { return mfaHabilitado; }
     public int getBloqueosSeguidos() { return bloqueosSeguidos; }
-    public CodigoRol getTipoDocumento() { return tipoDocumento; }
-    public String getDocumentoHmac() { return documentoHmac; }
-    public OffsetDateTime getCreatedAt() { return createdAt; }
-    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public String getTipoDocumento() { return tipoDocumento; }
+    public OffsetDateTime getCreadoEn() { return creadoEn; }
+    public OffsetDateTime getActualizadoEn() { return actualizadoEn; }
 }
