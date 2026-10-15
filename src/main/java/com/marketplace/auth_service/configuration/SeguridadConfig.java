@@ -61,6 +61,7 @@ public class SeguridadConfig {
                 .anonymous(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/desbloquear").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -80,6 +81,8 @@ public class SeguridadConfig {
     private static BearerTokenResolver soloFueraDeRutasPublicas() {
         DefaultBearerTokenResolver cabecera = new DefaultBearerTokenResolver();
         Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
-        return peticion -> publicas.contains(peticion.getRequestURI()) ? null : cabecera.resolve(peticion);
+        return peticion -> publicas.contains(peticion.getRequestURI())
+                || ("POST".equals(peticion.getMethod()) && "/api/v1/auth/desbloquear".equals(peticion.getRequestURI()))
+                ? null : cabecera.resolve(peticion);
     }
 }
