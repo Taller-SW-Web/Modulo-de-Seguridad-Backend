@@ -68,6 +68,7 @@ public class SeguridadConfig {
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLICAS_SESION_POST).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -86,11 +87,12 @@ public class SeguridadConfig {
      */
     private static BearerTokenResolver soloFueraDeRutasPublicas() {
         DefaultBearerTokenResolver cabecera = new DefaultBearerTokenResolver();
-        Set<String> publicas = Set.of(
-                "/api/v1/auth/.well-known/jwks.json",
-                "/api/v1/auth/.well-known/openid-configuration",
-                "/api/v1/auth/refresh",
-                "/api/v1/auth/logout");
-        return peticion -> publicas.contains(peticion.getRequestURI()) ? null : cabecera.resolve(peticion);
+        Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
+        Set<String> sesionPost = Set.of(PUBLICAS_SESION_POST);
+        return peticion -> publicas.contains(peticion.getRequestURI())
+                || ("POST".equals(peticion.getMethod()) && sesionPost.contains(peticion.getRequestURI()))
+                || ("GET".equals(peticion.getMethod())
+                    && "/api/v1/password/politica".equals(peticion.getRequestURI()))
+                ? null : cabecera.resolve(peticion);
     }
 }
