@@ -4,6 +4,7 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -49,7 +50,12 @@ class ArquitecturaHexagonalTest {
 
     @Test
     void otraCapacidadSoloSeConsumeDesdeUnPuenteYPorExports() {
-        classes().should(new ArchCondition<>("consumir capacidades ajenas por puentes a puertos y DTO exportados") {
+        consumoEntreCapacidades().check(PRODUCCION);
+    }
+
+    /** La misma regla, reutilizable por pruebas que la evalúan sobre consumidores de ejemplo. */
+    static ArchRule consumoEntreCapacidades() {
+        return classes().should(new ArchCondition<>("consumir capacidades ajenas por puentes a puertos y DTO exportados") {
             @Override
             public void check(JavaClass origen, ConditionEvents eventos) {
                 String propietario = capacidad(origen.getPackageName());
@@ -66,7 +72,7 @@ class ArquitecturaHexagonalTest {
                     }
                 }
             }
-        }).check(PRODUCCION);
+        });
     }
 
     @Test
