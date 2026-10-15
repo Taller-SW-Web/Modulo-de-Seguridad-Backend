@@ -6,6 +6,7 @@ import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public final class UsuarioPersistenceMapper {
 
@@ -25,28 +26,27 @@ public final class UsuarioPersistenceMapper {
                 entity.isMfaHabilitado(),
                 entity.getBloqueosSeguidos(),
                 null, // tipoDocumento no está en usuario (está en perfil_cliente)
-                enmascararDocumento(null),
+                enmascararDocumento(null), // documentoHmac está en perfil_cliente
                 roles != null ? roles : Set.of()
         );
     }
 
-    public static CuentaSnapshot toSnapshotConEstadoEfectivo(UsuarioJpaEntity usuario, UsuarioEstadoEfectivoJpaEntity estadoEfectivo, Set<String> roles) {
-        if (usuario == null) return null;
-        EstadoCuenta estadoEfectivoEnum = estadoEfectivo != null ? estadoEfectivo.getEstado() : usuario.getEstado();
+    public static CuentaSnapshot toSnapshotConEstadoEfectivo(UsuarioJpaEntity usuario, com.marketplace.auth_service.usuario.adapter.out.persistence.entity.UsuarioEstadoEfectivoJpaEntity estadoEfectivo, Set<String> roles) {
+        if (usuario == null || estadoEfectivo == null) return null;
         return new CuentaSnapshot(
-                usuario.getId(),
+                estadoEfectivo.getId(),
                 usuario.getNombres(),
                 usuario.getApellidos(),
                 usuario.getCorreo(),
                 usuario.getCelular(),
                 usuario.getEstado().name(),
-                estadoEfectivoEnum.name(),
+                estadoEfectivo.getEstado().name(),
                 usuario.isCorreoVerificado(),
                 usuario.isMfaHabilitado(),
                 usuario.getBloqueosSeguidos(),
-                null, // tipoDocumento está en perfil_cliente
-                enmascararDocumento(null),
-                roles != null ? roles : Set.of()
+                null, // tipoDocumento no está en usuario
+                null, // documentoEnmascarado
+                java.util.Collections.emptySet()
         );
     }
 

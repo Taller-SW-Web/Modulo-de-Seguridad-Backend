@@ -140,16 +140,13 @@ class CuentasPortTransaccionalTest {
 
     @Test
     void metodosTienenAnotacionesTransaccionalesCorrectas() throws NoSuchMethodException {
-        // Lectura: REQUIRED + readOnly
         checkTx("buscarPorCorreoNormalizado", Propagation.REQUIRED, true, String.class);
         checkTx("leer", Propagation.REQUIRED, true, UUID.class);
         checkTx("contarActivos", Propagation.REQUIRED, true, Set.class);
         checkTx("consultar", Propagation.REQUIRED, true, FiltroCuenta.class, Paginacion.class);
 
-        // Bloquear: REQUIRED + not readOnly
         checkTx("bloquear", Propagation.REQUIRED, false, UUID.class);
 
-        // Escritura: MANDATORY + not readOnly
         checkTx("actualizarBasicos", Propagation.MANDATORY, false, UUID.class, CambioBasicos.class);
         checkTx("guardarContadores", Propagation.MANDATORY, false, UUID.class, ContadoresProteccion.class);
         checkTx("guardarMfaVoluntario", Propagation.MANDATORY, false, UUID.class, boolean.class);

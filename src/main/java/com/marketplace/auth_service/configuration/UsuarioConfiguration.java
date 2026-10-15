@@ -18,19 +18,15 @@ import org.springframework.context.annotation.Primary;
 public class UsuarioConfiguration {
 
     @Bean
-    public UsuarioRepositoryAdapter usuarioRepositoryAdapter(UsuarioJpaRepository jpaRepository,
-                                                               UsuarioEstadoEfectivoRepository estadoEfectivoRepository) {
+    @Primary
+    public UsuarioRepositoryPort usuarioRepositoryPort(UsuarioJpaRepository jpaRepository,
+                                                        UsuarioEstadoEfectivoRepository estadoEfectivoRepository) {
         return new UsuarioRepositoryAdapter(jpaRepository, estadoEfectivoRepository);
     }
 
     @Bean
-    public UsuarioRepositoryPort usuarioRepositoryPort(UsuarioRepositoryAdapter adapter) {
-        return adapter;
-    }
-
-    @Bean
-    public UsuarioEstadoEfectivoPort usuarioEstadoEfectivoPort(UsuarioRepositoryAdapter adapter) {
-        return adapter;
+    public UsuarioEstadoEfectivoPort usuarioEstadoEfectivoPort(UsuarioRepositoryPort usuarioRepositoryPort) {
+        return (UsuarioEstadoEfectivoPort) usuarioRepositoryPort;
     }
 
     @Bean

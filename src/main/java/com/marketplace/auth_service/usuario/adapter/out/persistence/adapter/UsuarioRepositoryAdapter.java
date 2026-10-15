@@ -15,7 +15,6 @@ import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +24,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Component
 public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort, UsuarioEstadoEfectivoPort {
 
     private final UsuarioJpaRepository usuarioJpaRepository;
@@ -59,7 +57,7 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort, UsuarioE
     @Override
     public long countActiveByIds(Set<UUID> usuarioIds) {
         if (usuarioIds == null || usuarioIds.isEmpty()) return 0L;
-        return usuarioEstadoEfectivoRepository.countActiveByIds(usuarioIds);
+        return usuarioJpaRepository.countActiveByIds(usuarioIds);
     }
 
     @Override
@@ -85,9 +83,8 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort, UsuarioE
 
     @Override
     public Optional<CuentaSnapshot> findEstadoEfectivoById(UUID usuarioId) {
-        return usuarioJpaRepository.findById(usuarioId)
-                .flatMap(usuario -> usuarioEstadoEfectivoRepository.findById(usuarioId)
-                        .map(estadoEfectivo -> UsuarioPersistenceMapper.toSnapshotConEstadoEfectivo(usuario, estadoEfectivo, Collections.emptySet())));
+        return usuarioEstadoEfectivoRepository.findById(usuarioId)
+                .map(e -> UsuarioPersistenceMapper.toSnapshotConEstadoEfectivo(null, e, Collections.emptySet()));
     }
 
     @Override
@@ -102,7 +99,7 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort, UsuarioE
         }
         String correoFragmento = filtro != null ? filtro.correoFragmento() : null;
 
-        // Filtrar por estado en la vista, luego filtrar por correo en usuario
+        // Usar la vista para filtrar por estado efectivo
         Page<UsuarioEstadoEfectivoJpaEntity> page = usuarioEstadoEfectivoRepository.findByFiltro(estado, pageRequest);
 
         // Obtener IDs de la página

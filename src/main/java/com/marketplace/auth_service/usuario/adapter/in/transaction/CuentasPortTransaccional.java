@@ -21,7 +21,7 @@ import java.util.UUID;
 public class CuentasPortTransaccional implements CuentasPort {
 
     private final ConsultaCuentasService consultaService;
-    private final CuentaEscrituraInterna escrituraAdapter;
+    private final CuentaEscrituraAdapter escrituraAdapter;
     private final UsuarioRepositoryPort usuarioRepositoryPort;
 
     public CuentasPortTransaccional(ConsultaCuentasService consultaService,
@@ -47,7 +47,6 @@ public class CuentasPortTransaccional implements CuentasPort {
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
     public CuentaSnapshot bloquear(UUID usuarioId) {
-        // Lock pesimista en repositorio dentro de la transacción
         return usuarioRepositoryPort.lockById(usuarioId);
     }
 
@@ -63,7 +62,6 @@ public class CuentasPortTransaccional implements CuentasPort {
         return consultaService.consultar(filtro, paginacion);
     }
 
-    // Métodos de escritura expuestos vía CuentasPort (para coordinadores)
     @Transactional(propagation = Propagation.MANDATORY)
     public CuentaSnapshot actualizarBasicos(UUID usuarioId, com.marketplace.auth_service.usuario.application.port.in.CambioBasicos cambio) {
         return escrituraAdapter.actualizarBasicos(usuarioId, cambio);
