@@ -1,6 +1,10 @@
 package com.marketplace.auth_service.autorizacion.adapter.out.persistence;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -26,7 +30,15 @@ import java.util.UUID;
  * existentes. Flyway crea en él el esquema de prueba de V1 y aplica la semilla
  * real del catálogo; Hibernate valida los mappings ({@code ddl-auto=validate}).
  */
+@Import(PostgresDePrueba.PersistenciaAutorizacion.class)
 public abstract class PostgresDePrueba {
+
+    /** Esta fixture solo contiene tablas de autorización; otras capacidades tienen sus propias pruebas. */
+    @TestConfiguration(proxyBeanMethods = false)
+    @EntityScan("com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity")
+    @EnableJpaRepositories("com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository")
+    static class PersistenciaAutorizacion { }
+
 
     private static final String URL_EXTERNA = System.getenv("PRUEBAS_POSTGRES_URL");
     private static PostgreSQLContainer<?> contenedor;
