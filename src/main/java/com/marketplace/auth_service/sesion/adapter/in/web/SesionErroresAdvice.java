@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Errores de los controladores de sesión según el contrato (RFC 7807). */
-@RestControllerAdvice(assignableTypes = {RefrescoController.class, CierreController.class})
+@RestControllerAdvice(assignableTypes = {RefrescoController.class, CierreController.class, LoginController.class})
 @org.springframework.core.annotation.Order(-1)
 public class SesionErroresAdvice {
 
