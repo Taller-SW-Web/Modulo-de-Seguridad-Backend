@@ -61,6 +61,8 @@ class CredencialJpaPostgresTest {
             }
             ScriptUtils.executeSqlScript(connection,
                     new FileSystemResource("docs/migraciones-propuestas/V101__credencial_version.sql"));
+            ScriptUtils.executeSqlScript(connection,
+                    new FileSystemResource("docs/migraciones-propuestas/V105__token_un_uso_contexto_id.sql"));
         } catch (Exception exception) {
             throw new IllegalStateException("No se pudo preparar PostgreSQL aislado para credenciales", exception);
         }
