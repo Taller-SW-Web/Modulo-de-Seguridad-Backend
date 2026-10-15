@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
+import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
 import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
@@ -117,6 +119,8 @@ class SesionHttpTest {
 
     @LocalServerPort
     private int puerto;
+    @Autowired
+    private FirmaPort firmaPort;
     @Autowired
     private ApplicationContext contexto;
 
@@ -237,5 +241,39 @@ class SesionHttpTest {
         assertThat(respuesta.statusCode()).isEqualTo(400);
         JsonNode problema = json.readTree(respuesta.body());
         assertThat(problema.get("code").asText()).isEqualTo("VALIDACION");
+    }
+
+    @Test
+    void cuerpoIlegibleMetodoYRutaDanProblemaSinHtml() throws Exception {
+        var ilegible = post("/api/v1/auth/refresh", "no-es-json{");
+
+        assertThat(ilegible.statusCode()).isEqualTo(400);
+        assertThat(ilegible.headers().firstValue("Content-Type")).hasValueSatisfying(
+                v -> assertThat(v).startsWith("application/problem+json"));
+        assertThat(json.readTree(ilegible.body()).get("code").asText()).isEqualTo("VALIDACION");
+
+        String bearer = firmaPort.firmar(new ClaimsAcceso(UUID.randomUUID(), "a@ejemplo.test",
+                List.of("CLIENTE"), List.of())).token();
+        // Las rutas públicas ignoran el Bearer por URI: sin token van al 401
+        // del filtro (nunca HTML); con token inexistente van al mapping (404).
+        var sinToken = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/v1/auth/login"))
+                .header("Content-Type", "application/json")
+                .GET()
+                .build();
+        var sinAuth = http.send(sinToken, HttpResponse.BodyHandlers.ofString());
+        assertThat(sinAuth.statusCode()).isEqualTo(401);
+        assertThat(sinAuth.headers().firstValue("Content-Type")).hasValueSatisfying(
+                v -> assertThat(v).startsWith("application/problem+json"));
+
+        var inexistente = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + puerto + "/api/v1/auth/no-existe"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + bearer)
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+        var ruta = http.send(inexistente, HttpResponse.BodyHandlers.ofString());
+        assertThat(ruta.statusCode()).isEqualTo(404);
+        assertThat(ruta.headers().firstValue("Content-Type")).hasValueSatisfying(
+                v -> assertThat(v).startsWith("application/problem+json"));
     }
 }
