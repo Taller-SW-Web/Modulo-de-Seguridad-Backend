@@ -24,7 +24,7 @@ END $$;
 
 CREATE TABLE sesion_familia (
     id uuid NOT NULL,
-    usuario_id uuid NOT NULL REFERENCES usuario(id),
+    usuario_id uuid NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
     revocada boolean NOT NULL DEFAULT false,
     creado_en timestamptz NOT NULL DEFAULT now(),
     revocada_en timestamptz,
@@ -45,7 +45,7 @@ CREATE TABLE acceso_sesion (
     creado_en timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (jti),
     CONSTRAINT fk_acceso_sesion_familia
-        FOREIGN KEY (familia_id, usuario_id) REFERENCES sesion_familia(id, usuario_id),
+        FOREIGN KEY (familia_id, usuario_id) REFERENCES sesion_familia(id, usuario_id) ON DELETE CASCADE,
     CONSTRAINT ck_acceso_sesion_expiracion CHECK (expira_en > creado_en)
 );
 COMMENT ON TABLE acceso_sesion IS 'Asociación jti → usuario/familia/vigencia (DAT-01). Un jti nuevo por acceso emitido, incluso tras refresh; se conserva mientras el acceso sea vigente.';
@@ -85,6 +85,6 @@ SELECT familia_id,
 -- ya exige un solo usuario por familia, y VALIDATE lo comprueba fila por fila.
 ALTER TABLE token_refresco
     ADD CONSTRAINT fk_token_refresco_familia
-        FOREIGN KEY (familia_id, usuario_id) REFERENCES sesion_familia(id, usuario_id) NOT VALID;
+        FOREIGN KEY (familia_id, usuario_id) REFERENCES sesion_familia(id, usuario_id) ON DELETE CASCADE NOT VALID;
 ALTER TABLE token_refresco VALIDATE CONSTRAINT fk_token_refresco_familia;
 COMMENT ON CONSTRAINT fk_token_refresco_familia ON token_refresco IS 'Cada refresco pertenece a su familia y usuario; impedir atribución cruzada (RF-06.3). Se reutilizan uq_token_refresco_hash e índices por familia/usuario.';
