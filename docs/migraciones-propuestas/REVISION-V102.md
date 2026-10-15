@@ -51,6 +51,18 @@ roles ni concede permisos al runtime.
   Resultados finales en `docs/evidencia/EP-02-T002.md`.
 
 ## Qué recibe Christian
+Cadena de borrado del borrador corregida: usuario → sesion_familia y familia →
+acceso_sesion/token_refresco mediante FK compuestas ON DELETE CASCADE.
+No basta la primera cascada. La eliminación física la decide el dueño de usuario;
+sesiones no agrega un endpoint de borrado ni elimina por rotación/logout.
+Pruebas aisladas cubren borrado de familia, de usuario, conservación de otra
+cuenta y rollback del borrado, además de backfill/integridad anteriores.
+
+Antes de usar este diff, comprobar historial/checksum real. Si V102 ya fue
+aplicada, NO sustituir el archivo aplicado ni hacer repair: trasladar estas
+acciones a una nueva migración revisada con Christian. Esta sesión solo
+modifica un borrador local y no confirma nuevamente el estado de Supabase.
+
 Revisar el diff y esta revisión junto a V102 y la evidencia `EP-02-T002`.
 Repetir el contraste contra el historial real antes de la ventana (V101 puede
 mover el orden; no reemplazar versiones aplicadas). Aplicar como parte del

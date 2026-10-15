@@ -62,6 +62,7 @@ public class SeguridadConfig {
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/desbloquear").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -83,6 +84,8 @@ public class SeguridadConfig {
         Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
         return peticion -> publicas.contains(peticion.getRequestURI())
                 || ("POST".equals(peticion.getMethod()) && "/api/v1/auth/desbloquear".equals(peticion.getRequestURI()))
+                || ("GET".equals(peticion.getMethod())
+                    && "/api/v1/password/politica".equals(peticion.getRequestURI()))
                 ? null : cabecera.resolve(peticion);
     }
 }
