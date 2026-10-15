@@ -4,6 +4,7 @@ import com.marketplace.auth_service.autorizacion.application.dto.CuentaRoles;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -23,4 +24,12 @@ public interface CuentasRolesPort {
      * Requiere transacción.
      */
     Map<UUID, CuentaRoles> bloquear(List<UUID> usuarioIds);
+
+    /**
+     * Cuántas de esas cuentas están en estado efectivo {@code ACTIVO}
+     * ({@code CuentasPort.contarActivos} de Eva). Los UUID los aporta Sergio
+     * ({@code usuario_rol}); el estado, Eva. Se llama con el lock del catálogo
+     * de administrador tomado, que serializa también bloqueos y bajas.
+     */
+    long contarActivos(Set<UUID> usuarioIds);
 }

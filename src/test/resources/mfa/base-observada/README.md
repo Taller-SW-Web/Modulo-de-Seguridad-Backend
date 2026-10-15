@@ -1,7 +1,18 @@
-# Observed schema fixture for EP-03-T001
+# Base de prueba del esquema manual
 
-`schema.sql` is the unedited copy used by the test at `src/test/resources/mfa/base-observada/schema.sql`. Its source is `Modulo-de-Seguridad/docs/arquitectura/schema.sql`, the documented PostgreSQL schema for the G7 security module. The fixture's source and copy were checked for identical contents.
+Copia sin editar de `docs/arquitectura/schema.sql` del repo documental.
+Sus tablas de esta capacidad se contrastaron con metadatos reales el
+14-oct-2026 (`INVENTARIO-V103-20261014.json` en `docs/migraciones-propuestas`).
+No es un dump de datos, no acredita identidad completa de las 22 tablas remotas,
+no es una migración V1 y se ejecuta únicamente en PostgreSQL desechable de pruebas.
+Los datos históricos que se insertan son ficticios. No conectar tests a Supabase.
 
-The `credencial` and `password_historial` table shapes were also compared with `INVENTARIO-V103-20261014.json`, the metadata-only Supabase catalog inventory attached to backend PR #9. The inventory contains schema metadata, not business rows.
+La misma copia se reutiliza en `CredencialJpaPostgresTest` (EP-03-T001).
+Las tablas `credencial` y `password_historial` también se contrastaron con el
+inventario de metadatos de V103 adjunto al PR #9. El inventario no contiene filas
+de negocio.
 
-The test runs on disposable PostgreSQL Testcontainers, applies proposed V101, and starts Hibernate with `ddl-auto=validate`. It does not connect to Supabase, contain copied database rows, or prove the remote migration history or permissions.
+Cada prueba aplica su migración propuesta en su propia base desechable: V103
+para MFA y V101 para credenciales. Hibernate valida los mappings con
+`ddl-auto=validate`. Estas comprobaciones no acreditan el historial de
+migraciones ni los permisos de la base remota.

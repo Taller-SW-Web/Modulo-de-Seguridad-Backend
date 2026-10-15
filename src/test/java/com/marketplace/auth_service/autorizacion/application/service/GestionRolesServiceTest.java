@@ -12,6 +12,7 @@ import com.marketplace.auth_service.autorizacion.application.port.out.CuentasRol
 import com.marketplace.auth_service.autorizacion.application.port.out.EventosRolesPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.SesionesRolesPort;
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
+import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
@@ -96,6 +97,12 @@ class GestionRolesServiceTest {
             llamadas.add("asignar " + rol);
             return roles.computeIfAbsent(usuarioId, id -> EnumSet.noneOf(Rol.class)).add(rol);
         }
+
+        @Override
+        public boolean quitar(UUID usuarioId, Rol rol) {
+            llamadas.add("quitar " + rol);
+            return roles.getOrDefault(usuarioId, EnumSet.noneOf(Rol.class)).remove(rol);
+        }
     };
 
     /** AutorizacionService real sobre el doble: decide con los roles «de la base». */
@@ -132,12 +139,22 @@ class GestionRolesServiceTest {
     /** Orden en que se pidieron bloquear las cuentas en la última operación. */
     private List<UUID> bloqueadas = List.of();
 
-    private final CuentasRolesPort cuentas = ids -> {
-        llamadas.add("lock cuentas");
-        bloqueadas = ids;
-        Map<UUID, CuentaRoles> existentes = new HashMap<>();
-        ids.forEach(id -> Optional.ofNullable(cuentasExistentes.get(id)).ifPresent(c -> existentes.put(id, c)));
-        return existentes;
+    private final CuentasRolesPort cuentas = new CuentasRolesPort() {
+        @Override
+        public Map<UUID, CuentaRoles> bloquear(List<UUID> ids) {
+            llamadas.add("lock cuentas");
+            bloqueadas = ids;
+            Map<UUID, CuentaRoles> existentes = new HashMap<>();
+            ids.forEach(id -> Optional.ofNullable(cuentasExistentes.get(id)).ifPresent(c -> existentes.put(id, c)));
+            return existentes;
+        }
+
+        @Override
+        public long contarActivos(Set<UUID> usuarioIds) {
+            llamadas.add("contar activos");
+            return usuarioIds.stream().map(cuentasExistentes::get)
+                    .filter(c -> c != null && c.activa()).count();
+        }
     };
 
     private final SesionesRolesPort sesiones = usuarioId -> llamadas.add("revocar sesiones");
@@ -187,6 +204,11 @@ class GestionRolesServiceTest {
 
     private static CambioRolCommand asignar(UUID actor, UUID objetivo, String rol) {
         return new CambioRolCommand(actor(actor), objetivo, rol, CONTEXTO);
+    }
+
+    /** El comando es el mismo; cambia la operación a la que se pasa. */
+    private static CambioRolCommand revocar(UUID actor, UUID objetivo, String rol) {
+        return asignar(actor, objetivo, rol);
     }
 
     // ── ESC-11.1 ──────────────────────────────────────────────
@@ -407,5 +429,125 @@ class GestionRolesServiceTest {
                 .isInstanceOf(GestionRolesNoDisponibleException.class)
                 .hasMessageContaining("CuentasRolesPort");
         assertThat(roles.get(cliente)).containsExactly(Rol.CLIENTE);
+    }
+
+    // ── Revocación (EP-05-T004) ───────────────────────────────
+
+    @Test
+    void revocaUnRolConservandoLosDemasEnElMismoOrdenDeLocks() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID objetivo = persona("ACTIVO", Rol.VENDEDOR, Rol.GESTOR_DESPACHO);
+
+        RolesCambiados resultado = servicio.revocar(revocar(admin, objetivo, "GESTOR_DESPACHO"));
+
+        assertThat(llamadas).containsExactly(
+                "exigir rol.asignar", "lock catálogo", "lock cuentas", "exigir rol.asignar",
+                "revocar sesiones", "quitar GESTOR_DESPACHO", "auditar ROL_REVOCADO", "evento");
+        assertThat(bloqueadas).as("actor y objetivo").containsExactlyInAnyOrder(admin, objetivo);
+        assertThat(resultado.roles()).containsExactly(Rol.VENDEDOR);
+        assertThat(eventos.get(0).roles()).containsExactly(Rol.VENDEDOR);
+        assertThat(auditados.get(0).accion()).isEqualTo(RegistroRol.Accion.ROL_REVOCADO);
+        assertThat(auditados.get(0).rol()).isEqualTo(Rol.GESTOR_DESPACHO);
+    }
+
+    @Test
+    void revocarElUltimoRolDejaLaListaVaciaYPublicaArrayVacio() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID objetivo = persona("ACTIVO", Rol.CLIENTE);
+
+        RolesCambiados resultado = servicio.revocar(revocar(admin, objetivo, "CLIENTE"));
+
+        assertThat(resultado.roles()).isEmpty();
+        assertThat(eventos.get(0).roles()).isEmpty();
+    }
+
+    @Test
+    void revocarUnRolQueNoTieneNoTieneEfectos() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID objetivo = persona("ACTIVO", Rol.VENDEDOR);
+
+        RolesCambiados resultado = servicio.revocar(revocar(admin, objetivo, "GESTOR_COMERCIAL"));
+
+        assertThat(resultado.huboCambio()).isFalse();
+        assertThat(llamadas).containsExactly("exigir rol.asignar", "lock catálogo", "lock cuentas", "exigir rol.asignar");
+    }
+
+    @Test
+    void elUnicoAdministradorNoPuedeQuitarseSuRol() {
+        UUID unico = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+
+        assertThatThrownBy(() -> servicio.revocar(revocar(unico, unico, "ADMIN_SISTEMA")))
+                .isInstanceOf(AdministradorProtegidoException.class)
+                .extracting("motivo").isEqualTo(AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR);
+        assertThat(roles.get(unico)).containsExactly(Rol.ADMIN_SISTEMA);
+        assertThat(llamadas).doesNotContain("revocar sesiones").noneMatch(l -> l.startsWith("quitar"));
+    }
+
+    @Test
+    void unAdministradorNoSeQuitaSuPropioRolAunqueHayaOtros() {
+        UUID yo = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        persona("ACTIVO", Rol.ADMIN_SISTEMA);
+
+        assertThatThrownBy(() -> servicio.revocar(revocar(yo, yo, "ADMIN_SISTEMA")))
+                .extracting("motivo").isEqualTo(AdministradorProtegidoException.Motivo.PROPIO);
+        assertThat(roles.get(yo)).containsExactly(Rol.ADMIN_SISTEMA);
+    }
+
+    @Test
+    void unAdministradorSiPuedeQuitarseOtroRolPropio() {
+        UUID yo = persona("ACTIVO", Rol.ADMIN_SISTEMA, Rol.VENDEDOR);
+
+        RolesCambiados resultado = servicio.revocar(revocar(yo, yo, "VENDEDOR"));
+
+        assertThat(resultado.roles()).containsExactly(Rol.ADMIN_SISTEMA);
+    }
+
+    @Test
+    void conOtroAdministradorActivoSePuedeRevocarAUnAdministrador() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID otro = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+
+        RolesCambiados resultado = servicio.revocar(revocar(admin, otro, "ADMIN_SISTEMA"));
+
+        assertThat(resultado.roles()).isEmpty();
+        assertThat(llamadas).contains("contar activos");
+    }
+
+    @Test
+    void losAdministradoresBloqueadosOInactivosNoCuentanComoActivos() {
+        UUID actor = persona("BLOQUEADO", Rol.ADMIN_SISTEMA);
+        UUID ultimoActivo = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        persona("INACTIVO", Rol.ADMIN_SISTEMA);
+
+        // El actor conserva el permiso en la base (su acceso sigue vigente), pero su cuenta
+        // está bloqueada: quitarle el rol al único activo dejaría el sistema sin administrador.
+        assertThatThrownBy(() -> servicio.revocar(revocar(actor, ultimoActivo, "ADMIN_SISTEMA")))
+                .extracting("motivo").isEqualTo(AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR);
+        assertThat(roles.get(ultimoActivo)).containsExactly(Rol.ADMIN_SISTEMA);
+    }
+
+    @Test
+    void revocarAUnAdministradorNoActivoNoReduceLosActivosYSePermite() {
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+        UUID bloqueado = persona("BLOQUEADO", Rol.ADMIN_SISTEMA);
+
+        RolesCambiados resultado = servicio.revocar(revocar(admin, bloqueado, "ADMIN_SISTEMA"));
+
+        assertThat(resultado.roles()).isEmpty();
+        assertThat(llamadas).doesNotContain("contar activos");
+    }
+
+    @Test
+    void laRevocacionTambienAutorizaPrimeroYValidaDespues() {
+        UUID cliente = persona("ACTIVO", Rol.CLIENTE);
+        UUID admin = persona("ACTIVO", Rol.ADMIN_SISTEMA);
+
+        assertThatThrownBy(() -> servicio.revocar(revocar(cliente, admin, "BUYER")))
+                .isInstanceOf(AccesoDenegadoException.class);
+        assertThatThrownBy(() -> servicio.revocar(revocar(admin, cliente, "BUYER")))
+                .isInstanceOf(RolInvalidoException.class);
+        assertThatThrownBy(() -> servicio.revocar(revocar(admin, UUID.randomUUID(), "CLIENTE")))
+                .isInstanceOf(UsuarioNoEncontradoException.class);
+        assertThat(roles.get(admin)).containsExactly(Rol.ADMIN_SISTEMA);
     }
 }
