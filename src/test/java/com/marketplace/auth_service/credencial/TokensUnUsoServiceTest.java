@@ -91,6 +91,10 @@ class TokensUnUsoServiceTest {
             tokens.replaceAll((id, t) -> t.usuarioId().equals(usuario) && t.proposito() == p && t.vigenteEn(ahora)
                     ? t.marcarUsado() : t);
         }
-        @Override public void marcarUsado(UUID id) { tokens.computeIfPresent(id, (k, t) -> t.marcarUsado()); }
+        @Override public boolean marcarUsado(UUID id) {
+            if (!tokens.containsKey(id) || tokens.get(id).usado()) return false;
+            tokens.computeIfPresent(id, (k, t) -> t.marcarUsado());
+            return true;
+        }
     }
 }

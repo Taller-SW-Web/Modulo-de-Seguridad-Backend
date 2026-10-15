@@ -15,6 +15,9 @@ import org.springframework.data.repository.query.Param;
 public interface TokenUnUsoJpaRepository extends JpaRepository<TokenUnUsoJpaEntity, UUID> {
     Optional<TokenUnUsoJpaEntity> findByHashTokenAndProposito(String hashToken, PropositoTokenPersistido proposito);
 
+    Optional<TokenUnUsoJpaEntity> findByHashTokenAndPropositoAndContextoIdIsNotNull(
+            String hashToken, PropositoTokenPersistido proposito);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from TokenUnUsoJpaEntity t where t.id = :id")
     Optional<TokenUnUsoJpaEntity> bloquearPorId(@Param("id") UUID id);

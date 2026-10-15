@@ -12,5 +12,5 @@ public interface TokenUnUsoRepositoryPort {
     Optional<TokenUnUso> buscar(String hash, PropositoTokenUnUso proposito);
     Optional<TokenUnUso> bloquear(UUID id);
     void invalidarPrevios(UUID usuarioId, PropositoTokenUnUso proposito, Instant ahora);
-    void marcarUsado(UUID id);
+    boolean marcarUsado(UUID id);
 }

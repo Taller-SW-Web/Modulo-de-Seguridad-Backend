@@ -88,8 +88,7 @@ public final class TokensUnUsoService implements TokensUnUsoPort {
         if (!token.usuarioId().equals(usuarioId) || token.proposito() != mapeo(proposito)
                 || !Objects.equals(token.contextoId(), contextoId) || !token.vigenteEn(ahora))
             return false;
-        repositorio.marcarUsado(id);
-        return true;
+        return repositorio.marcarUsado(id);
     }
 
     @Override public void invalidarPrevios(UUID usuarioId, PropositoToken proposito) {
