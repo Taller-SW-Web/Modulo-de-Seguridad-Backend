@@ -8,6 +8,8 @@ import com.marketplace.auth_service.autorizacion.adapter.out.persistence.reposit
 import com.marketplace.auth_service.autorizacion.application.port.out.AsociacionesRolPort;
 import com.marketplace.auth_service.shared.domain.Rol;
 
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +46,19 @@ public class AutorizacionJpaAdapter implements AsociacionesRolPort {
     @Override
     public Set<UUID> usuariosConRol(Rol rol) {
         return Set.copyOf(usuarioRol.usuariosConRol(rol));
+    }
+
+    @Override
+    public Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+        if (usuarioIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Set<Rol>> roles = new HashMap<>();
+        for (UsuarioRolJpaEntity asociacion : usuarioRol.asociacionesDe(usuarioIds)) {
+            roles.computeIfAbsent(asociacion.getUsuarioId(), id -> EnumSet.noneOf(Rol.class))
+                    .add(asociacion.getRol());
+        }
+        return roles;
     }
 
     @Override
