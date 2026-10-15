@@ -53,6 +53,7 @@ public class SeguridadConfig {
 
     /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
     static final String[] PUBLICAS_SESION_POST = {
+            "/api/v1/auth/login",
             "/api/v1/auth/refresh",
             "/api/v1/auth/logout"
     };

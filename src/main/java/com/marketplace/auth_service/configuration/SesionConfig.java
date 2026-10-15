@@ -29,4 +29,5 @@ public class SesionConfig {
         return new SesionTransaccional(new SesionService(persistencia, criptografia, firmador, identidad,
                 clock.getIfAvailable(Clock::systemUTC)), persistencia, criptografia, cuentas);
     }
+
 }

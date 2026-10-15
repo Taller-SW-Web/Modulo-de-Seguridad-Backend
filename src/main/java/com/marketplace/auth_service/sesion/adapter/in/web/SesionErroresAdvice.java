@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Errores de los controladores de sesión según el contrato (RFC 7807). */
-@RestControllerAdvice(assignableTypes = {RefrescoController.class, CierreController.class})
+@RestControllerAdvice(assignableTypes = {RefrescoController.class, CierreController.class, LoginController.class})
 @org.springframework.core.annotation.Order(-1)
 public class SesionErroresAdvice {
 
@@ -35,6 +35,18 @@ public class SesionErroresAdvice {
                 "Datos de entrada inválidos", null);
         problema.setProperty("errores", List.of(Map.of("campo", "refreshToken", "mensaje", e.getMessage())));
         return ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema);
+    }
+
+    /**
+     * Base o capacidad dueña caída a mitad del caso de uso: 503 sin éxito parcial, sin
+     * secretos ni SQL en la respuesta (la transacción ya se revirtió). Nunca un 401 que
+     * confunda con credenciales o token.
+     */
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    ResponseEntity<ProblemDetail> baseNoDisponible(org.springframework.dao.DataAccessException e) {
+        log.error("sesion: acceso a datos fallido ({})", e.getClass().getSimpleName());
+        return Problemas.respuesta(HttpStatus.SERVICE_UNAVAILABLE, "NO_DISPONIBLE",
+                "Servicio no disponible", "Inténtalo nuevamente.");
     }
 
     /** Capacidad dueña aún sin puerto: 503 sin éxito parcial ni secreto. */
