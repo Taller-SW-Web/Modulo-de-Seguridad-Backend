@@ -57,6 +57,11 @@ public class GestionRolesTransaccional implements GestionRolesPort {
         return enTransaccion(comando, () -> casoDeUso.asignar(comando));
     }
 
+    @Override
+    public RolesCambiados revocar(CambioRolCommand comando) {
+        return enTransaccion(comando, () -> casoDeUso.revocar(comando));
+    }
+
     private RolesCambiados enTransaccion(CambioRolCommand comando, Supplier<RolesCambiados> operacion) {
         try {
             return transaccion.execute(estado -> operacion.get());

@@ -35,6 +35,11 @@ public class GestionRolesNoDisponible implements GestionRolesPort {
         throw new GestionRolesNoDisponibleException("Gestión de roles sin componer; faltan: " + faltantes);
     }
 
+    @Override
+    public RolesCambiados revocar(CambioRolCommand comando) {
+        return asignar(comando);
+    }
+
     public List<String> faltantes() {
         return faltantes;
     }

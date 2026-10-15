@@ -12,6 +12,7 @@ import com.marketplace.auth_service.autorizacion.application.port.out.AuditoriaR
 import com.marketplace.auth_service.autorizacion.application.port.out.CuentasRolesPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.EventosRolesPort;
 import com.marketplace.auth_service.autorizacion.application.port.out.SesionesRolesPort;
+import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
 import com.marketplace.auth_service.autorizacion.domain.model.CatalogoAutorizacion;
 import com.marketplace.auth_service.shared.domain.Permiso;
@@ -20,9 +21,11 @@ import com.marketplace.auth_service.shared.domain.Rol;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -49,6 +52,13 @@ import java.util.stream.Stream;
  * </ol>
  *
  * <p>Ningún paso vuelve a un nivel anterior.
+ *
+ * <p>Revocar sigue el mismo orden. Si el rol ya no estaba no hay cambio. Al
+ * revocar {@code ADMIN_SISTEMA} aplica RF-11.7 tras la reautorización, con el
+ * lock del catálogo tomado y antes de cualquier efecto: nadie se lo quita a sí
+ * mismo y nunca queda el sistema sin un administrador activo. El lock serializa
+ * estas revocaciones y los bloqueos o bajas, así que dos revocaciones cruzadas
+ * no pueden dejar cero.
  */
 public class GestionRolesService implements GestionRolesPort {
 
@@ -93,6 +103,46 @@ public class GestionRolesService implements GestionRolesPort {
         List<Rol> resultantes = rolesOrdenados(cuenta.id());
         registrarCambio(comando, RegistroRol.Accion.ROL_ASIGNADO, rol, resultantes);
         return new RolesCambiados(cuenta, resultantes, true);
+    }
+
+    @Override
+    public RolesCambiados revocar(CambioRolCommand comando) {
+        autorizacion.exigirPermiso(comando.actor(), Permiso.ROL_ASIGNAR);
+        Rol rol = CatalogoAutorizacion.rol(comando.rol());
+        CuentaRoles cuenta = bloquearYReautorizar(comando);
+        if (rol == Rol.ADMIN_SISTEMA) {
+            protegerAdministrador(comando.actor().sub(), cuenta);
+        }
+
+        if (!asociaciones.rolesDe(cuenta.id()).contains(rol)) {
+            return new RolesCambiados(cuenta, rolesOrdenados(cuenta.id()), false);
+        }
+        sesiones.revocarTodas(cuenta.id());
+        asociaciones.quitar(cuenta.id(), rol);
+        List<Rol> resultantes = rolesOrdenados(cuenta.id());
+        registrarCambio(comando, RegistroRol.Accion.ROL_REVOCADO, rol, resultantes);
+        return new RolesCambiados(cuenta, resultantes, true);
+    }
+
+    /**
+     * RF-11.7. Cuenta los administradores con UUID de {@code usuario_rol} (Sergio)
+     * y estado efectivo de las cuentas (Eva), sin leer la tabla {@code usuario}.
+     * Primero el último administrador, para que ESC-11.5 (el único admin se quita
+     * su propio rol) dé el mensaje de «único administrador».
+     */
+    private void protegerAdministrador(UUID actor, CuentaRoles objetivo) {
+        boolean esAdministradorActivo = objetivo.activa()
+                && asociaciones.rolesDe(objetivo.id()).contains(Rol.ADMIN_SISTEMA);
+        if (esAdministradorActivo) {
+            Set<UUID> otros = new HashSet<>(asociaciones.usuariosConRol(Rol.ADMIN_SISTEMA));
+            otros.remove(objetivo.id());
+            if (otros.isEmpty() || cuentas.contarActivos(otros) == 0) {
+                throw new AdministradorProtegidoException(AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR);
+            }
+        }
+        if (actor.equals(objetivo.id())) {
+            throw new AdministradorProtegidoException(AdministradorProtegidoException.Motivo.PROPIO);
+        }
     }
 
     /** Niveles 1 y 2 del orden de locks y reautorización bajo lock. */
