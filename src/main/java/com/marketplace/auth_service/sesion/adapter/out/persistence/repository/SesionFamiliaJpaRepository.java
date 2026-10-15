@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,4 +15,6 @@ public interface SesionFamiliaJpaRepository extends JpaRepository<SesionFamiliaJ
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from SesionFamiliaJpaEntity f where f.id = :id")
     Optional<SesionFamiliaJpaEntity> bloquearPorId(@Param("id") UUID id);
+
+    List<SesionFamiliaJpaEntity> findByUsuarioIdOrderByIdAsc(UUID usuarioId);
 }
