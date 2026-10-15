@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.auditoria.adapter.out.persistence.mapper;
 
+import com.marketplace.auth_service.auditoria.adapter.out.persistence.entity.AuditoriaSeguridadJpaEntity;
 import com.marketplace.auth_service.auditoria.domain.model.AccionAuditable;
 import com.marketplace.auth_service.auditoria.domain.model.ActorTipo;
 import com.marketplace.auth_service.auditoria.domain.model.RegistroAuditoria;
@@ -36,10 +37,23 @@ class AuditoriaPersistenceMapperTest {
     @Test
     void mapeaVueltaExcluyendoIdNumericoDelModelo() {
         var entidad = AuditoriaPersistenceMapper.aEntidad(modelo());
-        var dominio = AuditoriaPersistenceMapper.aDominio(entidad);
+        var dominio = AuditoriaPersistenceMapper.aDominio(entidad).orElseThrow();
         assertThat(dominio.accion()).isEqualTo(AccionAuditable.ROL_ASIGNADO);
         assertThat(dominio.resultado()).isEqualTo(Resultado.EXITO);
         assertThat(dominio.actorTipo()).isEqualTo(ActorTipo.USUARIO);
         assertThat(dominio.detalle()).containsEntry("rol", "VENDEDOR");
+    }
+
+    @Test
+    void filaHistoricaNoProyectableSeOmiteSinFallar() {
+        var fuera = new AuditoriaSeguridadJpaEntity(1L, UUID.randomUUID(), "LOGIN_OK", Resultado.EXITO,
+                ActorTipo.USUARIO, "sub-1", UUID.randomUUID(), OffsetDateTime.ofInstant(AHORA, ZoneOffset.UTC),
+                null, null, null);
+        var conSecreto = new AuditoriaSeguridadJpaEntity(2L, UUID.randomUUID(), "SESION_INICIADA", Resultado.EXITO,
+                ActorTipo.USUARIO, "sub-1", UUID.randomUUID(), OffsetDateTime.ofInstant(AHORA, ZoneOffset.UTC),
+                null, null, Map.of("refresh_token", "x"));
+
+        assertThat(AuditoriaPersistenceMapper.aDominio(fuera)).isEmpty();
+        assertThat(AuditoriaPersistenceMapper.aDominio(conSecreto)).isEmpty();
     }
 }

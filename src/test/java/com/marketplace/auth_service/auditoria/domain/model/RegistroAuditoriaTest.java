@@ -10,6 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class RegistroAuditoriaTest {
     private static final Instant AHORA = Instant.parse("2026-10-15T12:00:00Z");
@@ -50,6 +52,31 @@ class RegistroAuditoriaTest {
                 .isInstanceOf(DetalleInseguroException.class);
         assertThatThrownBy(() -> nuevo("MODULO_OBTUVO_DOCUMENTO", Map.of("documento", "12345678")))
                 .isInstanceOf(DetalleInseguroException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"contrasenaNueva", "nueva_contrasena", "refreshToken", "access_token", "hashRefresco",
+            "codigoOtp2", "numeroDocumento", "client_secret", "Authorization", "codigo", "clave"})
+    void claveQueContieneUnSecretoSeRechazaAunqueNoSeaExacta(String clave) {
+        assertThatThrownBy(() -> nuevo("SESION_INICIADA", Map.of(clave, "valor-del-productor")))
+                .isInstanceOf(DetalleInseguroException.class)
+                .hasMessageNotContaining("valor-del-productor");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.firma", "Bearer eyJhbGciOi.eyJzdWIi.x",
+            "$2a$10$abcdefghijklmnopqrstuv", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA"})
+    void valorConFormaDeJwtOHashSeRechazaEnCualquierClave(String valor) {
+        assertThatThrownBy(() -> nuevo("SESION_CERRADA", Map.of("motivo", valor)))
+                .isInstanceOf(DetalleInseguroException.class)
+                .hasMessageNotContaining(valor);
+    }
+
+    @Test
+    void referenciasPermitidasPorEsc123NoSeConfundenConSecretos() {
+        var registro = nuevo("SESION_CERRADA", Map.of("token_jti", "2b7c0e51", "tipoDocumento", "DNI",
+                "motivo", "logout", "rol", "VENDEDOR"));
+        assertThat(registro.detalle()).containsKeys("token_jti", "tipoDocumento", "motivo", "rol");
     }
 
     @Test
