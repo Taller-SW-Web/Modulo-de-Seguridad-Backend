@@ -3,6 +3,7 @@ package com.marketplace.auth_service.credencial.adapter.out.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.marketplace.auth_service.credencial.adapter.out.persistence.repository.TokenUnUsoJpaRepository;
+import com.marketplace.auth_service.credencial.adapter.out.persistence.entity.TokenUnUsoJpaEntity;
 import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.service.TokensUnUsoService;
 import com.marketplace.auth_service.credencial.domain.model.TokenUnUso;
@@ -20,8 +21,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -38,9 +43,16 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(TokenUnUsoJpaPostgresTest.PersistenciaToken.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class TokenUnUsoJpaPostgresTest {
+    /** Aísla esta prueba del escaneo de entidades y repositorios de otras capacidades. */
+    @TestConfiguration(proxyBeanMethods = false)
+    @EntityScan(basePackageClasses = TokenUnUsoJpaEntity.class)
+    @EnableJpaRepositories(basePackageClasses = TokenUnUsoJpaRepository.class)
+    static class PersistenciaToken { }
+
     @Container static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16.6");
 
     @DynamicPropertySource static void postgres(DynamicPropertyRegistry r) {
