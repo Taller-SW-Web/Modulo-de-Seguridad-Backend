@@ -8,14 +8,15 @@ import com.marketplace.auth_service.credencial.application.port.out.TokenUnUsoRe
 import com.marketplace.auth_service.credencial.application.service.TokensUnUsoService;
 import java.security.SecureRandom;
 import java.time.Clock;
+import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class TokensUnUsoConfig {
-    @Bean TokenUnUsoRepositoryPort tokenUnUsoRepositoryPort(TokenUnUsoJpaRepository repository) {
-        return new TokenUnUsoJpaAdapter(repository);
+    @Bean TokenUnUsoRepositoryPort tokenUnUsoRepositoryPort(TokenUnUsoJpaRepository repository, EntityManager entityManager) {
+        return new TokenUnUsoJpaAdapter(repository, entityManager);
     }
     @Bean TokensUnUsoPort tokensUnUsoPort(TokenUnUsoRepositoryPort repository, ObjectProvider<Clock> clocks,
                                            ObjectProvider<SecureRandom> randoms) {

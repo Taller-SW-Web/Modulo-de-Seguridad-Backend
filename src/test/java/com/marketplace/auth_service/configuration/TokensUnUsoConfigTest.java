@@ -7,6 +7,7 @@ import com.marketplace.auth_service.credencial.adapter.in.transaction.TokensUnUs
 import com.marketplace.auth_service.credencial.adapter.out.persistence.repository.TokenUnUsoJpaRepository;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.EntityManager;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class TokensUnUsoConfigTest {
@@ -15,6 +16,7 @@ class TokensUnUsoConfigTest {
     void exponeUnUnicoPortYEsElDecoradorTransaccional() {
         try (var contexto = new AnnotationConfigApplicationContext()) {
             contexto.registerBean(TokenUnUsoJpaRepository.class, () -> mock(TokenUnUsoJpaRepository.class));
+            contexto.registerBean(EntityManager.class, () -> mock(EntityManager.class));
             contexto.register(TokensUnUsoConfig.class);
             contexto.refresh();
 

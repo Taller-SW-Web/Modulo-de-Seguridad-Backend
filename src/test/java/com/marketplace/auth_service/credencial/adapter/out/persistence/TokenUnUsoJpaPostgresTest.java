@@ -1,11 +1,16 @@
 package com.marketplace.auth_service.credencial.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marketplace.auth_service.credencial.adapter.out.persistence.repository.TokenUnUsoJpaRepository;
 import com.marketplace.auth_service.credencial.adapter.out.persistence.entity.TokenUnUsoJpaEntity;
 import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
-import com.marketplace.auth_service.credencial.application.service.TokensUnUsoService;
+import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
+import com.marketplace.auth_service.configuration.TokensUnUsoConfig;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.marketplace.auth_service.credencial.domain.model.TokenUnUso;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
@@ -44,8 +49,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(TokenUnUsoJpaPostgresTest.PersistenciaToken.class)
-@Testcontainers(disabledWithoutDocker = true)
+@Import({TokenUnUsoJpaPostgresTest.PersistenciaToken.class, TokensUnUsoConfig.class})
+@Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class TokenUnUsoJpaPostgresTest {
     private static final UUID USUARIO_TOKEN_HISTORICO = UUID.fromString("802e8a8b-91f8-4e98-9f00-000000000105");
@@ -86,13 +91,13 @@ class TokenUnUsoJpaPostgresTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager manager;
     private TransactionTemplate tx;
-    private TokensUnUsoService service;
+    @Autowired TokensUnUsoPort service;
+    @Autowired EntityManager entityManager;
     private UUID usuarioId;
 
     @BeforeEach void preparar() {
         tx = new TransactionTemplate(manager);
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        service = new TokensUnUsoService(new TokenUnUsoJpaAdapter(repository), Clock.systemUTC(), new java.security.SecureRandom());
         usuarioId = UUID.randomUUID();
         jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?, ?, 'Token', 'T004', 'ACTIVO')",
                 usuarioId, usuarioId + "@example.test");
@@ -199,6 +204,57 @@ class TokenUnUsoJpaPostgresTest {
         assertThat(repository.findById(first.id()).orElseThrow().isUsado()).isTrue();
         assertThat(repository.findById(independent.id()).orElseThrow().isUsado()).isFalse();
         assertThat(repository.findById(second.id()).orElseThrow().isUsado()).isFalse();
+    }
+
+    @Test void localizaAntesDeLocksSinAbrirEscriturasYMutacionesExigenProductor() {
+        UUID revision = UUID.randomUUID();
+        var emitido = tx.execute(s -> service.emitir(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO,
+                revision, Duration.ofMinutes(30)));
+        String hash = repository.findById(emitido.id()).orElseThrow().getHashToken();
+        assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        assertThat(service.localizar(hash, PropositoToken.DESBLOQUEO_AUTOMATICO).orElseThrow().contextoId()).isEqualTo(revision);
+        assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        assertThat(repository.findById(emitido.id()).orElseThrow().isUsado()).isFalse();
+        assertThatThrownBy(() -> service.emitir(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, revision, Duration.ofMinutes(30)))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.consumir(emitido.id(), usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, revision, Instant.now()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.invalidarPrevios(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test void rechazoDeUsuarioPropositoRevisionYVencimientoNoConsume() {
+        UUID revision = UUID.randomUUID();
+        var emitido = tx.execute(s -> service.emitir(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO,
+                revision, Duration.ofMinutes(30)));
+        tx.executeWithoutResult(s -> {
+            assertThat(service.consumir(emitido.id(), UUID.randomUUID(), PropositoToken.DESBLOQUEO_AUTOMATICO, revision, Instant.now())).isFalse();
+            assertThat(service.consumir(emitido.id(), usuarioId, PropositoToken.RECUPERACION, revision, Instant.now())).isFalse();
+            assertThat(service.consumir(emitido.id(), usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, UUID.randomUUID(), Instant.now())).isFalse();
+            assertThat(service.consumir(emitido.id(), usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, revision, emitido.expiraEn())).isFalse();
+        });
+        assertThat(repository.findById(emitido.id()).orElseThrow().isUsado()).isFalse();
+    }
+
+    @Test void invalidarYConsumirReleenEstadoSinDesconectarEntidadesDelProductor() {
+        UUID revision = UUID.randomUUID();
+        var primero = tx.execute(s -> service.emitir(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO,
+                revision, Duration.ofMinutes(30)));
+        var independiente = tx.execute(s -> service.emitir(usuarioId, PropositoToken.RECUPERACION, Duration.ofMinutes(30)));
+        tx.executeWithoutResult(s -> {
+            var retenida = entityManager.find(TokenUnUsoJpaEntity.class, independiente.id());
+            String hash = repository.findById(primero.id()).orElseThrow().getHashToken();
+            assertThat(service.localizar(hash, PropositoToken.DESBLOQUEO_AUTOMATICO).orElseThrow().usado()).isFalse();
+            service.invalidarPrevios(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO);
+            assertThat(entityManager.contains(retenida)).isTrue();
+            assertThat(service.localizar(hash, PropositoToken.DESBLOQUEO_AUTOMATICO).orElseThrow().usado()).isTrue();
+            assertThat(service.consumir(primero.id(), usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, revision, Instant.now())).isFalse();
+            var siguiente = service.emitir(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, UUID.randomUUID(), Duration.ofMinutes(30));
+            UUID nuevaRevision = repository.findById(siguiente.id()).orElseThrow().getContextoId();
+            assertThat(service.consumir(siguiente.id(), usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO, nuevaRevision, Instant.now())).isTrue();
+            assertThat(entityManager.contains(retenida)).isTrue();
+        });
+        assertThat(repository.findById(independiente.id()).orElseThrow().isUsado()).isFalse();
     }
 
     private boolean consumirTras(CountDownLatch start, UUID id) throws Exception {

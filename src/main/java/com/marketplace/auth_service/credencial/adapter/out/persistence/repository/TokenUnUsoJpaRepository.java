@@ -22,14 +22,14 @@ public interface TokenUnUsoJpaRepository extends JpaRepository<TokenUnUsoJpaEnti
     @Query("select t from TokenUnUsoJpaEntity t where t.id = :id")
     Optional<TokenUnUsoJpaEntity> bloquearPorId(@Param("id") UUID id);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query("update TokenUnUsoJpaEntity t set t.usado = true where t.usuarioId = :usuarioId " +
             "and t.proposito = :proposito and t.usado = false and t.expiraEn > :ahora")
     int invalidarVigentes(@Param("usuarioId") UUID usuarioId,
                           @Param("proposito") PropositoTokenPersistido proposito,
                           @Param("ahora") OffsetDateTime ahora);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query("update TokenUnUsoJpaEntity t set t.usado = true where t.id = :id and t.usado = false")
     int consumir(@Param("id") UUID id);
 }

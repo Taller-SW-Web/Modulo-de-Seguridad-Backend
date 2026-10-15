@@ -17,7 +17,8 @@ public class TokensUnUsoTransaccional implements TokensUnUsoPort {
     private final TokensUnUsoService servicio;
     public TokensUnUsoTransaccional(TokensUnUsoService servicio) { this.servicio = servicio; }
 
-    @Override @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    // Localiza antes de adquirir los locks del productor; dentro de él comparte su transacción.
+    @Override @Transactional(readOnly = true)
     public Optional<TokenUnUsoSnapshot> localizar(String hash, PropositoToken proposito) {
         return servicio.localizar(hash, proposito);
     }
