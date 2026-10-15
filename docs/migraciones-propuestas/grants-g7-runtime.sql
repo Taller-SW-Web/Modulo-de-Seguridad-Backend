@@ -31,7 +31,36 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO g7_runtime;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC, anon, authenticated;
 
 -- 6. Políticas RLS: el runtime opera; anon/authenticated quedan sin política = sin acceso.
--- (RLS ya está ENABLED en las 22 tablas + racha/huella nuevas.)
+-- (RLS ya está ENABLED en las 22 tablas + 4 nuevas de V102/V104, verificado DAT-01.)
+-- Inventario: 22 G7 (usuario, perfil_cliente, perfil_vendedor, direccion,
+-- credencial, password_historial, otp, token_un_uso, solicitud_limitada,
+-- token_refresco, desafio_mfa, intento_login, bloqueo, rol, permiso,
+-- rol_permiso, usuario_rol, auditoria_seguridad, cliente_servicio, scope,
+-- cliente_servicio_scope, outbox) + sesion_familia, acceso_sesion,
+-- racha_fallo, huella_fallo = 26 políticas.
 CREATE POLICY g7_runtime_total ON usuario FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
--- Repetir por tabla antes de aplicar; generar el bloque completo en la ventana
--- a partir del inventario real (22 + nuevas).
+CREATE POLICY g7_runtime_total ON perfil_cliente FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON perfil_vendedor FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON direccion FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON credencial FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON password_historial FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON otp FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON token_un_uso FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON solicitud_limitada FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON token_refresco FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON desafio_mfa FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON intento_login FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON bloqueo FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON rol FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON permiso FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON rol_permiso FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON usuario_rol FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON auditoria_seguridad FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON cliente_servicio FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON scope FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON cliente_servicio_scope FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON outbox FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON sesion_familia FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON acceso_sesion FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON racha_fallo FOR ALL TO g7_runtime USING (true) WITH CHECK (true);
+CREATE POLICY g7_runtime_total ON huella_fallo FOR ALL TO g7_runtime USING (true) WITH CHECK (true);

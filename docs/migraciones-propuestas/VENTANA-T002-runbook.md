@@ -5,7 +5,11 @@ Precondición: los 6 SQL de `docs/migraciones-propuestas/` confirmados como
 finales por sus dueños (V101 Juan José, V102 Jose Luis, V103 Luis,
 V104 Luis, V105 Juan José, V106 Christian).
 
-## 0. Prechequeos (solo lectura)
+## 0. Prechequeos (solo lectura, verificados 15-oct-2026)
+
+V101–V106 existen en `docs/migraciones-propuestas/` (V102 con cascadas del
+PR #31); sus 8 columnas y 4 tablas objetivo están ausentes en remoto, sin
+conflictos ni versiones aplicadas.
 
 1. Backup/PITR disponible en el dashboard Supabase. Anotar hora.
 2. `SELECT version();` → PostgreSQL 17.x esperado.
