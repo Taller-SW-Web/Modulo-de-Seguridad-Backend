@@ -5,6 +5,7 @@ import com.marketplace.auth_service.sesion.application.dto.DesafioEmitido;
 import com.marketplace.auth_service.sesion.application.dto.PreverificacionLogin;
 import com.marketplace.auth_service.sesion.application.dto.RevisionLogin;
 import com.marketplace.auth_service.sesion.application.dto.RolesLogin;
+import com.marketplace.auth_service.sesion.application.dto.VerificacionOtpLogin;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.time.Instant;
 import java.util.Optional;
@@ -44,4 +45,7 @@ public interface CapacidadesLoginPort {
     boolean contrasenaCaducada(UUID usuarioId, RolesLogin roles, Instant ahora);
 
     void completarLogin(UUID usuarioId);
+
+    /** Verifica el código del desafío (MFA, Luis) dentro de la transacción del login. */
+    VerificacionOtpLogin verificarOtp(String challengeToken, String codigo);
 }

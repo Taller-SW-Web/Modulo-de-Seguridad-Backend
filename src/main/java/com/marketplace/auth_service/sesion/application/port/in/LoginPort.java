@@ -10,4 +10,11 @@ import com.marketplace.auth_service.shared.domain.ContextoPeticion;
  */
 public interface LoginPort {
     ResultadoLogin iniciar(String correo, String contrasena, ContextoPeticion contexto);
+
+    /**
+     * Completa el login de una cuenta con MFA (SPEC-09 RF-09.10/09.11): verifica el código y,
+     * en el mismo commit, revalida cuenta, protección y credencial, aplica la caducidad y abre
+     * la familia. Los fallos de código confirman su intento antes del 401.
+     */
+    ResultadoLogin completarMfa(String challengeToken, String codigo, ContextoPeticion contexto);
 }
