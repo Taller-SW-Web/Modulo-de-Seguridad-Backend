@@ -17,12 +17,10 @@ public class TokensUnUsoConfig {
     @Bean TokenUnUsoRepositoryPort tokenUnUsoRepositoryPort(TokenUnUsoJpaRepository repository) {
         return new TokenUnUsoJpaAdapter(repository);
     }
-    @Bean TokensUnUsoService tokensUnUsoService(TokenUnUsoRepositoryPort repository, ObjectProvider<Clock> clocks,
-                                                 ObjectProvider<SecureRandom> randoms) {
-        return new TokensUnUsoService(repository, clocks.getIfAvailable(Clock::systemUTC),
+    @Bean TokensUnUsoPort tokensUnUsoPort(TokenUnUsoRepositoryPort repository, ObjectProvider<Clock> clocks,
+                                           ObjectProvider<SecureRandom> randoms) {
+        TokensUnUsoService service = new TokensUnUsoService(repository, clocks.getIfAvailable(Clock::systemUTC),
                 randoms.getIfAvailable(SecureRandom::new));
-    }
-    @Bean TokensUnUsoPort tokensUnUsoPort(TokensUnUsoService service) {
         return new TokensUnUsoTransaccional(service);
     }
 }
