@@ -14,6 +14,8 @@ import java.util.UUID;
 @Repository
 @Transactional(readOnly = true)
 public class ProteccionJpaAdapter implements PersistenciaProteccionPort {
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
     private final RachaFalloJpaRepository rachas;
     private final HuellaFalloJpaRepository huellas;
     private final BloqueoJpaRepository bloqueos;
@@ -56,11 +58,16 @@ public class ProteccionJpaAdapter implements PersistenciaProteccionPort {
                 i.ip(), i.agente(), i.fecha().atOffset(ZoneOffset.UTC));
     }
     @Override public Optional<Bloqueo> buscarBloqueo(UUID usuario) {
-        return bloqueos.leer(usuario).map(ProteccionPersistenceMapper::aDominio);
+        return bloqueos.leerActual(usuario).map(b -> new Bloqueo(b.getUsuarioId(),b.getTipo(),
+                b.getBloqueadoHasta()==null ? null : b.getBloqueadoHasta().toInstant(),
+                b.getMotivo(),b.getCreadoEn().toInstant(),b.getRevision()));
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Bloqueo> bloquearBloqueo(UUID usuario) {
-        return bloqueos.bloquear(usuario).map(ProteccionPersistenceMapper::aDominio);
+        return bloqueos.bloquear(usuario).map(b -> {
+            entityManager.refresh(b,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            return ProteccionPersistenceMapper.aDominio(b);
+        });
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public void guardarBloqueo(Bloqueo b) {
@@ -68,6 +75,9 @@ public class ProteccionJpaAdapter implements PersistenciaProteccionPort {
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public boolean eliminarBloqueo(UUID usuario, UUID revision) {
-        return bloqueos.borrarRevision(usuario, revision) == 1;
+        var fila=entityManager.find(com.marketplace.auth_service.proteccion.adapter.out.persistence.entity.BloqueoJpaEntity.class,usuario);
+        boolean eliminado=bloqueos.borrarRevision(usuario, revision)==1;
+        if (eliminado && fila!=null) entityManager.detach(fila);
+        return eliminado;
     }
 }

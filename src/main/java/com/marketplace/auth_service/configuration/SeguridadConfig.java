@@ -51,6 +51,12 @@ public class SeguridadConfig {
     /** Salud para la plataforma de despliegue (TEC-INFRA-T005): solo UP/DOWN, sin detalles. */
     static final String SALUD = "/actuator/health";
 
+    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
+    static final String[] PUBLICAS_SESION_POST = {
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
+    };
+
     @Bean
     SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json) throws Exception {
         AuthenticationManager accesos = new AccesoAuthenticationManager(firmaPort);
@@ -66,6 +72,8 @@ public class SeguridadConfig {
                 .anonymous(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLICAS_SESION_POST).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/desbloquear").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
                         .requestMatchers(HttpMethod.GET, SALUD).permitAll()
                         .anyRequest().authenticated())
@@ -87,7 +95,10 @@ public class SeguridadConfig {
     private static BearerTokenResolver soloFueraDeRutasPublicas() {
         DefaultBearerTokenResolver cabecera = new DefaultBearerTokenResolver();
         Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
+        Set<String> sesionPost = Set.of(PUBLICAS_SESION_POST);
         return peticion -> publicas.contains(peticion.getRequestURI())
+                || ("POST".equals(peticion.getMethod()) && sesionPost.contains(peticion.getRequestURI()))
+                || ("POST".equals(peticion.getMethod()) && "/api/v1/auth/desbloquear".equals(peticion.getRequestURI()))
                 || ("GET".equals(peticion.getMethod())
                     && ("/api/v1/password/politica".equals(peticion.getRequestURI())
                         || SALUD.equals(peticion.getRequestURI())))
