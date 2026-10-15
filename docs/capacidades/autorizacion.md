@@ -146,6 +146,35 @@ Los accesos ya emitidos siguen válidos hasta su `exp` (máx. 15 min). Revocar
 los refrescos obliga a iniciar sesión de nuevo, y el nuevo acceso trae los roles
 actuales. Las operaciones privilegiadas de G7 ya revalidan los permisos en cada llamada.
 
+## Revocar un rol — `DELETE /api/v1/usuarios/{id}/roles/{rol}` (EP-05-T004)
+
+El mismo orden de locks que la asignación (pasos 1–5, luego familias → fila de
+`usuario_rol` → auditoría/outbox), con `ROL_REVOCADO`. Responde 204 y conserva
+los demás roles. Si la persona no tenía el rol, responde 204 sin revocar,
+escribir, auditar ni publicar. Quitar el último rol deja `roles: []` y el
+evento lleva un array vacío.
+
+Si el rol es `ADMIN_SISTEMA`, después de reautorizar y con el lock del catálogo
+tomado se aplica RF-11.7, que responde 422 `ADMINISTRADOR_PROTEGIDO`:
+
+- **Último administrador activo**: si el objetivo es un ADMIN_SISTEMA activo y
+  ningún otro está activo. Los UUID salen de `usuario_rol` y el estado efectivo
+  de Eva (`CuentasRolesPort.contarActivos`); ninguno de los dos lee la tabla del otro.
+  `detail`: «No se puede eliminar el único administrador del sistema» (ESC-11.5).
+- **El propio**: nadie se quita su propio ADMIN_SISTEMA, aunque haya otros.
+  Sí puede quitarse otro rol propio.
+
+Revocar a un administrador bloqueado o inactivo no reduce los activos y se
+permite. El lock del catálogo serializa estas revocaciones con bloqueos y
+bajas: dos revocaciones cruzadas simultáneas (A quita a B y B quita a A)
+nunca dejan cero administradores activos. La segunda falla con 403, porque al
+reautorizar ya no tiene el rol, o con 422. Sin ese lock, la prueba de
+concurrencia falla.
+
+Un código inválido en la ruta responde 400 `VALIDACION`. El contrato no lista
+400 para este DELETE, pero su respuesta `Validacion` cubre «el valor no
+pertenece a un catálogo cerrado»; queda anotado para el PO.
+
 ### Lo que falta conectar: un puente por proveedor
 
 El cambio de rol depende de cuatro puertos de **salida** propios, que cada
@@ -157,7 +186,7 @@ responde 503. El arranque deja este aviso:
 
 | Puerto de salida (Sergio) | Método | Puerto del dueño (ACUERDOS §2) | Requisito |
 |---|---|---|---|
-| `CuentasRolesPort` | `bloquear(List<UUID>)` → `Map<UUID, CuentaRoles>` | `CuentasPort.bloquear` (Eva) | Lock de filas en la transacción, exactamente en el orden recibido; `estado` = estado **efectivo** |
+| `CuentasRolesPort` | `bloquear(List<UUID>)` → `Map<UUID, CuentaRoles>`; `contarActivos(Set<UUID>)` | `CuentasPort.bloquear` / `contarActivos` (Eva) | Lock de filas en la transacción, exactamente en el orden recibido; `estado` = estado **efectivo** |
 | `SesionesRolesPort` | `revocarTodas(UUID)` | `SesionesPort.revocarTodas` (Jose Luis) | `MANDATORY`; bloquea raíces en orden |
 | `AuditoriaRolesPort` | `registrarCritica(RegistroRol)` / `registrarNoCritica(RegistroRol)` | `AuditoriaPort.registrarCritica` / `registrarNoCriticaTrasCommit` (Christian) | Crítica en el mismo commit; si falla, lanzar `GestionRolesNoDisponibleException` |
 | `EventosRolesPort` | `guardar(RolesCambiadosEvento)` | `MensajeriaPort.guardarEvento` (Christian) | Outbox en el mismo commit; `datos.roles` = lista completa |
@@ -197,7 +226,7 @@ una prueba compara la base con la clase.
 ```text
 autorizacion/
   domain/model/            CatalogoAutorizacion, PermisosEfectivos (internos)
-  domain/exception/        RolInvalidoException, AccesoDenegadoException,
+  domain/exception/        RolInvalidoException, AccesoDenegadoException, AdministradorProtegidoException,
                            UsuarioNoEncontradoException, GestionRolesNoDisponibleException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
                            GestionRolesPort          ← solo lo usa RolesController

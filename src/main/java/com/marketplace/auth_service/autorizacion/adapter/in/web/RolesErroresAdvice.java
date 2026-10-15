@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.autorizacion.adapter.in.web;
 
+import com.marketplace.auth_service.autorizacion.domain.exception.AdministradorProtegidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.GestionRolesNoDisponibleException;
 import com.marketplace.auth_service.autorizacion.domain.exception.RolInvalidoException;
 import com.marketplace.auth_service.autorizacion.domain.exception.UsuarioNoEncontradoException;
@@ -33,6 +34,9 @@ class RolesErroresAdvice {
     static final String TITULO_VALIDACION = "Datos de entrada inválidos";
     static final String NO_PERTENECE = "No pertenece al catálogo cerrado de roles.";
     static final String OBLIGATORIO = "Es obligatorio.";
+    /** Mensaje de ESC-11.5. */
+    static final String UNICO_ADMINISTRADOR = "No se puede eliminar el único administrador del sistema";
+    static final String PROPIO_ADMINISTRADOR = "No puedes quitarte tu propio rol de administrador del sistema";
 
     @ExceptionHandler(RolInvalidoException.class)
     ResponseEntity<ProblemDetail> rolInvalido(RolInvalidoException e) {
@@ -52,6 +56,14 @@ class RolesErroresAdvice {
     @ExceptionHandler(UsuarioNoEncontradoException.class)
     ResponseEntity<ProblemDetail> noEncontrado(UsuarioNoEncontradoException e) {
         return Problemas.respuesta(HttpStatus.NOT_FOUND, "NO_ENCONTRADO", "Usuario no encontrado", null);
+    }
+
+    @ExceptionHandler(AdministradorProtegidoException.class)
+    ResponseEntity<ProblemDetail> administradorProtegido(AdministradorProtegidoException e) {
+        String detalle = e.motivo() == AdministradorProtegidoException.Motivo.ULTIMO_ADMINISTRADOR
+                ? UNICO_ADMINISTRADOR : PROPIO_ADMINISTRADOR;
+        return Problemas.respuesta(HttpStatus.UNPROCESSABLE_ENTITY, "ADMINISTRADOR_PROTEGIDO",
+                "Operación no permitida sobre este administrador", detalle);
     }
 
     @ExceptionHandler(GestionRolesNoDisponibleException.class)
