@@ -7,6 +7,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Objects;
 
 /**
  * Refrescos opacos (SPEC-06): 32 bytes de {@code SecureRandom} en base64url sin
@@ -31,6 +32,12 @@ public class SesionCryptoAdapter implements CriptografiaSesionPort {
         aleatorio.nextBytes(secreto);
         String valor = Base64.getUrlEncoder().withoutPadding().encodeToString(secreto);
         return new RefrescoGenerado(valor, sha256Hex(valor));
+    }
+
+    @Override
+    public String hash(String secreto) {
+        Objects.requireNonNull(secreto, "secreto");
+        return sha256Hex(secreto);
     }
 
     /** SHA-256 hexadecimal de un valor, para contrastar lo persistido en pruebas. */

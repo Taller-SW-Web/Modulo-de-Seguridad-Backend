@@ -3,8 +3,12 @@ package com.marketplace.auth_service.sesion.application.service;
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.DatosAcceso;
+import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
+import com.marketplace.auth_service.sesion.application.dto.MotivoRechazo;
 import com.marketplace.auth_service.sesion.application.dto.RefrescoGenerado;
+import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
+import com.marketplace.auth_service.sesion.application.dto.SecretoRefresco;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.dto.TokenAccesoFirmado;
 import com.marketplace.auth_service.sesion.application.dto.UsuarioAutenticado;
@@ -12,6 +16,7 @@ import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.CriptografiaSesionPort;
 import com.marketplace.auth_service.sesion.application.port.out.FirmadorAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.out.PersistenciaSesionPort;
+import com.marketplace.auth_service.sesion.application.port.out.ProveedorIdentidadPort;
 import com.marketplace.auth_service.sesion.domain.exception.AccesoDesconocidoException;
 import com.marketplace.auth_service.sesion.domain.exception.FamiliaRevocadaException;
 import com.marketplace.auth_service.sesion.domain.model.AccesoSesion;
@@ -36,13 +41,15 @@ public class SesionService implements SesionesPort {
     private final PersistenciaSesionPort persistencia;
     private final CriptografiaSesionPort criptografia;
     private final FirmadorAccesoPort firmador;
+    private final ProveedorIdentidadPort identidad;
     private final Clock clock;
 
     public SesionService(PersistenciaSesionPort persistencia, CriptografiaSesionPort criptografia,
-                         FirmadorAccesoPort firmador, Clock clock) {
+                         FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad, Clock clock) {
         this.persistencia = Objects.requireNonNull(persistencia, "persistencia");
         this.criptografia = Objects.requireNonNull(criptografia, "criptografia");
         this.firmador = Objects.requireNonNull(firmador, "firmador");
+        this.identidad = Objects.requireNonNull(identidad, "identidad");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -85,6 +92,61 @@ public class SesionService implements SesionesPort {
         }
         return new ContextoSesion(asociacion.usuarioId(), asociacion.familiaId(), asociacion.jti(),
                 asociacion.expiraEn());
+    }
+
+    @Override
+    public RenovacionResultado renovar(SecretoRefresco secreto) {
+        Objects.requireNonNull(secreto, "secreto");
+        Instant ahora = clock.instant();
+        TokenRefresco presentado = persistencia.buscarTokenPorHash(criptografia.hash(secreto.valor()))
+                .orElse(null);
+        if (presentado == null) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REFRESCO_DESCONOCIDO, null, null);
+        }
+        SesionFamilia familia = persistencia.bloquearFamilia(presentado.familiaId()).orElse(null);
+        if (familia == null) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REFRESCO_DESCONOCIDO,
+                    presentado.usuarioId(), presentado.familiaId());
+        }
+        // La lectura previa al lock es orientativa: se relee bajo el lock de la
+        // raíz, así dos renovaciones simultáneas no emiten dos sucesores.
+        TokenRefresco actual = persistencia.buscarTokenPorHash(criptografia.hash(secreto.valor()))
+                .filter(fila -> fila.familiaId().equals(familia.id())).orElse(null);
+        if (actual == null) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REFRESCO_DESCONOCIDO,
+                    presentado.usuarioId(), familia.id());
+        }
+        if (familia.revocada() || actual.revocado()) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REFRESCO_REVOCADO,
+                    actual.usuarioId(), familia.id());
+        }
+        if (!ahora.isBefore(actual.expiracion())) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REFRESCO_VENCIDO,
+                    actual.usuarioId(), familia.id());
+        }
+        if (actual.usado()) {
+            revocarFamilia(familia.id(), ahora);
+            return new RenovacionResultado.Rechazada(MotivoRechazo.REUSO_DETECTADO,
+                    actual.usuarioId(), familia.id());
+        }
+        DatosIdentidad datos = identidad.identidadParaRenovar(actual.usuarioId());
+        if (!datos.usuarioId().equals(actual.usuarioId()) || !datos.renovacionPermitida()) {
+            return new RenovacionResultado.Rechazada(MotivoRechazo.CUENTA_NO_DISPONIBLE,
+                    actual.usuarioId(), familia.id());
+        }
+        persistencia.guardarToken(actual.marcarUsado());
+        RefrescoGenerado siguiente = criptografia.generarRefresco();
+        TokenRefresco nuevo = TokenRefresco.nuevo(UUID.randomUUID(), actual.usuarioId(), familia.id(),
+                siguiente.hash(), ahora);
+        persistencia.guardarToken(nuevo);
+        TokenAccesoFirmado firmado = firmador.firmar(
+                new DatosAcceso(actual.usuarioId(), datos.email(), datos.roles(), datos.permisos()));
+        persistencia.guardarAcceso(new AccesoSesion(firmado.jti(), actual.usuarioId(), familia.id(),
+                firmado.expiraEn(), ahora));
+        return new RenovacionResultado.Renovada(new SesionIniciada(firmado.token(), siguiente.secreto(),
+                firmado.expiresIn(), firmado.expiraEn(), nuevo.expiracion(),
+                new UsuarioAutenticado(actual.usuarioId(), datos.nombreCompleto(), datos.email(),
+                        datos.roles())));
     }
 
     @Override

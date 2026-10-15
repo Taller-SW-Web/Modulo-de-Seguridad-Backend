@@ -9,6 +9,7 @@ import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteFirmaAcce
 import com.marketplace.auth_service.sesion.adapter.out.crypto.SesionCryptoAdapter;
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
+import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
@@ -105,7 +106,10 @@ class AbrirSesionPostgresTest {
     @BeforeEach
     void servicioConFirmaReal() {
         sesiones = new SesionService(persistencia, new SesionCryptoAdapter(),
-                new PuenteFirmaAcceso(firmaReal()), RELOJ);
+                new PuenteFirmaAcceso(firmaReal()),
+                u -> new DatosIdentidad(u, usuario + "@ejemplo.test", "Cliente Prueba",
+                        List.of("CLIENTE"), List.of(), true),
+                RELOJ);
         usuario = UUID.randomUUID();
         jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?,?,?,?, 'ACTIVO')",
                 usuario, usuario + "@ejemplo.test", "Cliente", "Prueba");
@@ -193,7 +197,10 @@ class AbrirSesionPostgresTest {
         FirmadorAccesoPort firmaCaida = datos -> {
             throw new IllegalStateException("firma caída");
         };
-        var sinFirma = new SesionService(persistencia, new SesionCryptoAdapter(), firmaCaida, RELOJ);
+        var sinFirma = new SesionService(persistencia, new SesionCryptoAdapter(), firmaCaida,
+                u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
+                        List.of("CLIENTE"), List.of(), true),
+                RELOJ);
         var tx = new TransactionTemplate(transacciones);
         long familiasAntes = contar("sesion_familia");
         long tokensAntes = contar("token_refresco");

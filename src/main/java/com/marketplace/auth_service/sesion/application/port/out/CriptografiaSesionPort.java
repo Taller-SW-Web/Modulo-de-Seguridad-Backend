@@ -9,4 +9,7 @@ import com.marketplace.auth_service.sesion.application.dto.RefrescoGenerado;
  */
 public interface CriptografiaSesionPort {
     RefrescoGenerado generarRefresco();
+
+    /** SHA-256 hexadecimal para localizar el refresco presentado, sin exponerlo. */
+    String hash(String secreto);
 }

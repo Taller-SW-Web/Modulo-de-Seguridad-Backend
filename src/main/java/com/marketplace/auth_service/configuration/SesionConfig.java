@@ -2,6 +2,7 @@ package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.sesion.adapter.in.transaction.SesionTransaccional;
+import com.marketplace.auth_service.sesion.adapter.out.capacidad.IdentidadSesionPendiente;
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteFirmaAcceso;
 import com.marketplace.auth_service.sesion.adapter.out.crypto.SesionCryptoAdapter;
 import com.marketplace.auth_service.sesion.adapter.out.persistence.SesionJpaAdapter;
@@ -12,6 +13,7 @@ import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.CriptografiaSesionPort;
 import com.marketplace.auth_service.sesion.application.port.out.FirmadorAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.out.PersistenciaSesionPort;
+import com.marketplace.auth_service.sesion.application.port.out.ProveedorIdentidadPort;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -47,9 +49,16 @@ public class SesionConfig {
     }
 
     @Bean
+    ProveedorIdentidadPort proveedorIdentidadPort() {
+        return new IdentidadSesionPendiente();
+    }
+
+    @Bean
     SesionesPort sesionesPort(PersistenciaSesionPort persistencia, CriptografiaSesionPort criptografia,
-                              FirmadorAccesoPort firmador, ObjectProvider<Clock> clock) {
+                              FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad,
+                              ObjectProvider<Clock> clock) {
         return new SesionTransaccional(
-                new SesionService(persistencia, criptografia, firmador, clock.getIfAvailable(Clock::systemUTC)));
+                new SesionService(persistencia, criptografia, firmador, identidad,
+                        clock.getIfAvailable(Clock::systemUTC)));
     }
 }
