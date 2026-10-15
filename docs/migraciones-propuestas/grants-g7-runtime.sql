@@ -52,6 +52,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
     usuario_rol, cliente_servicio, scope, cliente_servicio_scope, outbox
     TO g7_runtime;
 
+-- 5b. Vista de estado efectivo (V3): se evalúa con los privilegios de quien consulta
+--     (security_invoker, ENTORNO-Y-REACT §1) y el runtime solo la lee.
+ALTER VIEW usuario_estado_efectivo SET (security_invoker = true);
+GRANT SELECT ON usuario_estado_efectivo TO g7_runtime;
+
 -- 6. Secuencias de identity/serial (incluye auditoria_seguridad_id_seq).
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO g7_runtime;
 

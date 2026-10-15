@@ -110,7 +110,7 @@ Con el rol runtime real, **por la misma URL que usará el despliegue**
 Ensayado en PostgreSQL 16 local desechable (nunca Supabase), emulando los
 privilegios por defecto de Supabase a `anon`/`authenticated` y RLS activo:
 base observada + V101–V106 (cada una en su transacción, como Flyway) + R__ +
-grants aplicados dos veces. 22/22 comprobaciones OK como `g7_runtime`, `anon`
+grants aplicados dos veces. 24/24 comprobaciones OK (incluida la vista `usuario_estado_efectivo`) como `g7_runtime`, `anon`
 y una tabla creada después por el migrador. Mutaciones detectadas: sin
 `ALTER DEFAULT PRIVILEGES` la tabla futura queda visible para `anon`; con
 UPDATE/DELETE en auditoría el runtime deja de ser solo-anexado.
