@@ -1,0 +1,17 @@
+# Nada privado ni generado entra al contexto de la imagen.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.crt
+.git
+.github
+.gradle
+build
+docs
+**/node_modules
+.idea
+.vscode
