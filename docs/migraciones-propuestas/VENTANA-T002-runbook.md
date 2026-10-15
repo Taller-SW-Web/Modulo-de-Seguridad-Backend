@@ -83,7 +83,7 @@ guardarla solo en el gestor de secretos del despliegue (`DB_PASSWORD`).
 El script es transaccional y repetible: crea el rol solo si falta, revoca a
 PUBLIC/anon/authenticated lo existente **y los privilegios por defecto**
 del migrador, deja auditoría en SELECT+INSERT, catálogo en SELECT y recrea
-27 políticas RLS (22 operativas, 3 de catálogo en lectura, 2 de auditoría).
+28 políticas RLS (22 operativas, 3 de catálogo en lectura, 1 de guard sobre `rol` que bloquea sin escribir, 2 de auditoría).
 
 ## 4. Verificación
 
@@ -92,7 +92,7 @@ Como administrador:
 ```
 SELECT has_table_privilege('anon', 'usuario', 'SELECT');          -- f
 SELECT count(*) FROM pg_tables WHERE schemaname='public' AND rowsecurity;  -- 26
-SELECT count(*) FROM pg_policies WHERE 'g7_runtime' = ANY(roles); -- 27
+SELECT count(*) FROM pg_policies WHERE 'g7_runtime' = ANY(roles); -- 28
 ```
 
 Con el rol runtime real, **por la misma URL que usará el despliegue**
@@ -110,7 +110,7 @@ Con el rol runtime real, **por la misma URL que usará el despliegue**
 Ensayado en PostgreSQL 16 local desechable (nunca Supabase), emulando los
 privilegios por defecto de Supabase a `anon`/`authenticated` y RLS activo:
 base observada + V101–V106 (cada una en su transacción, como Flyway) + R__ +
-grants aplicados dos veces. 24/24 comprobaciones OK (incluida la vista `usuario_estado_efectivo`) como `g7_runtime`, `anon`
+grants aplicados dos veces. 26/26 comprobaciones OK (incluidos el guard `FOR UPDATE` sobre `rol` sin poder modificarlo y la vista) (incluida la vista `usuario_estado_efectivo`) como `g7_runtime`, `anon`
 y una tabla creada después por el migrador. Mutaciones detectadas: sin
 `ALTER DEFAULT PRIVILEGES` la tabla futura queda visible para `anon`; con
 UPDATE/DELETE en auditoría el runtime deja de ser solo-anexado.

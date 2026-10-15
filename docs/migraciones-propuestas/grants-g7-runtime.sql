@@ -42,6 +42,11 @@ GRANT SELECT, INSERT ON auditoria_seguridad TO g7_runtime;
 -- 4. Catálogo de autorización: solo lectura. Lo escribe la migración
 --    R__catalogo_autorizacion con el migrador, nunca el runtime.
 GRANT SELECT ON rol, permiso, rol_permiso TO g7_runtime;
+--    Guard ADMIN (SELECT … FOR UPDATE sobre la fila ADMIN_SISTEMA, orden de locks de
+--    roles, login fallido y desbloqueo): PostgreSQL exige UPDATE para bloquear filas.
+--    Se concede solo sobre una columna inocua y la política de abajo rechaza toda
+--    escritura (WITH CHECK false): el runtime puede bloquear, nunca modificar.
+GRANT UPDATE (descripcion) ON rol TO g7_runtime;
 
 -- 5. Operativa del dominio: lectura/escritura, sin TRUNCATE.
 GRANT SELECT, INSERT, UPDATE, DELETE ON
@@ -92,6 +97,10 @@ BEGIN
         EXECUTE format('DROP POLICY IF EXISTS g7_runtime_lectura ON %I', tabla);
         EXECUTE format('CREATE POLICY g7_runtime_lectura ON %I FOR SELECT TO g7_runtime USING (true)', tabla);
     END LOOP;
+
+    -- Solo bloqueo de fila en rol: USING permite el FOR UPDATE; WITH CHECK impide escribir.
+    DROP POLICY IF EXISTS g7_runtime_guard ON rol;
+    CREATE POLICY g7_runtime_guard ON rol FOR UPDATE TO g7_runtime USING (true) WITH CHECK (false);
 END
 $$;
 
