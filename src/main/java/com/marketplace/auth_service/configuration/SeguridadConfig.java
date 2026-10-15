@@ -7,6 +7,7 @@ import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -47,12 +48,16 @@ public class SeguridadConfig {
             "/api/v1/auth/.well-known/openid-configuration"
     };
 
+    /** Salud para la plataforma de despliegue (TEC-INFRA-T005): solo UP/DOWN, sin detalles. */
+    static final String SALUD = "/actuator/health";
+
     @Bean
     SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json) throws Exception {
         AuthenticationManager accesos = new AccesoAuthenticationManager(firmaPort);
         RespuestasAcceso respuestas = new RespuestasAcceso(json);
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -62,6 +67,7 @@ public class SeguridadConfig {
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
+                        .requestMatchers(HttpMethod.GET, SALUD).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -83,7 +89,8 @@ public class SeguridadConfig {
         Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
         return peticion -> publicas.contains(peticion.getRequestURI())
                 || ("GET".equals(peticion.getMethod())
-                    && "/api/v1/password/politica".equals(peticion.getRequestURI()))
+                    && ("/api/v1/password/politica".equals(peticion.getRequestURI())
+                        || SALUD.equals(peticion.getRequestURI())))
                 ? null : cabecera.resolve(peticion);
     }
 }
