@@ -5,7 +5,6 @@ import com.marketplace.auth_service.usuario.adapter.in.web.dto.PaginaUsuariosRes
 import com.marketplace.auth_service.usuario.adapter.in.web.dto.UsuarioResponse;
 import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
-import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -18,7 +17,7 @@ public final class UsuarioWebMapper {
         if (snapshot == null) return null;
 
         BloqueoResponse bloqueo = null;
-        if (snapshot.estadoEfectivo() == EstadoCuenta.BLOQUEADO) {
+        if ("BLOQUEADO".equals(snapshot.estadoEfectivo())) {
             bloqueo = new BloqueoResponse("AUTOMATICO", null, null);
         }
 
@@ -29,7 +28,7 @@ public final class UsuarioWebMapper {
                 snapshot.nombreCompleto(),
                 snapshot.correo(),
                 snapshot.celular(),
-                snapshot.estadoEfectivo().name(),
+                snapshot.estadoEfectivo(),
                 snapshot.correoVerificado(),
                 false,
                 snapshot.mfaHabilitado(),
@@ -37,7 +36,7 @@ public final class UsuarioWebMapper {
                 null,
                 null,
                 null,
-                snapshot.roles() != null ? snapshot.roles().stream().map(Enum::name).collect(java.util.stream.Collectors.toSet()) : Set.of(),
+                snapshot.roles() != null ? snapshot.roles() : Set.of(),
                 snapshot.tipoDocumento(),
                 null,
                 snapshot.documentoEnmascarado(),

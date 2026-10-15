@@ -7,8 +7,7 @@ import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.port.in.CambioBasicos;
 import com.marketplace.auth_service.usuario.application.port.in.ContadoresProteccion;
 import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
-import com.marketplace.auth_service.usuario.domain.model.CodigoRol;
-import jakarta.persistence.LockModeType;
+import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,15 +41,14 @@ public class CuentaEscrituraAdapter implements CuentaEscrituraInterna {
             entity.setCelular(cambio.celular());
         }
         if (cambio.tipoDocumento() != null) {
-            // Validar que sea un CodigoRol válido para tipo_documento
-            entity.setTipoDocumento(CodigoRol.valueOf(cambio.tipoDocumento()));
+            entity.setTipoDocumento(cambio.tipoDocumento());
         }
         // numeroDocumento se maneja via Valery (encriptado/HMAC) - no aquí
 
         // NO tocar: roles, estado, passwordHash, contadores, MFA, fechas, versión
 
         UsuarioJpaEntity saved = usuarioJpaRepository.saveAndFlush(entity);
-        return UsuarioPersistenceMapper.toSnapshot(saved, UsuarioPersistenceMapper.extraerRoles(saved));
+        return UsuarioPersistenceMapper.toSnapshot(saved, Set.of());
     }
 
     @Override
@@ -60,7 +58,7 @@ public class CuentaEscrituraAdapter implements CuentaEscrituraInterna {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usuarioId));
 
         entity.setBloqueosSeguidos(contadores.bloqueosSeguidos());
-        entity.setIntentosFallidos(contadores.intentosFallidos());
+        entity.setIntentosFallidosConsecutivos(contadores.intentosFallidos());
 
         // NO tocar: básicos, roles, estado, password, MFA, fechas
         usuarioJpaRepository.saveAndFlush(entity);

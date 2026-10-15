@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.usuario.adapter.out.persistence.entity;
 
+import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -15,16 +16,16 @@ public class UsuarioJpaEntity {
     @Column(name = "id", nullable = false, updatable = false, columnDefinition = "uuid")
     private UUID id;
 
+    @Column(name = "correo", nullable = false, length = 254)
+    private String correo;
+
     @Column(name = "nombres", nullable = false, length = 100)
     private String nombres;
 
     @Column(name = "apellidos", nullable = false, length = 100)
     private String apellidos;
 
-    @Column(name = "correo", nullable = false, length = 254, unique = true)
-    private String correo;
-
-    @Column(name = "celular", length = 30)
+    @Column(name = "celular", length = 12)
     private String celular;
 
     @Enumerated(EnumType.STRING)
@@ -41,60 +42,47 @@ public class UsuarioJpaEntity {
     @Column(name = "mfa_habilitado", nullable = false)
     private boolean mfaHabilitado;
 
-    @Column(name = "fecha_nacimiento")
-    private java.time.LocalDate fechaNacimiento;
+    @Column(name = "acepta_terminos", nullable = false)
+    private boolean aceptaTerminos;
 
-    @Column(name = "tipo_documento", length = 20)
-    private String tipoDocumento;
+    @Column(name = "fecha_aceptacion")
+    private OffsetDateTime fechaAceptacion;
 
-    @Column(name = "documento_cifrado")
-    private String documentoCifrado;
+    @Column(name = "version_terminos", length = 20)
+    private String versionTerminos;
 
-    @Column(name = "documento_hmac", length = 64)
-    private String documentoHmac;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "canal_origen", nullable = false)
+    private CanalOrigen canalOrigen;
 
-    @Column(name = "codigo_vendedor", length = 50)
-    private String codigoVendedor;
-
-    @Column(name = "tienda", length = 100)
-    private String tienda;
-
-    @Column(name = "fecha_ingreso")
-    private java.time.LocalDate fechaIngreso;
+    @Column(name = "intentos_fallidos_consecutivos", nullable = false)
+    private int intentosFallidosConsecutivos;
 
     @Column(name = "bloqueos_seguidos", nullable = false)
     private int bloqueosSeguidos;
 
-    @Column(name = "intentos_fallidos", nullable = false)
-    private int intentosFallidos;
+    @Column(name = "creado_en", nullable = false, updatable = false)
+    private OffsetDateTime creadoEn;
 
-    @Column(name = "acepta_terminos_version", length = 50)
-    private String aceptaTerminosVersion;
-
-    @Column(name = "acepta_terminos_en")
-    private OffsetDateTime aceptaTerminosEn;
-
-    @Column(name = "canal_origen", length = 30)
-    private String canalOrigen;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    @Column(name = "actualizado_en")
+    private OffsetDateTime actualizadoEn;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
 
+    @Column(name = "tipo_documento", length = 20)
+    private String tipoDocumento;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public String getCorreo() { return correo; }
+    public void setCorreo(String correo) { this.correo = correo; }
     public String getNombres() { return nombres; }
     public void setNombres(String nombres) { this.nombres = nombres; }
     public String getApellidos() { return apellidos; }
     public void setApellidos(String apellidos) { this.apellidos = apellidos; }
-    public String getCorreo() { return correo; }
-    public void setCorreo(String correo) { this.correo = correo; }
     public String getCelular() { return celular; }
     public void setCelular(String celular) { this.celular = celular; }
     public EstadoCuenta getEstado() { return estado; }
@@ -105,34 +93,24 @@ public class UsuarioJpaEntity {
     public void setCelularVerificado(boolean celularVerificado) { this.celularVerificado = celularVerificado; }
     public boolean isMfaHabilitado() { return mfaHabilitado; }
     public void setMfaHabilitado(boolean mfaHabilitado) { this.mfaHabilitado = mfaHabilitado; }
-    public java.time.LocalDate getFechaNacimiento() { return fechaNacimiento; }
-    public void setFechaNacimiento(java.time.LocalDate fechaNacimiento) { this.fechaNacimiento = fechaNacimiento; }
-    public String getTipoDocumento() { return tipoDocumento; }
-    public void setTipoDocumento(String tipoDocumento) { this.tipoDocumento = tipoDocumento; }
-    public String getDocumentoCifrado() { return documentoCifrado; }
-    public void setDocumentoCifrado(String documentoCifrado) { this.documentoCifrado = documentoCifrado; }
-    public String getDocumentoHmac() { return documentoHmac; }
-    public void setDocumentoHmac(String documentoHmac) { this.documentoHmac = documentoHmac; }
-    public String getCodigoVendedor() { return codigoVendedor; }
-    public void setCodigoVendedor(String codigoVendedor) { this.codigoVendedor = codigoVendedor; }
-    public String getTienda() { return tienda; }
-    public void setTienda(String tienda) { this.tienda = tienda; }
-    public java.time.LocalDate getFechaIngreso() { return fechaIngreso; }
-    public void setFechaIngreso(java.time.LocalDate fechaIngreso) { this.fechaIngreso = fechaIngreso; }
+    public boolean isAceptaTerminos() { return aceptaTerminos; }
+    public void setAceptaTerminos(boolean aceptaTerminos) { this.aceptaTerminos = aceptaTerminos; }
+    public OffsetDateTime getFechaAceptacion() { return fechaAceptacion; }
+    public void setFechaAceptacion(OffsetDateTime fechaAceptacion) { this.fechaAceptacion = fechaAceptacion; }
+    public String getVersionTerminos() { return versionTerminos; }
+    public void setVersionTerminos(String versionTerminos) { this.versionTerminos = versionTerminos; }
+    public com.marketplace.auth_service.usuario.domain.model.CanalOrigen getCanalOrigen() { return canalOrigen; }
+    public void setCanalOrigen(com.marketplace.auth_service.usuario.domain.model.CanalOrigen canalOrigen) { this.canalOrigen = canalOrigen; }
+    public int getIntentosFallidosConsecutivos() { return intentosFallidosConsecutivos; }
+    public void setIntentosFallidosConsecutivos(int intentosFallidosConsecutivos) { this.intentosFallidosConsecutivos = intentosFallidosConsecutivos; }
     public int getBloqueosSeguidos() { return bloqueosSeguidos; }
     public void setBloqueosSeguidos(int bloqueosSeguidos) { this.bloqueosSeguidos = bloqueosSeguidos; }
-    public int getIntentosFallidos() { return intentosFallidos; }
-    public void setIntentosFallidos(int intentosFallidos) { this.intentosFallidos = intentosFallidos; }
-    public String getAceptaTerminosVersion() { return aceptaTerminosVersion; }
-    public void setAceptaTerminosVersion(String aceptaTerminosVersion) { this.aceptaTerminosVersion = aceptaTerminosVersion; }
-    public OffsetDateTime getAceptaTerminosEn() { return aceptaTerminosEn; }
-    public void setAceptaTerminosEn(OffsetDateTime aceptaTerminosEn) { this.aceptaTerminosEn = aceptaTerminosEn; }
-    public String getCanalOrigen() { return canalOrigen; }
-    public void setCanalOrigen(String canalOrigen) { this.canalOrigen = canalOrigen; }
-    public OffsetDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
-    public OffsetDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public OffsetDateTime getCreadoEn() { return creadoEn; }
+    public void setCreadoEn(OffsetDateTime creadoEn) { this.creadoEn = creadoEn; }
+    public OffsetDateTime getActualizadoEn() { return actualizadoEn; }
+    public void setActualizadoEn(OffsetDateTime actualizadoEn) { this.actualizadoEn = actualizadoEn; }
     public Long getVersion() { return version; }
     public void setVersion(Long version) { this.version = version; }
+    public String getTipoDocumento() { return tipoDocumento; }
+    public void setTipoDocumento(String tipoDocumento) { this.tipoDocumento = tipoDocumento; }
 }
