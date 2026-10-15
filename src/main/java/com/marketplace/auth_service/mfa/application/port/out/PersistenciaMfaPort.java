@@ -8,9 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** Persistencia propia. Guardados/locks requieren transacción del coordinador y lock previo de usuario. */
-public interface PersistenciaMfaPort {
-    void guardarDesafio(DesafioMfa desafio);
-    Optional<DesafioMfa> buscarDesafioPorHash(String hash);
+public interface PersistenciaMfaPort extends AlmacenDesafiosMfaPort {
     Optional<DesafioMfa> bloquearDesafio(UUID id);
     void guardarOtp(Otp otp);
     Optional<Otp> bloquearOtp(UUID id);
