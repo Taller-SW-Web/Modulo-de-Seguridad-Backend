@@ -11,6 +11,7 @@ import com.marketplace.auth_service.sesion.domain.model.TokenRefresco;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +38,11 @@ public class SesionJpaAdapter implements PersistenciaSesionPort {
         return familias.bloquearPorId(familiaId).map(SesionPersistenceMapper::aDominio);
     }
 
+    @Override public List<SesionFamilia> listarFamiliasDeUsuario(UUID usuarioId) {
+        return familias.findByUsuarioIdOrderByIdAsc(usuarioId).stream()
+                .map(SesionPersistenceMapper::aDominio).toList();
+    }
+
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public void guardarToken(TokenRefresco token) {
         tokens.saveAndFlush(SesionPersistenceMapper.aEntidad(token));
@@ -44,6 +50,11 @@ public class SesionJpaAdapter implements PersistenciaSesionPort {
 
     @Override public Optional<TokenRefresco> buscarTokenPorHash(String hashToken) {
         return tokens.findByHashToken(hashToken).map(SesionPersistenceMapper::aDominio);
+    }
+
+    @Override public List<TokenRefresco> listarTokensDeFamilia(UUID familiaId) {
+        return tokens.findByFamiliaIdOrderByJtiAsc(familiaId).stream()
+                .map(SesionPersistenceMapper::aDominio).toList();
     }
 
     @Override @Transactional(propagation = Propagation.MANDATORY)
