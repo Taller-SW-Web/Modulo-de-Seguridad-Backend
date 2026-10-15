@@ -47,6 +47,12 @@ public class SeguridadConfig {
             "/api/v1/auth/.well-known/openid-configuration"
     };
 
+    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
+    static final String[] PUBLICAS_SESION_POST = {
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
+    };
+
     @Bean
     SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json) throws Exception {
         AuthenticationManager accesos = new AccesoAuthenticationManager(firmaPort);
@@ -61,6 +67,7 @@ public class SeguridadConfig {
                 .anonymous(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(rutas -> rutas
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLICAS_SESION_POST).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -79,7 +86,11 @@ public class SeguridadConfig {
      */
     private static BearerTokenResolver soloFueraDeRutasPublicas() {
         DefaultBearerTokenResolver cabecera = new DefaultBearerTokenResolver();
-        Set<String> publicas = Set.of(PUBLICAS_IDENTIDAD);
+        Set<String> publicas = Set.of(
+                "/api/v1/auth/.well-known/jwks.json",
+                "/api/v1/auth/.well-known/openid-configuration",
+                "/api/v1/auth/refresh",
+                "/api/v1/auth/logout");
         return peticion -> publicas.contains(peticion.getRequestURI()) ? null : cabecera.resolve(peticion);
     }
 }
