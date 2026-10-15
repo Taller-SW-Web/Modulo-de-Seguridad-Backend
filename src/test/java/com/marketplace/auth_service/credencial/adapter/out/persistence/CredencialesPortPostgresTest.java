@@ -70,6 +70,10 @@ class CredencialesPortPostgresTest {
             }
             ScriptUtils.executeSqlScript(conexion,
                     new FileSystemResource("docs/migraciones-propuestas/V101__credencial_version.sql"));
+            // El paquete de credenciales también contiene TokenUnUsoJpaEntity desde EP-03-T004.
+            // Su mapping se valida contra la misma base aislada: necesita contexto_id de V105.
+            ScriptUtils.executeSqlScript(conexion,
+                    new FileSystemResource("docs/migraciones-propuestas/V105__token_un_uso_contexto_id.sql"));
             comunes = Files.createTempFile("ep03-comunes-", ".txt");
             Files.writeString(comunes, "ComunDePrueba8!\n");
         } catch (Exception error) { throw new IllegalStateException("Fixture PostgreSQL local no disponible", error); }
