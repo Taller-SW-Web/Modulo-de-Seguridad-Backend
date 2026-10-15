@@ -28,6 +28,9 @@ public interface AsociacionesRolPort {
     /** Personas que tienen el rol. */
     Set<UUID> usuariosConRol(Rol rol);
 
+    /** Roles de cada UUID pedido, en una consulta; los que no tienen filas no aparecen. */
+    Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds);
+
     /**
      * {@code SELECT ... FROM rol WHERE codigo = 'ADMIN_SISTEMA' FOR UPDATE} en la
      * transacción en curso.

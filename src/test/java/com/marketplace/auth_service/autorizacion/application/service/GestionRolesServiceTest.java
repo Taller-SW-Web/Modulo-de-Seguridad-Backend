@@ -85,6 +85,11 @@ class GestionRolesServiceTest {
         }
 
         @Override
+        public Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+            throw new UnsupportedOperationException("La gestión de roles no proyecta páginas");
+        }
+
+        @Override
         public void bloquearFilaAdministrador() {
             llamadas.add("lock catálogo");
             if (alBloquearCatalogo != null) {
