@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.sesion.adapter.in.web;
 
+import com.marketplace.auth_service.sesion.domain.exception.DatoObligatorioException;
 import com.marketplace.auth_service.sesion.domain.exception.DependenciaNoDisponibleException;
 import com.marketplace.auth_service.sesion.domain.exception.SecretoInvalidoException;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
@@ -26,6 +27,15 @@ public class SesionErroresAdvice {
         ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION",
                 "Datos de entrada inválidos", null);
         problema.setProperty("errores", List.of(Map.of("campo", "refreshToken", "mensaje", e.getMessage())));
+        return ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema);
+    }
+
+    /** Falta un dato del cuerpo: {@code 400 VALIDACION} con campo y mensaje. */
+    @ExceptionHandler(DatoObligatorioException.class)
+    ResponseEntity<ProblemDetail> datoObligatorio(DatoObligatorioException e) {
+        ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION",
+                "Datos de entrada inválidos", null);
+        problema.setProperty("errores", List.of(Map.of("campo", e.campo(), "mensaje", e.getMessage())));
         return ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema);
     }
 
