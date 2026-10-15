@@ -1,25 +1,27 @@
 package com.marketplace.auth_service;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
+import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
+import com.marketplace.auth_service.usuario.application.service.ConsultaCuentasService;
+import static org.assertj.core.api.Assertions.assertThat;
+@Import(TestcontainersConfiguration.class)
 @SpringBootTest
-@TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-    "spring.datasource.driver-class-name=org.h2.Driver",
-    "spring.datasource.username=sa",
-    "spring.datasource.password=",
-    "spring.jpa.hibernate.ddl-auto=none",
-    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-    "spring.flyway.enabled=false",
-    "spring.jpa.hibernate.ddl-auto=none",
-    "spring.rabbitmq.listener.simple.auto-startup=false",
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.amqp.RabbitConnectionFactoryAutoConfiguration,org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration"
-})
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=none")
 class AuthServiceApplicationTests {
-
-	@Test
-	void contextLoads() {
-	}
+    @Autowired ApplicationContext contexto;
+    @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping rutas;
+    @Test void contextLoads() {
+        assertThat(contexto.getBeansOfType(CuentasPort.class)).hasSize(1);
+        assertThat(contexto.getBeansOfType(CuentaEscrituraInterna.class)).hasSize(1);
+        assertThat(contexto.getBeansOfType(ConsultaCuentasService.class)).isEmpty();
+        assertThat(rutas.getHandlerMethods().keySet().stream().flatMap(r -> r.getPatternValues().stream()))
+                .doesNotContain("/api/v1/usuarios", "/api/v1/usuarios/{id}");
+    }
 }

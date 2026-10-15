@@ -9,124 +9,77 @@ import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
 import com.marketplace.auth_service.usuario.application.dto.Paginacion;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
-import com.marketplace.auth_service.usuario.application.port.out.UsuarioEstadoEfectivoPort;
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
-import org.springframework.data.domain.Page;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import java.util.Collections;
-import java.util.HashMap;
+import org.springframework.data.jpa.domain.Specification;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort, UsuarioEstadoEfectivoPort {
-
-    private final UsuarioJpaRepository usuarioJpaRepository;
-    private final UsuarioEstadoEfectivoRepository usuarioEstadoEfectivoRepository;
-
-    public UsuarioRepositoryAdapter(UsuarioJpaRepository usuarioJpaRepository,
-                                     UsuarioEstadoEfectivoRepository usuarioEstadoEfectivoRepository) {
-        this.usuarioJpaRepository = usuarioJpaRepository;
-        this.usuarioEstadoEfectivoRepository = usuarioEstadoEfectivoRepository;
+public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort {
+    private final UsuarioJpaRepository usuarios;
+    private final UsuarioEstadoEfectivoRepository estados;
+    public UsuarioRepositoryAdapter(UsuarioJpaRepository usuarios, UsuarioEstadoEfectivoRepository estados) {
+        this.usuarios = usuarios;
+        this.estados = estados;
     }
-
-    @Override
-    public Optional<CuentaSnapshot> findByCorreoNormalizado(String correoNormalizado) {
-        return usuarioJpaRepository.findByCorreo(correoNormalizado)
-                .map(e -> UsuarioPersistenceMapper.toSnapshot(e, Collections.emptySet()));
+    private CuentaSnapshot snapshot(UsuarioJpaEntity usuario) {
+        var estado = estados.findById(usuario.getId())
+                .orElseThrow(() -> new IllegalStateException("Falta la proyección de una cuenta existente"));
+        return UsuarioPersistenceMapper.toSnapshot(usuario, estado);
     }
-
     @Override
-    public Optional<CuentaSnapshot> findById(UUID usuarioId) {
-        return usuarioJpaRepository.findById(usuarioId)
-                .map(e -> UsuarioPersistenceMapper.toSnapshot(e, Collections.emptySet()));
+    public Optional<CuentaSnapshot> findByCorreoNormalizado(String correo) {
+        return usuarios.findByCorreo(correo).map(this::snapshot);
     }
-
     @Override
-    public CuentaSnapshot lockById(UUID usuarioId) {
-        return usuarioJpaRepository.lockById(usuarioId)
-                .map(e -> UsuarioPersistenceMapper.toSnapshot(e, Collections.emptySet()))
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usuarioId));
+    public Optional<CuentaSnapshot> findById(UUID id) { return usuarios.findById(id).map(this::snapshot); }
+    @Override
+    public CuentaSnapshot lockById(UUID id) {
+        return snapshot(usuarios.lockById(id).orElseThrow(() -> new IllegalArgumentException("Cuenta inexistente")));
     }
-
     @Override
-    public long countActiveByIds(Set<UUID> usuarioIds) {
-        if (usuarioIds == null || usuarioIds.isEmpty()) return 0L;
-        return usuarioJpaRepository.countActiveByIds(usuarioIds);
+    public long countActiveByIds(Set<UUID> ids) {
+        return ids.isEmpty() ? 0 : estados.countActiveByIds(ids);
     }
-
     @Override
-    public PaginaResultado<CuentaSnapshot> findByFiltro(FiltroCuenta filtro, Paginacion paginacion) {
-        PageRequest pageRequest = PageRequest.of(paginacion.pagina() - 1, paginacion.tamano(), Sort.by("creadoEn").descending());
-
-        EstadoCuenta estado = null;
-        if (filtro != null && filtro.estado() != null && !filtro.estado().isBlank()) {
-            try {
-                estado = EstadoCuenta.valueOf(filtro.estado().toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
-        }
-        String correoFragmento = filtro != null ? filtro.correoFragmento() : null;
-
-        Page<UsuarioJpaEntity> page = usuarioJpaRepository.findByFiltro(estado, correoFragmento, pageRequest);
-
-        List<CuentaSnapshot> elementos = page.getContent().stream()
-                .map(e -> UsuarioPersistenceMapper.toSnapshot(e, Collections.emptySet()))
-                .collect(Collectors.toList());
-
-        return new PaginaResultado<>(elementos, paginacion.pagina(), paginacion.tamano(), page.getTotalElements());
-    }
-
-    @Override
-    public Optional<CuentaSnapshot> findEstadoEfectivoById(UUID usuarioId) {
-        return usuarioEstadoEfectivoRepository.findById(usuarioId)
-                .map(e -> UsuarioPersistenceMapper.toSnapshotConEstadoEfectivo(null, e, Collections.emptySet()));
-    }
-
-    @Override
-    public PaginaResultado<CuentaSnapshot> findByFiltroWithEstadoEfectivo(FiltroCuenta filtro, Paginacion paginacion) {
-        PageRequest pageRequest = PageRequest.of(paginacion.pagina() - 1, paginacion.tamano(), Sort.by("creadoEn").descending());
-
-        EstadoCuenta estado = null;
-        if (filtro != null && filtro.estado() != null && !filtro.estado().isBlank()) {
-            try {
-                estado = EstadoCuenta.valueOf(filtro.estado().toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
-        }
-        String correoFragmento = filtro != null ? filtro.correoFragmento() : null;
-
-        // Usar la vista para filtrar por estado efectivo
-        Page<UsuarioEstadoEfectivoJpaEntity> page = usuarioEstadoEfectivoRepository.findByFiltro(estado, pageRequest);
-
-        // Obtener IDs de la página
-        Set<UUID> ids = page.getContent().stream()
-                .map(UsuarioEstadoEfectivoJpaEntity::getId)
-                .collect(Collectors.toSet());
-
-        // Obtener usuarios completos de la tabla usuario
-        Map<UUID, UsuarioJpaEntity> usuariosMap = new HashMap<>();
-        if (!ids.isEmpty()) {
-            usuarioJpaRepository.findAllById(ids).forEach(u -> usuariosMap.put(u.getId(), u));
-        }
-
-        // Filtrar por correo si se proporcionó
-        List<CuentaSnapshot> elementos = page.getContent().stream()
-                .map(e -> {
-                    UsuarioJpaEntity usuario = usuariosMap.get(e.getId());
-                    if (usuario == null) return null;
-                    if (correoFragmento != null && !correoFragmento.isBlank()
-                            && !usuario.getCorreo().toLowerCase().contains(correoFragmento.toLowerCase())) {
-                        return null;
-                    }
-                    return UsuarioPersistenceMapper.toSnapshotConEstadoEfectivo(usuario, e, Collections.emptySet());
-                })
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toList());
-
-        return new PaginaResultado<>(elementos, paginacion.pagina(), paginacion.tamano(), page.getTotalElements());
+    public PaginaResultado<CuentaSnapshot> findByFiltro(FiltroCuenta filtro, Paginacion paginacion, Set<UUID> idsPorRol) {
+        if (idsPorRol != null && idsPorRol.isEmpty())
+            return new PaginaResultado<>(List.of(), paginacion.pagina(), paginacion.tamano(), 0);
+        Specification<UsuarioJpaEntity> condiciones = (usuario, consulta, cb) -> {
+            List<Predicate> filtros = new ArrayList<>();
+            if (idsPorRol != null) filtros.add(usuario.get("id").in(idsPorRol));
+            if (filtro != null && filtro.correoFragmento() != null && !filtro.correoFragmento().isEmpty()) {
+                String fragmento = filtro.correoFragmento().toLowerCase(Locale.ROOT)
+                        .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+                filtros.add(cb.like(cb.lower(usuario.get("correo")), "%" + fragmento + "%", '\\'));
+            }
+            if (filtro != null && filtro.estado() != null) {
+                var estado = consulta.subquery(UUID.class);
+                var vista = estado.from(UsuarioEstadoEfectivoJpaEntity.class);
+                estado.select(vista.get("id")).where(cb.equal(vista.get("id"), usuario.get("id")),
+                        cb.equal(vista.get("estado"), EstadoCuenta.valueOf(filtro.estado())));
+                filtros.add(cb.exists(estado));
+            }
+            return cb.and(filtros.toArray(Predicate[]::new));
+        };
+        if (paginacion.offset() > Integer.MAX_VALUE)
+            return new PaginaResultado<>(List.of(), paginacion.pagina(), paginacion.tamano(), usuarios.count(condiciones));
+        var pagina = usuarios.findAll(condiciones, PageRequest.of(paginacion.pagina() - 1, paginacion.tamano(),
+                Sort.by(Sort.Order.desc("creadoEn"), Sort.Order.asc("id"))));
+        var ids = pagina.getContent().stream().map(UsuarioJpaEntity::getId).toList();
+        Map<UUID, UsuarioEstadoEfectivoJpaEntity> porId = ids.isEmpty() ? Map.of() :
+                estados.findAllById(ids).stream().collect(Collectors.toMap(UsuarioEstadoEfectivoJpaEntity::getId, Function.identity()));
+        var elementos = pagina.getContent().stream().map(u -> UsuarioPersistenceMapper.toSnapshot(u, porId.get(u.getId()))).toList();
+        return new PaginaResultado<>(elementos, paginacion.pagina(), paginacion.tamano(), pagina.getTotalElements());
     }
 }

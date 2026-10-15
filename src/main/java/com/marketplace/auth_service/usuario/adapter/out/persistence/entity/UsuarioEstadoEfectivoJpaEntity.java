@@ -18,7 +18,7 @@ public class UsuarioEstadoEfectivoJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "estado", nullable = false)
+    @Column(name = "estado", nullable = false, columnDefinition = "estado_cuenta_efectivo")
     private EstadoCuenta estado;
 
     public UUID getId() { return id; }

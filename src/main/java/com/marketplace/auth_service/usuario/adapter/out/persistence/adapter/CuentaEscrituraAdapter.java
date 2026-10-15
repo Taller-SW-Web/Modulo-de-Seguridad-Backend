@@ -1,70 +1,44 @@
 package com.marketplace.auth_service.usuario.adapter.out.persistence.adapter;
 
-import com.marketplace.auth_service.usuario.adapter.out.persistence.entity.UsuarioJpaEntity;
-import com.marketplace.auth_service.usuario.adapter.out.persistence.mapper.UsuarioPersistenceMapper;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.repository.UsuarioJpaRepository;
 import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.port.in.CambioBasicos;
 import com.marketplace.auth_service.usuario.application.port.in.ContadoresProteccion;
 import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
-import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
-import org.springframework.stereotype.Component;
+import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.Optional;
-import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
 
-@Component
+@Transactional(propagation = Propagation.MANDATORY)
 public class CuentaEscrituraAdapter implements CuentaEscrituraInterna {
-
-    private final UsuarioJpaRepository usuarioJpaRepository;
-
-    public CuentaEscrituraAdapter(UsuarioJpaRepository usuarioJpaRepository) {
-        this.usuarioJpaRepository = usuarioJpaRepository;
+    private final UsuarioJpaRepository usuarios;
+    private final UsuarioRepositoryPort consultas;
+    public CuentaEscrituraAdapter(UsuarioJpaRepository usuarios, UsuarioRepositoryPort consultas) {
+        this.usuarios = usuarios;
+        this.consultas = consultas;
     }
-
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public CuentaSnapshot actualizarBasicos(UUID usuarioId, CambioBasicos cambio) {
-        UsuarioJpaEntity entity = usuarioJpaRepository.findById(usuarioId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usuarioId));
-
-        // Aplicar solo campos presentes (no null)
-        if (cambio.nombres() != null) {
-            entity.setNombres(cambio.nombres());
+    public CuentaSnapshot actualizarBasicos(UUID id, CambioBasicos cambio) {
+        var entity = usuarios.findById(id).orElseThrow(() -> new IllegalArgumentException("Cuenta inexistente"));
+        if (cambio.nombres().presente()) entity.setNombres(cambio.nombres().valor());
+        if (cambio.apellidos().presente()) entity.setApellidos(cambio.apellidos().valor());
+        if (cambio.celular().presente() && !Objects.equals(entity.getCelular(), cambio.celular().valor())) {
+            entity.setCelular(cambio.celular().valor()); entity.setCelularVerificado(false);
         }
-        if (cambio.apellidos() != null) {
-            entity.setApellidos(cambio.apellidos());
-        }
-        if (cambio.celular() != null) {
-            entity.setCelular(cambio.celular());
-        }
-        // tipoDocumento se maneja via Valery en perfil_cliente - no aquí
-
-        // NO tocar: roles, estado, passwordHash, contadores, MFA, fechas, versión
-
-        UsuarioJpaEntity saved = usuarioJpaRepository.saveAndFlush(entity);
-        return UsuarioPersistenceMapper.toSnapshot(saved, Set.of());
+        usuarios.saveAndFlush(entity);
+        return consultas.findById(id).orElseThrow();
     }
-
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void guardarContadores(UUID usuarioId, ContadoresProteccion contadores) {
-        UsuarioJpaEntity entity = usuarioJpaRepository.findById(usuarioId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usuarioId));
-
+    public void guardarContadores(UUID id, ContadoresProteccion contadores) {
+        var entity = usuarios.findById(id).orElseThrow(() -> new IllegalArgumentException("Cuenta inexistente"));
         entity.setBloqueosSeguidos(contadores.bloqueosSeguidos());
         entity.setIntentosFallidosConsecutivos(contadores.intentosFallidos());
-
-        // NO tocar: básicos, roles, estado, password, MFA, fechas
-        usuarioJpaRepository.saveAndFlush(entity);
+        usuarios.saveAndFlush(entity);
     }
-
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void guardarMfaVoluntario(UUID usuarioId, boolean habilitado) {
-        // Reservado para SPEC-10 - no implementado en H3
+    public void guardarMfaVoluntario(UUID id, boolean habilitado) {
         throw new UnsupportedOperationException("guardarMfaVoluntario reservado para SPEC-10");
     }
 }

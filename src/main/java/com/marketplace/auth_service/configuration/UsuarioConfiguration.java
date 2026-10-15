@@ -1,55 +1,35 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
+import com.marketplace.auth_service.usuario.adapter.out.capacidad.RolesConsultaAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.CuentaEscrituraAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.UsuarioRepositoryAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.repository.UsuarioEstadoEfectivoRepository;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.repository.UsuarioJpaRepository;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
-import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
-import com.marketplace.auth_service.usuario.application.port.out.UsuarioEstadoEfectivoPort;
+import com.marketplace.auth_service.usuario.application.port.out.RolesConsultaPort;
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
 import com.marketplace.auth_service.usuario.application.service.ConsultaCuentasService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class UsuarioConfiguration {
-
     @Bean
-    @Primary
-    public UsuarioRepositoryPort usuarioRepositoryPort(UsuarioJpaRepository jpaRepository,
-                                                        UsuarioEstadoEfectivoRepository estadoEfectivoRepository) {
-        return new UsuarioRepositoryAdapter(jpaRepository, estadoEfectivoRepository);
+    UsuarioRepositoryAdapter usuarioRepositoryAdapter(UsuarioJpaRepository usuarios, UsuarioEstadoEfectivoRepository estados) {
+        return new UsuarioRepositoryAdapter(usuarios, estados);
     }
-
     @Bean
-    public UsuarioEstadoEfectivoPort usuarioEstadoEfectivoPort(UsuarioRepositoryPort usuarioRepositoryPort) {
-        return (UsuarioEstadoEfectivoPort) usuarioRepositoryPort;
+    CuentaEscrituraAdapter cuentaEscrituraAdapter(UsuarioJpaRepository usuarios, UsuarioRepositoryPort consultas) {
+        return new CuentaEscrituraAdapter(usuarios, consultas);
     }
-
     @Bean
-    public ConsultaCuentasService consultaCuentasService(UsuarioRepositoryPort usuarioRepositoryPort,
-                                                          UsuarioEstadoEfectivoPort usuarioEstadoEfectivoPort) {
-        return new ConsultaCuentasService(usuarioRepositoryPort, usuarioEstadoEfectivoPort);
+    RolesConsultaAdapter rolesConsultaAdapter(AutorizacionPort autorizacion) {
+        return new RolesConsultaAdapter(autorizacion);
     }
-
     @Bean
-    public CuentaEscrituraAdapter cuentaEscrituraAdapter(UsuarioJpaRepository jpaRepository) {
-        return new CuentaEscrituraAdapter(jpaRepository);
-    }
-
-    @Bean
-    public CuentaEscrituraInterna cuentaEscrituraInterna(CuentaEscrituraAdapter adapter) {
-        return adapter;
-    }
-
-    @Bean
-    @Primary
-    public CuentasPort cuentasPort(ConsultaCuentasService consultaService,
-                                    CuentaEscrituraAdapter escrituraAdapter,
-                                    UsuarioRepositoryPort usuarioRepositoryPort) {
-        return new CuentasPortTransaccional(consultaService, escrituraAdapter, usuarioRepositoryPort);
+    CuentasPort cuentasPort(UsuarioRepositoryPort usuarios, RolesConsultaPort roles) {
+        return new CuentasPortTransaccional(new ConsultaCuentasService(usuarios, roles));
     }
 }

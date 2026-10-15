@@ -30,7 +30,7 @@ public class UsuarioJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "estado", nullable = false)
+    @Column(name = "estado", nullable = false, columnDefinition = "estado_cuenta")
     private EstadoCuenta estado;
 
     @Column(name = "correo_verificado", nullable = false)
@@ -53,7 +53,7 @@ public class UsuarioJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "canal_origen", nullable = false)
+    @Column(name = "canal_origen", nullable = false, columnDefinition = "canal_origen")
     private CanalOrigen canalOrigen;
 
     @Column(name = "intentos_fallidos_consecutivos", nullable = false)
