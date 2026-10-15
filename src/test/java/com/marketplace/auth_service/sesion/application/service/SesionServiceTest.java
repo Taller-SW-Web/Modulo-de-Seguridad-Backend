@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.sesion.application.service;
 
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
+import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.DatosAcceso;
 import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
@@ -226,8 +227,7 @@ class SesionServiceTest {
     }
 
     @Test
-    void cuentaNoDisponibleNoRota() {
-        servicio.abrir(usuario, identidad, contexto());
+    void cuentaNoDisponibleNoRota() {        servicio.abrir(usuario, identidad, contexto());
         var sinCuenta = new SesionService(persistencia, new CriptoFija(), firmador,
                 u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), false),
@@ -236,6 +236,38 @@ class SesionServiceTest {
                 .extracting(r -> ((RenovacionResultado.Rechazada) r).motivo())
                 .isEqualTo(MotivoRechazo.CUENTA_NO_DISPONIBLE);
         assertThat(persistencia.tokens.values().stream().filter(TokenRefresco::usado)).isEmpty();
+    }
+
+    @Test
+    void cerrarRevocaLaFamilia() {
+        servicio.abrir(usuario, identidad, contexto());
+        UUID familia = persistencia.familias.values().iterator().next().id();
+
+        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO)))
+                .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
+        assertThat(persistencia.familias.get(familia).revocada()).isTrue();
+        assertThat(persistencia.tokens.values()).allMatch(TokenRefresco::revocado);
+    }
+
+    @Test
+    void cerrarRepetidoYDesconocidoSonYaCerrada() {
+        servicio.abrir(usuario, identidad, contexto());
+        servicio.cerrar(new SecretoRefresco(SECRETO));
+        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO)))
+                .isEqualTo(new CierreResultado.YaCerrada());
+        assertThat(servicio.cerrar(new SecretoRefresco("inexistente")))
+                .isEqualTo(new CierreResultado.YaCerrada());
+    }
+
+    @Test
+    void cerrarConRefrescoVencidoCierraIgual() {
+        UUID familia = UUID.randomUUID();
+        persistencia.guardarFamilia(SesionFamilia.nueva(familia, usuario, AHORA.minusSeconds(8 * 24 * 3600)));
+        persistencia.guardarToken(new TokenRefresco(UUID.randomUUID(), usuario, familia, "f".repeat(64),
+                false, false, AHORA.minusSeconds(3600), AHORA.minusSeconds(8 * 24 * 3600)));
+        assertThat(servicio.cerrar(new SecretoRefresco("cualquiera")))
+                .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
+        assertThat(persistencia.familias.get(familia).revocada()).isTrue();
     }
 
     static class Memoria implements PersistenciaSesionPort {

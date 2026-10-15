@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.sesion.application.service;
 
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
+import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.DatosAcceso;
 import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
@@ -147,6 +148,23 @@ public class SesionService implements SesionesPort {
                 firmado.expiresIn(), firmado.expiraEn(), nuevo.expiracion(),
                 new UsuarioAutenticado(actual.usuarioId(), datos.nombreCompleto(), datos.email(),
                         datos.roles())));
+    }
+
+    @Override
+    public CierreResultado cerrar(SecretoRefresco secreto) {
+        Objects.requireNonNull(secreto, "secreto");
+        Instant ahora = clock.instant();
+        TokenRefresco presentado = persistencia.buscarTokenPorHash(criptografia.hash(secreto.valor()))
+                .orElse(null);
+        if (presentado == null) {
+            return new CierreResultado.YaCerrada();
+        }
+        SesionFamilia familia = persistencia.bloquearFamilia(presentado.familiaId()).orElse(null);
+        if (familia == null || familia.revocada()) {
+            return new CierreResultado.YaCerrada();
+        }
+        revocarFamilia(familia.id(), ahora);
+        return new CierreResultado.Cerrada(presentado.usuarioId(), familia.id());
     }
 
     @Override

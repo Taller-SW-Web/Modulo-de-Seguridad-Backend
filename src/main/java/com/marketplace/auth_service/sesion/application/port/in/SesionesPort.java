@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.sesion.application.port.in;
 
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
+import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
 import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
@@ -21,6 +22,7 @@ public interface SesionesPort {
     SesionIniciada abrir(UUID usuarioId, IdentidadAutorizada identidad, ContextoPeticion contexto);
     ContextoSesion resolverAcceso(AccesoVerificado acceso);
     RenovacionResultado renovar(SecretoRefresco secreto);
+    CierreResultado cerrar(SecretoRefresco secreto);
     void revocarTodas(UUID usuarioId);
     void revocarOtras(UUID usuarioId, UUID familiaActual);
 }

@@ -47,9 +47,10 @@ public class SeguridadConfig {
             "/api/v1/auth/.well-known/openid-configuration"
     };
 
-    /** Rutas públicas de sesión (EP-02-T004; login/logout las amplían). */
+    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
     static final String[] PUBLICAS_SESION_POST = {
-            "/api/v1/auth/refresh"
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
     };
 
     @Bean
@@ -88,7 +89,8 @@ public class SeguridadConfig {
         Set<String> publicas = Set.of(
                 "/api/v1/auth/.well-known/jwks.json",
                 "/api/v1/auth/.well-known/openid-configuration",
-                "/api/v1/auth/refresh");
+                "/api/v1/auth/refresh",
+                "/api/v1/auth/logout");
         return peticion -> publicas.contains(peticion.getRequestURI()) ? null : cabecera.resolve(peticion);
     }
 }

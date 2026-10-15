@@ -6,6 +6,7 @@ import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
+import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;import com.marketplace.auth_service.sesion.application.dto.MotivoRechazo;
 import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
@@ -51,18 +52,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code 401 REFRESCO_INVALIDO} sin el secreto. El caso de uso es un doble
  * programable; su lógica se prueba en {@code SesionServiceTest} y PostgreSQL.
  */
-@SpringBootTest(classes = RefrescoHttpTest.Aplicacion.class,
+@SpringBootTest(classes = SesionHttpTest.Aplicacion.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class RefrescoHttpTest {
+class SesionHttpTest {
 
     static final AtomicReference<Function<SecretoRefresco, RenovacionResultado>> COMPORTAMIENTO =
+            new AtomicReference<>();
+    static final AtomicReference<Function<SecretoRefresco, CierreResultado>> COMPORTAMIENTO_CIERRE =
             new AtomicReference<>();
     static final AtomicReference<SecretoRefresco> RECIBIDO = new AtomicReference<>();
 
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             FlywayAutoConfiguration.class, RabbitAutoConfiguration.class})
-    @Import({IdentidadConfig.class, SeguridadConfig.class, RefrescoController.class, SesionErroresAdvice.class})
+    @Import({IdentidadConfig.class, SeguridadConfig.class, RefrescoController.class, CierreController.class,
+            SesionErroresAdvice.class})
     static class Aplicacion {
 
         @Bean
@@ -82,6 +86,12 @@ class RefrescoHttpTest {
                 public RenovacionResultado renovar(SecretoRefresco secreto) {
                     RECIBIDO.set(secreto);
                     return COMPORTAMIENTO.get().apply(secreto);
+                }
+
+                @Override
+                public CierreResultado cerrar(SecretoRefresco secreto) {
+                    RECIBIDO.set(secreto);
+                    return COMPORTAMIENTO_CIERRE.get().apply(secreto);
                 }
 
                 @Override
@@ -124,19 +134,28 @@ class RefrescoHttpTest {
     void reiniciar() {
         RECIBIDO.set(null);
         COMPORTAMIENTO.set(s -> new RenovacionResultado.Renovada(renovada()));
+        COMPORTAMIENTO_CIERRE.set(s -> new CierreResultado.Cerrada(usuario, UUID.randomUUID()));
     }
 
-    private HttpResponse<String> post(String cuerpo) throws IOException, InterruptedException {
-        HttpRequest peticion = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/v1/auth/refresh"))
+    private HttpResponse<String> post(String ruta, String cuerpo) throws IOException, InterruptedException {
+        HttpRequest peticion = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(cuerpo))
                 .build();
         return http.send(peticion, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> renovar(String cuerpo) throws IOException, InterruptedException {
+        return post("/api/v1/auth/refresh", cuerpo);
+    }
+
+    private HttpResponse<String> cerrar(String cuerpo) throws IOException, InterruptedException {
+        return post("/api/v1/auth/logout", cuerpo);
+    }
+
     @Test
     void renovacionValidaDevuelveElNuevoPar() throws Exception {
-        var respuesta = post("{\"refreshToken\":\"secreto-presentado\"}");
+        var respuesta = renovar("{\"refreshToken\":\"secreto-presentado\"}");
 
         assertThat(respuesta.statusCode()).isEqualTo(200);
         JsonNode cuerpo = json.readTree(respuesta.body());
@@ -154,7 +173,7 @@ class RefrescoHttpTest {
     void cadaMotivoRespondeElMismo401SinElSecreto() throws Exception {
         for (MotivoRechazo motivo : MotivoRechazo.values()) {
             COMPORTAMIENTO.set(s -> new RenovacionResultado.Rechazada(motivo, usuario, UUID.randomUUID()));
-            var respuesta = post("{\"refreshToken\":\"secreto-presentado\"}");
+            var respuesta = renovar("{\"refreshToken\":\"secreto-presentado\"}");
 
             assertThat(respuesta.statusCode()).as("motivo %s", motivo).isEqualTo(401);
             assertThat(respuesta.headers().firstValue("Content-Type")).hasValueSatisfying(
@@ -176,7 +195,7 @@ class RefrescoHttpTest {
         COMPORTAMIENTO.set(s -> {
             throw new DependenciaNoDisponibleException("CuentasPort de Eva");
         });
-        var respuesta = post("{\"refreshToken\":\"secreto-presentado\"}");
+        var respuesta = renovar("{\"refreshToken\":\"secreto-presentado\"}");
 
         assertThat(respuesta.statusCode()).isEqualTo(503);
         JsonNode problema = json.readTree(respuesta.body());
@@ -186,7 +205,7 @@ class RefrescoHttpTest {
     @Test
     void cuerpoSinRefrescoEs400Validacion() throws Exception {
         for (String cuerpo : new String[]{"{}", "{\"refreshToken\":\"\"}", "{\"refreshToken\":null}"}) {
-            var respuesta = post(cuerpo);
+            var respuesta = renovar(cuerpo);
 
             assertThat(respuesta.statusCode()).as(cuerpo).isEqualTo(400);
             JsonNode problema = json.readTree(respuesta.body());
@@ -194,5 +213,29 @@ class RefrescoHttpTest {
             assertThat(problema.get("errores").get(0).get("campo").asText()).isEqualTo("refreshToken");
             assertThat(RECIBIDO.get()).isNull();
         }
+    }
+
+    @Test
+    void cierreNormalYDesconocidoResponden204SinBearer() throws Exception {
+        var respuesta = cerrar("{\"refreshToken\":\"secreto-presentado\"}");
+
+        assertThat(respuesta.statusCode()).isEqualTo(204);
+        assertThat(respuesta.body()).isEmpty();
+        assertThat(RECIBIDO.get().valor()).isEqualTo("secreto-presentado");
+
+        COMPORTAMIENTO_CIERRE.set(s -> new CierreResultado.YaCerrada());
+        var desconocido = cerrar("{\"refreshToken\":\"inexistente\"}");
+
+        assertThat(desconocido.statusCode()).isEqualTo(204);
+        assertThat(desconocido.body()).isEmpty();
+    }
+
+    @Test
+    void cierreSinCuerpoEs400Validacion() throws Exception {
+        var respuesta = cerrar("{}");
+
+        assertThat(respuesta.statusCode()).isEqualTo(400);
+        JsonNode problema = json.readTree(respuesta.body());
+        assertThat(problema.get("code").asText()).isEqualTo("VALIDACION");
     }
 }

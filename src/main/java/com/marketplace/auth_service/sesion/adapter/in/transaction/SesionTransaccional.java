@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.sesion.adapter.in.transaction;
 
 import com.marketplace.auth_service.sesion.application.dto.AccesoVerificado;
+import com.marketplace.auth_service.sesion.application.dto.CierreResultado;
 import com.marketplace.auth_service.sesion.application.dto.ContextoSesion;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
 import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
@@ -48,6 +49,12 @@ public class SesionTransaccional implements SesionesPort {
     @Transactional
     public RenovacionResultado renovar(SecretoRefresco secreto) {
         return casoDeUso.renovar(secreto);
+    }
+
+    @Override
+    @Transactional
+    public CierreResultado cerrar(SecretoRefresco secreto) {
+        return casoDeUso.cerrar(secreto);
     }
 
     @Override
