@@ -1,86 +1,58 @@
-# MfaPort — núcleo del desafío de login (EP-04-T002)
+# MfaPort — desafíos de login (EP-04-T002)
 
-Dueño: Luis David Morales Brenis. Entrega parcial: núcleo y pruebas locales.
-No existe todavía wiring productivo ni puentes a proveedores reales.
-MfaPort no es un endpoint ni autoriza activar MFA, verificar contactos o abrir sesión.
+Dueño: Luis David Morales Brenis. Actualización 15-oct-2026: composición productiva
+con CuentasPort, AutorizacionPort y CredencialesPort incorporado en #28.
+MfaConfig publica un único MfaPort decorado; MfaService no se expone como bean.
+No incluye envío/verificación OTP, configuración MFA ni apertura de sesión.
 
-## Contrato interno para Jose Luis y Valery
+## Contrato para autenticación y perfil
 
 | Operación | Resultado |
-|---|---|
-| esEfectivo(boolean voluntario, Set<String> rolesActuales) | Boolean: basta cualquier rol de gestión para exigir MFA |
-| crearDesafio(UUID usuarioId, RevisionCredencialMfa revision) | ResultadoCreacionDesafio: Creado, NoRequerido o Rechazado.INVALIDO |
-| leerEstado(UUID usuarioId, Set<String> rolesActuales) | Optional<EstadoMfa>: mfaHabilitado efectivo y obligatorio |
+| --- | --- |
+| esEfectivo(boolean, Set<Rol>) | Política pura: voluntario o cualquier Rol.esDeGestion() |
+| crearDesafio(UUID, RevisionCredencialMfa) | Creado, NoRequerido o Rechazado.INVALIDO |
+| leerEstado(UUID, Set<Rol>) | Optional<EstadoMfa>, efectivo y obligatorio |
 
-Roles son códigos canónicos del proveedor de Sergio; no se leen del navegador
-ni de perfiles de negocio locales. CLIENTE/VENDEDOR siguen bandera voluntaria,
-y ADMIN_VENTAS/GESTOR_DESPACHO/GESTOR_COMERCIAL/ADMIN_SISTEMA siempre obligan.
-Un rol desconocido causa error técnico/de composición en vez de permitir omitir MFA.
-La política no administra el catálogo, asociaciones ni permisos de Sergio.
+Rol procede de shared.domain y los roles actuales se obtienen del puerto de
+Sergio, nunca del navegador. CLIENTE/VENDEDOR siguen la bandera voluntaria.
+El DTO propio RevisionCredencialMfa conserva usuarioId/credencialId/version;
+credencialId es la PK usuario_id real, igual que en el proveedor de #28.
+No contiene hashes ni prueba OTP. El puente traduce ese DTO a RevisionCredencial
+únicamente en adapter.out.capacidad; no importa entidades ni repositorios ajenos.
 
-RevisionCredencialMfa contiene usuarioId/credencialId/version y procede de la
-preverificación de Juan José; no acepta contraseña/hash ni prueba de OTP.
-El consumidor la convierte desde el DTO real del dueño y confirma su vínculo
-mediante el puente; no construirla desde un cuerpo HTTP para eludir autenticación.
-Cualquier inexistencia/indisponibilidad o revisión sustituida devuelve el mismo
-rechazo interno. Jose Luis mantiene su 401 genérico y sus reglas de login.
+## Secuencia de consumo
 
-Creado contiene DesafioLogin con challengeToken/canal/expiraEn y
-mfaRequerido() = true. El mapper del login produce exactamente la rama DesafioMfa
-de OpenAPI: mfaRequerido true, challengeToken, canal EMAIL, expiraEn 300.
-Nunca serializar automáticamente los resultados internos como respuesta HTTP.
-NoRequerido deja al coordinador completar su recorrido sin MFA; no es una sesión.
-Leer estado permite proyección de atributos; autorización/titularidad del endpoint
-siguen siendo del coordinador de Valery/Eva.
+1. El coordinador preverifica la contraseña con CredencialesPort fuera del lock.
+   Solo una coincidencia real permite entrar en la rama de MFA.
+2. Abre su transacción y bloquea la cuenta mediante CuentasPort.bloquear.
+3. Copia la revisión previa a RevisionCredencialMfa y llama al MfaPort inyectado.
+   crearDesafio es MANDATORY: revalida cuenta disponible, correo verificado,
+   revisión actual y roles reales. Sin transacción falla antes de escribir.
+4. Devuelve el resultado público únicamente después del commit. Creado contiene
+   desafío aleatorio/hash persistido, EMAIL y 300 segundos; no emite acceso,
+   refresco, OTP ni resetea racha. Un error técnico revierte el desafío.
 
-## SOLID, puertos y composición
+CuentasMfaAdapter usa disponibilidad base y efectiva; RolesMfaAdapter consume
+AutorizacionPort.resolver; RevisionCredencialMfaAdapter usa la confirmación
+escalar actual de #28, sin depender de la caché JPA. No hay dobles en producción.
 
-MfaService y ValidadorDesafioLogin son Java puro, stateless, con constructor
-y dependencias final. La política queda en dominio, los DTO exportados no
-referencian dominio/JPA/Spring. CuentasMfaPort, RolesMfaPort y
-RevisionCredencialMfaPort son salidas estrechas de este consumidor, no
-implementaciones alternativas de CuentasPort/AutorizacionPort/CredencialesPort.
+leerEstado es readOnly. Quien proyecta perfil entrega roles actuales resueltos;
+la bandera voluntaria proviene de CuentasPort. esEfectivo no hace I/O.
 
-T002 usa AlmacenDesafiosMfaPort y CriptografiaDesafiosMfaPort, sin obligar a sus
-casos de uso a depender de operaciones OTP. Los puertos completos de T001
-extienden esas interfaces y conservan sus métodos originales por herencia.
-Los adaptadores existentes siguen implementando ambos contratos sin delegación
-a adaptadores de otro dueño ni duplicación de lógica criptográfica.
+ValidadorDesafioLogin es consulta interna, sin endpoint ni prueba de autenticación:
+comprueba hash, vigencia, consumo, cuenta, MFA y revisión. Su caller debe tener
+transacción y respetar locks al confirmar la revisión. Solicitar/verificar OTP
+revalidarán bajo sus locks en T003/T004. El vencimiento exacto ya es inválido.
 
-Puentes futuros en mfa/adapter/out/capacidad deben usar exclusivamente puertos
-de entrada y DTO exportados del dueño. No implementar aquí repositorios, SQL
-o clases entity de cuentas, credenciales o roles. Ningún doble se registra en src/main.
+## Configuración y límites
 
-## Transacciones y validación de desafío
+Se reutiliza MfaCriptografiaConfig de T001: AUTH_OTP_HMAC_KEY_ID y
+AUTH_OTP_HMAC_KEY (Base64, mínimo 32 bytes, externa y persistente). Sin clave
+válida se deniega generación; no se crea material temporal en producción.
+Los tests usan una clave sintética y los proveedores productivos.
 
-MfaTransaccional es el decorador que debe registrarse explícitamente como único
-bean MfaPort cuando estén los puentes reales. No se auto-registra un servicio
-incompleto ni se habilitan mocks en producción. Wiring: crear el núcleo con
-sus salidas reales, Clock y UUID::randomUUID y devolver el decorador desde
-@Configuration; el coordinador debe recibir ese bean proxificado por Spring.
-
-Crear usa MANDATORY: Jose Luis abre su transacción, bloquea la cuenta mediante
-Eva y entrega revisión preverificada. Bajo esa frontera Mfa revalida cuenta,
-correo verificado, revisión y roles actuales. Guarda desafío sin familia, tokens
-de acceso/refresco, OTP, envío o reset de racha. El coordinador entrega HTTP
-solo después del commit; los fallos técnicos revierten. No REQUIRES_NEW.
-
-ValidadorDesafioLogin.localizarVigente es consulta interna de MFA, no puerto
-exportado ni autenticación completa. Calcula hash mediante criptografía de T001,
-comprueba existencia, usuario, fechas, consumo, MFA efectivo y revisión actual.
-El vencimiento exacto ya es inválido; históricos sin revisión no autorizan.
-No consume desafío ni OTP, y no aplica la caducidad de contraseña antes de MFA.
-T003/T004 deben revalidar en su transacción con cuenta→desafío→OTP bloqueados,
-aplicar las reglas de cuota/código y caducidad y componer sesión/auditoría.
-
-## Dependencias pendientes
-
-Esta rama parte del commit 0395a de EP-04-T001, no copia sus cambios locales
-sin commit. Integra su historial existente; el PR hacia develop debe permanecer
-en borrador hasta que se incorpore/revise su dependencia (PR #9).
-Las mejoras de tests de T001 y el CI ampliado se incorporan mediante sus PR.
-
-Faltan: contraste/aplicación de V103 con Christian; DTO/puentes reales de Eva,
-Juan José y Sergio; wiring único de MfaPort; prueba con el login real de Jose Luis
-y la proyección de Valery. No se afirma integración real, despliegue ni correo.
-T003/T004 y el cambio MFA de SPEC-10 no forman parte de esta entrega.
+V103 ya está propuesta en develop desde #9; este cambio no añade migración.
+Christian conserva su revisión/aplicación coordinada y grants de runtime.
+No se ejecutó DDL remoto ni se acredita despliegue o correo. Login HTTP completo,
+OTP y proyección de perfil se integran en sus bloques posteriores consumiendo
+este puerto. La revisión humana y el CI del nuevo head siguen siendo obligatorios.

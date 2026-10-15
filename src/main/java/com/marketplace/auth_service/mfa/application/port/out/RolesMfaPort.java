@@ -2,8 +2,9 @@ package com.marketplace.auth_service.mfa.application.port.out;
 
 import java.util.Set;
 import java.util.UUID;
+import com.marketplace.auth_service.shared.domain.Rol;
 
-/** Roles actuales de Sergio convertidos a códigos canónicos por un puente. */
+/** Roles actuales del dueño de autorización, mediante su puerto exportado. */
 public interface RolesMfaPort {
-    Set<String> leer(UUID usuarioId);
+    Set<Rol> leer(UUID usuarioId);
 }

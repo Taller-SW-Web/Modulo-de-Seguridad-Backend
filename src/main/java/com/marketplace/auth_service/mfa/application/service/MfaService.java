@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import com.marketplace.auth_service.shared.domain.Rol;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -34,7 +35,7 @@ public final class MfaService implements MfaPort {
         this.identificadores = Objects.requireNonNull(identificadores);
     }
 
-    @Override public boolean esEfectivo(boolean voluntario, Set<String> rolesActuales) {
+    @Override public boolean esEfectivo(boolean voluntario, Set<Rol> rolesActuales) {
         return PoliticaMfa.efectivo(voluntario, rolesActuales);
     }
 
@@ -48,7 +49,7 @@ public final class MfaService implements MfaPort {
             return ResultadoCreacionDesafio.Rechazado.INVALIDO;
         }
         if (!credenciales.confirmar(revision)) return ResultadoCreacionDesafio.Rechazado.INVALIDO;
-        Set<String> actuales = Set.copyOf(roles.leer(usuarioId));
+        Set<Rol> actuales = Set.copyOf(roles.leer(usuarioId));
         boolean obligatorio = PoliticaMfa.obligatorio(actuales);
         if (!PoliticaMfa.efectivo(cuenta.get().mfaVoluntario(), actuales)) {
             return new ResultadoCreacionDesafio.NoRequerido(new EstadoMfa(false, obligatorio));
@@ -63,11 +64,11 @@ public final class MfaService implements MfaPort {
                 Math.toIntExact(DesafioMfa.VIGENCIA.toSeconds())));
     }
 
-    @Override public Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<String> rolesActuales) {
+    @Override public Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<Rol> rolesActuales) {
         Objects.requireNonNull(usuarioId);
         var cuenta = cuentas.leer(usuarioId);
         if (cuenta.isEmpty() || !cuenta.get().usuarioId().equals(usuarioId)) return Optional.empty();
-        Set<String> actuales = Set.copyOf(rolesActuales);
+        Set<Rol> actuales = Set.copyOf(rolesActuales);
         boolean obligatorio = PoliticaMfa.obligatorio(actuales);
         return Optional.of(new EstadoMfa(PoliticaMfa.efectivo(cuenta.get().mfaVoluntario(), actuales), obligatorio));
     }

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.*;
 import java.util.*;
+import static com.marketplace.auth_service.shared.domain.Rol.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -32,7 +33,7 @@ class ValidadorDesafioLoginTest {
                 hash.equals(inv.getArgument(0)) ? Optional.ofNullable(modelo) : Optional.empty());
         when(reloj.instant()).thenReturn(AHORA.plusSeconds(1));
         when(cuentas.leer(USUARIO)).thenReturn(Optional.of(new CuentaMfaSnapshot(USUARIO,true,true,false)));
-        when(roles.leer(USUARIO)).thenReturn(Set.of("GESTOR_COMERCIAL"));
+        when(roles.leer(USUARIO)).thenReturn(Set.of(GESTOR_COMERCIAL));
         when(credenciales.confirmar(any())).thenReturn(true);
     }
     @Test void localizaConHashRealYConfirmaRevisionSinConsumir() {
@@ -81,7 +82,7 @@ class ValidadorDesafioLoginTest {
         verifyNoInteractions(credenciales);
     }
     @Test void mfaDeClienteDesactivadoObligaANuevoLogin() {
-        when(roles.leer(USUARIO)).thenReturn(Set.of("CLIENTE"));
+        when(roles.leer(USUARIO)).thenReturn(Set.of(CLIENTE));
         assertThat(validador.localizarVigente(TOKEN)).isEmpty();
     }
     @Test void cuentaDeOtroUsuarioNoSustituyeAlDuenoDelDesafio() {

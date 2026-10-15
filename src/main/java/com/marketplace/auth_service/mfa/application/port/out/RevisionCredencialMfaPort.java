@@ -2,7 +2,7 @@ package com.marketplace.auth_service.mfa.application.port.out;
 
 import com.marketplace.auth_service.mfa.application.dto.RevisionCredencialMfa;
 
-/** El puente futuro confirma usuario/id/version mediante CredencialesPort de Juan José. */
+/** Confirma usuario/id/version actuales mediante CredencialesPort, bajo la transacción del caller. */
 public interface RevisionCredencialMfaPort {
     boolean confirmar(RevisionCredencialMfa revision);
 }

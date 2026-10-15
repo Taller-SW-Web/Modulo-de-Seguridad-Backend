@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import java.time.*;
 import java.util.*;
+import static com.marketplace.auth_service.shared.domain.Rol.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -26,7 +27,7 @@ class MfaServiceTest {
 
     @BeforeEach void preparar() {
         cuenta(true,true,false);
-        when(roles.leer(USUARIO)).thenReturn(Set.of("ADMIN_SISTEMA"));
+        when(roles.leer(USUARIO)).thenReturn(Set.of(ADMIN_SISTEMA));
         when(credenciales.confirmar(revision)).thenReturn(true);
         when(crypto.generarDesafio()).thenReturn(new DesafioGenerado(TOKEN,HASH));
     }
@@ -51,13 +52,13 @@ class MfaServiceTest {
         verifyNoMoreInteractions(crypto,almacen);
     }
     @Test void clienteSinMfaNoGeneraNiPersisteDesafio() {
-        when(roles.leer(USUARIO)).thenReturn(Set.of("CLIENTE"));
+        when(roles.leer(USUARIO)).thenReturn(Set.of(CLIENTE));
         assertThat(servicio.crearDesafio(USUARIO,revision)).isEqualTo(
                 new ResultadoCreacionDesafio.NoRequerido(new EstadoMfa(false,false)));
         verifyNoInteractions(crypto,almacen);
     }
     @Test void clienteConBanderaVoluntariaSiCreaDesafioEmail() {
-        cuenta(true,true,true); when(roles.leer(USUARIO)).thenReturn(Set.of("CLIENTE"));
+        cuenta(true,true,true); when(roles.leer(USUARIO)).thenReturn(Set.of(CLIENTE));
         assertThat(servicio.crearDesafio(USUARIO,revision)).isInstanceOf(ResultadoCreacionDesafio.Creado.class);
     }
     @Test void cuentaInexistenteRespondeRechazoGenericoSinEfectos() {
@@ -84,7 +85,7 @@ class MfaServiceTest {
     }
     @Test void revisionCambiadaNoGeneraTokenNiDecideLoginSinMfa() {
         when(credenciales.confirmar(revision)).thenReturn(false);
-        when(roles.leer(USUARIO)).thenReturn(Set.of("CLIENTE"));
+        when(roles.leer(USUARIO)).thenReturn(Set.of(CLIENTE));
         assertThat(servicio.crearDesafio(USUARIO,revision)).isEqualTo(ResultadoCreacionDesafio.Rechazado.INVALIDO);
         verifyNoInteractions(roles,crypto,almacen);
     }
@@ -93,13 +94,13 @@ class MfaServiceTest {
         assertThatThrownBy(() -> servicio.crearDesafio(USUARIO,revision)).isInstanceOf(IllegalStateException.class);
     }
     @Test void lecturaDeEstadoProyectaGestionAunqueBanderaSeaFalse() {
-        assertThat(servicio.leerEstado(USUARIO,Set.of("CLIENTE","GESTOR_DESPACHO"))).contains(new EstadoMfa(true,true));
-        assertThat(servicio.leerEstado(USUARIO,Set.of("CLIENTE"))).contains(new EstadoMfa(false,false));
+        assertThat(servicio.leerEstado(USUARIO,Set.of(CLIENTE,GESTOR_DESPACHO))).contains(new EstadoMfa(true,true));
+        assertThat(servicio.leerEstado(USUARIO,Set.of(CLIENTE))).contains(new EstadoMfa(false,false));
         verifyNoInteractions(crypto,almacen,credenciales);
     }
     @Test void lecturaDesconocidaDevuelveVacioSinInventarUsuario() {
         when(cuentas.leer(USUARIO)).thenReturn(Optional.empty());
-        assertThat(servicio.leerEstado(USUARIO,Set.of("CLIENTE"))).isEmpty();
+        assertThat(servicio.leerEstado(USUARIO,Set.of(CLIENTE))).isEmpty();
     }
     @Test void resultadoNoMuestraTokenOHashEnToString() {
         var resultado=servicio.crearDesafio(USUARIO,revision);

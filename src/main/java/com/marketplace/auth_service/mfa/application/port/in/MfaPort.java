@@ -3,6 +3,7 @@ package com.marketplace.auth_service.mfa.application.port.in;
 import com.marketplace.auth_service.mfa.application.dto.EstadoMfa;
 import com.marketplace.auth_service.mfa.application.dto.ResultadoCreacionDesafio;
 import com.marketplace.auth_service.mfa.application.dto.RevisionCredencialMfa;
+import com.marketplace.auth_service.shared.domain.Rol;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -14,7 +15,7 @@ import java.util.UUID;
  * Solicitar/verificar OTP se implementarán en T003/T004, sin métodos ficticios aquí.
  */
 public interface MfaPort {
-    boolean esEfectivo(boolean voluntario, Set<String> roles);
+    boolean esEfectivo(boolean voluntario, Set<Rol> roles);
     ResultadoCreacionDesafio crearDesafio(UUID usuarioId, RevisionCredencialMfa revision);
-    Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<String> rolesActuales);
+    Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<Rol> rolesActuales);
 }

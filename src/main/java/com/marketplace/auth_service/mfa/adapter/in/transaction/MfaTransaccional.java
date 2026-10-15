@@ -7,17 +7,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import com.marketplace.auth_service.shared.domain.Rol;
 import java.util.UUID;
 
 /**
- * Decorador para registrar explícitamente en el wiring cuando existan proveedores reales.
- * No se auto-registra un service con mocks ni se ignoran dependencias ausentes.
+ * Único MfaPort publicado por MfaConfig con los proveedores reales.
+ * El coordinador conserva la transacción y el lock previo de cuenta.
  */
 public class MfaTransaccional implements MfaPort {
     private final MfaPort delegado;
     public MfaTransaccional(MfaPort delegado) { this.delegado = Objects.requireNonNull(delegado); }
 
-    @Override public boolean esEfectivo(boolean voluntario, Set<String> roles) {
+    @Override public boolean esEfectivo(boolean voluntario, Set<Rol> roles) {
         return delegado.esEfectivo(voluntario, roles);
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
@@ -25,7 +26,7 @@ public class MfaTransaccional implements MfaPort {
         return delegado.crearDesafio(usuarioId, revision);
     }
     @Override @Transactional(readOnly = true)
-    public Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<String> rolesActuales) {
+    public Optional<EstadoMfa> leerEstado(UUID usuarioId, Set<Rol> rolesActuales) {
         return delegado.leerEstado(usuarioId, rolesActuales);
     }
 }

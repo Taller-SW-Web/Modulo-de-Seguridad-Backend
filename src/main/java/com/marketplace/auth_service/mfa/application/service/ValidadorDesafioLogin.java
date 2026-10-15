@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import com.marketplace.auth_service.shared.domain.Rol;
 
 /**
  * Consulta interna a MFA, no puerto exportado ni prueba de autenticación completa.
@@ -46,7 +47,7 @@ public final class ValidadorDesafioLogin {
         var cuenta = cuentas.leer(desafio.usuarioId());
         if (cuenta.isEmpty() || !cuenta.get().usuarioId().equals(desafio.usuarioId())
                 || !cuenta.get().disponible() || !cuenta.get().correoVerificado()) return Optional.empty();
-        Set<String> actuales = Set.copyOf(roles.leer(desafio.usuarioId()));
+        Set<Rol> actuales = Set.copyOf(roles.leer(desafio.usuarioId()));
         if (!PoliticaMfa.efectivo(cuenta.get().mfaVoluntario(), actuales)) return Optional.empty();
         var revision = new RevisionCredencialMfa(desafio.usuarioId(), desafio.credencialId(), desafio.credencialVersion());
         return credenciales.confirmar(revision) ? Optional.of(desafio) : Optional.empty();
