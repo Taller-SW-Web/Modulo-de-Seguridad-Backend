@@ -8,6 +8,7 @@ import com.marketplace.auth_service.shared.domain.Rol;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -59,5 +60,11 @@ public class AutorizacionTransaccional implements AutorizacionPort {
     @Transactional(readOnly = true)
     public Set<UUID> usuariosConRol(Rol rol) {
         return casoDeUso.usuariosConRol(rol);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+        return casoDeUso.rolesDe(usuarioIds);
     }
 }

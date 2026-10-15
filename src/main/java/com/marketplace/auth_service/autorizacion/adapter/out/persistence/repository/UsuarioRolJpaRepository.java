@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,4 +30,7 @@ public interface UsuarioRolJpaRepository extends JpaRepository<UsuarioRolJpaEnti
 
     @Query("SELECT ur.id.usuarioId FROM UsuarioRolJpaEntity ur WHERE ur.id.rol = :rol")
     List<UUID> usuariosConRol(@Param("rol") Rol rol);
+
+    @Query("SELECT ur FROM UsuarioRolJpaEntity ur WHERE ur.id.usuarioId IN :usuarioIds")
+    List<UsuarioRolJpaEntity> asociacionesDe(@Param("usuarioIds") Collection<UUID> usuarioIds);
 }
