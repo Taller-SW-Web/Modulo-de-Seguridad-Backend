@@ -114,7 +114,85 @@ void revocarRol(...) {
 por rol y para contar administradores activos con su estado efectivo, sin
 consultar `usuario_rol` desde su repositorio.
 
-Siguientes tareas: EP-05-T003/T004 asignan y revocan.
+## Asignar un rol — `POST /api/v1/usuarios/{id}/roles` (EP-05-T003)
+
+`RolesController` recibe `{"rol": "..."}`. El actor sale del acceso validado,
+nunca del cuerpo, y la operación la hace `GestionRolesPort.asignar` en **una
+sola transacción** (`REQUIRED`, `READ_COMMITTED`), en este orden
+(ACUERDOS-INTERNOS §§3–4):
+
+1. `rol.asignar` con los permisos **actuales** de la base. Sin él: 403, antes de
+   mirar el código o la cuenta, y `ACCESO_DENEGADO` se audita después del rollback.
+2. Código de rol: si no es uno de los seis, 400 `VALIDACION` con `errores[{campo: "rol"}]`.
+3. Nivel 1: lock de `rol.ADMIN_SISTEMA`.
+4. Nivel 2: lock de las cuentas de **actor y objetivo** (Eva), una sola vez si
+   son la misma y ordenadas por UUID como las ordena PostgreSQL (texto en
+   minúsculas; `UUID.compareTo` de Java compara con signo y da otro orden).
+   Si el objetivo no existe, 404 `NO_ENCONTRADO`.
+5. Reautorización bajo lock: si otra transacción le quitó el permiso al actor
+   mientras esperaba, 403 y nada cambia.
+6. Si ya tenía el rol, responde 200 sin revocar, escribir, auditar ni publicar.
+7. Nivel 3: revoca **todas** las familias de refresco del objetivo (Jose Luis).
+8. Nivel 4: fila en `usuario_rol` (fila interna propia).
+9. Nivel 5: auditoría crítica `ROL_ASIGNADO` y evento `usuario.roles_cambiados`
+   en el outbox, con la lista completa resultante (Christian).
+
+Ningún paso vuelve a un nivel anterior. Cualquier fallo en 7–9 revierte todo. Un fallo
+técnico responde 503 `NO_DISPONIBLE`. La respuesta 200 es el esquema `Usuario`
+con sus campos obligatorios (`id`, `nombreCompleto`, `correo`, `estado`,
+`roles`); la pantalla recarga el detalle completo después.
+
+Los accesos ya emitidos siguen válidos hasta su `exp` (máx. 15 min). Revocar
+los refrescos obliga a iniciar sesión de nuevo, y el nuevo acceso trae los roles
+actuales. Las operaciones privilegiadas de G7 ya revalidan los permisos en cada llamada.
+
+## Revocar un rol — `DELETE /api/v1/usuarios/{id}/roles/{rol}` (EP-05-T004)
+
+El mismo orden de locks que la asignación (pasos 1–5, luego familias → fila de
+`usuario_rol` → auditoría/outbox), con `ROL_REVOCADO`. Responde 204 y conserva
+los demás roles. Si la persona no tenía el rol, responde 204 sin revocar,
+escribir, auditar ni publicar. Quitar el último rol deja `roles: []` y el
+evento lleva un array vacío.
+
+Si el rol es `ADMIN_SISTEMA`, después de reautorizar y con el lock del catálogo
+tomado se aplica RF-11.7, que responde 422 `ADMINISTRADOR_PROTEGIDO`:
+
+- **Último administrador activo**: si el objetivo es un ADMIN_SISTEMA activo y
+  ningún otro está activo. Los UUID salen de `usuario_rol` y el estado efectivo
+  de Eva (`CuentasRolesPort.contarActivos`); ninguno de los dos lee la tabla del otro.
+  `detail`: «No se puede eliminar el único administrador del sistema» (ESC-11.5).
+- **El propio**: nadie se quita su propio ADMIN_SISTEMA, aunque haya otros.
+  Sí puede quitarse otro rol propio.
+
+Revocar a un administrador bloqueado o inactivo no reduce los activos y se
+permite. El lock del catálogo serializa estas revocaciones con bloqueos y
+bajas: dos revocaciones cruzadas simultáneas (A quita a B y B quita a A)
+nunca dejan cero administradores activos. La segunda falla con 403, porque al
+reautorizar ya no tiene el rol, o con 422. Sin ese lock, la prueba de
+concurrencia falla.
+
+Un código inválido en la ruta responde 400 `VALIDACION`. El contrato no lista
+400 para este DELETE, pero su respuesta `Validacion` cubre «el valor no
+pertenece a un catálogo cerrado»; queda anotado para el PO.
+
+### Lo que falta conectar: un puente por proveedor
+
+El cambio de rol depende de cuatro puertos de **salida** propios, que cada
+dueño cumple con un puente en `autorizacion/adapter/out/capacidad/` hacia su
+puerto exportado. Mientras falte alguno, `RolesConfig` instala
+`GestionRolesNoDisponible`: comprueba el permiso (403 a quien no lo tiene) y
+responde 503. El arranque deja este aviso:
+`Gestión de roles no disponible (responde 503): faltan [...]`.
+
+| Puerto de salida (Sergio) | Método | Puerto del dueño (ACUERDOS §2) | Requisito |
+|---|---|---|---|
+| `CuentasRolesPort` | `bloquear(List<UUID>)` → `Map<UUID, CuentaRoles>`; `contarActivos(Set<UUID>)` | `CuentasPort.bloquear` / `contarActivos` (Eva) | Lock de filas en la transacción, exactamente en el orden recibido; `estado` = estado **efectivo** |
+| `SesionesRolesPort` | `revocarTodas(UUID)` | `SesionesPort.revocarTodas` (Jose Luis) | `MANDATORY`; bloquea raíces en orden |
+| `AuditoriaRolesPort` | `registrarCritica(RegistroRol)` / `registrarNoCritica(RegistroRol)` | `AuditoriaPort.registrarCritica` / `registrarNoCriticaTrasCommit` (Christian) | Crítica en el mismo commit; si falla, lanzar `GestionRolesNoDisponibleException` |
+| `EventosRolesPort` | `guardar(RolesCambiadosEvento)` | `MensajeriaPort.guardarEvento` (Christian) | Outbox en el mismo commit; `datos.roles` = lista completa |
+
+El puente lo escribe quien entrega el puerto del dueño, o Sergio en cuanto ese
+puerto exista. No hace falta tocar el caso de uso.
 
 ## Tablas (todas de Sergio)
 
@@ -148,23 +226,44 @@ una prueba compara la base con la clase.
 ```text
 autorizacion/
   domain/model/            CatalogoAutorizacion, PermisosEfectivos (internos)
-  domain/exception/        RolInvalidoException, AccesoDenegadoException
+  domain/exception/        RolInvalidoException, AccesoDenegadoException, AdministradorProtegidoException,
+                           UsuarioNoEncontradoException, GestionRolesNoDisponibleException
   application/port/in/     AutorizacionPort          ← lo único que consumen los demás
+                           GestionRolesPort          ← solo lo usa RolesController
+  application/port/out/    AsociacionesRolPort, CuentasRolesPort, SesionesRolesPort,
+                           AuditoriaRolesPort, EventosRolesPort
   application/dto/         PermisosResueltos         ← lo que devuelve resolver
-  application/port/out/    AsociacionesRolPort
-  application/service/     AutorizacionService (Java puro)
-  adapter/in/transaction/  AutorizacionTransaccional (frontera @Transactional)
+                           CambioRolCommand, CuentaRoles, RolesCambiados, RegistroRol,
+                           RolesCambiadosEvento
+  application/service/     AutorizacionService, GestionRolesService (Java puro),
+                           GestionRolesNoDisponible
+  adapter/in/transaction/  AutorizacionTransaccional, GestionRolesTransaccional
+  adapter/in/web/          RolesController, RolesErroresAdvice, RolesWebMapper, dto/
   adapter/out/persistence/ AutorizacionJpaAdapter, entity/, repository/, mapper/
-configuration/             AutorizacionConfig (wiring: un único bean AutorizacionPort)
-shared/domain/             Rol, Permiso (vocabulario común), ActorUsuario (persona de un acceso verificado)
+  adapter/out/capacidad/   (pendiente) puentes hacia Eva, Jose Luis y Christian
+configuration/             AutorizacionConfig, RolesConfig
+shared/domain/             Rol, Permiso (vocabulario común), ActorUsuario, ContextoPeticion
+shared/adapter/web/        Problemas, ContextoPeticiones
 ```
 
 ## Pruebas
 
 Unitarias (sin base): `CatalogoYRolesTest`, `PermisosEfectivosTest`,
-`AutorizacionServiceTest`. De arquitectura: `ConsumoAutorizacionTest` evalúa la
+`AutorizacionServiceTest` y `GestionRolesServiceTest`, que comprueba el orden
+exacto de locks y efectos. De arquitectura: `ConsumoAutorizacionTest` evalúa la
 regla de consumo entre capacidades sobre un puente de ejemplo de `sesion`
 (pasa) y sobre un puente con el modelo interno y un consumo sin puente (fallan).
+
+HTTP (`RolesHttpTest`): servidor real con el filtro de acceso, para el formato
+de 200/400/401/403/404/503.
+
+`GestionRolesPostgresTest` usa la transacción real del decorador. Los
+proveedores son dobles que escriben con JDBC en tablas `prueba_*` dentro de la
+misma transacción, y la cuenta se bloquea con `FOR UPDATE`. Comprueba que un
+fallo de auditoría u outbox no deja ni asociación ni revocación, que
+`ACCESO_DENEGADO` queda registrado tras el rollback, que dos asignaciones
+concurrentes conservan ambos roles y que perder el permiso mientras se espera
+el lock rechaza el cambio. **No** acredita los proveedores reales: eso es EP-05-T006.
 
 De persistencia (`AutorizacionPersistenciaTest`, `GuardAdministradorTest`):
 PostgreSQL real, nunca H2. `GuardAdministradorTest` abre dos transacciones

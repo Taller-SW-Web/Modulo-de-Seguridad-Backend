@@ -56,6 +56,16 @@ class AutorizacionServiceTest {
         public void bloquearFilaAdministrador() {
             bloqueos++;
         }
+
+        @Override
+        public boolean asignar(UUID usuarioId, Rol rol) {
+            throw new UnsupportedOperationException("AutorizacionService no cambia roles");
+        }
+
+        @Override
+        public boolean quitar(UUID usuarioId, Rol rol) {
+            throw new UnsupportedOperationException("AutorizacionService no cambia roles");
+        }
     };
 
     /** Persona con esos roles y los permisos que les da el catálogo, como lo haría la base. */
