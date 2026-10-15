@@ -11,11 +11,14 @@ import com.marketplace.auth_service.sesion.domain.model.TokenRefresco;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public class SesionJpaAdapter implements PersistenciaSesionPort {
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
     private final SesionFamiliaJpaRepository familias;
     private final TokenRefrescoJpaRepository tokens;
     private final AccesoSesionJpaRepository accesos;
@@ -34,7 +37,16 @@ public class SesionJpaAdapter implements PersistenciaSesionPort {
 
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public Optional<SesionFamilia> bloquearFamilia(UUID familiaId) {
-        return familias.bloquearPorId(familiaId).map(SesionPersistenceMapper::aDominio);
+        return familias.bloquearPorId(familiaId).map(fila -> {
+            // Refrescar solo esta raíz, sin clear() que perdería cambios del coordinador.
+            entityManager.refresh(fila, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            return SesionPersistenceMapper.aDominio(fila);
+        });
+    }
+
+    @Override public List<SesionFamilia> listarFamiliasDeUsuario(UUID usuarioId) {
+        return familias.findByUsuarioIdOrderByIdAsc(usuarioId).stream()
+                .map(SesionPersistenceMapper::aDominio).toList();
     }
 
     @Override @Transactional(propagation = Propagation.MANDATORY)
@@ -43,7 +55,16 @@ public class SesionJpaAdapter implements PersistenciaSesionPort {
     }
 
     @Override public Optional<TokenRefresco> buscarTokenPorHash(String hashToken) {
-        return tokens.findByHashToken(hashToken).map(SesionPersistenceMapper::aDominio);
+        return tokens.leerActualPorHash(hashToken).map(SesionJpaAdapter::tokenActual);
+    }
+
+    @Override public List<TokenRefresco> listarTokensDeFamilia(UUID familiaId) {
+        return tokens.leerActualesDeFamilia(familiaId).stream().map(SesionJpaAdapter::tokenActual).toList();
+    }
+
+    private static TokenRefresco tokenActual(TokenRefrescoJpaRepository.TokenActual t) {
+        return new TokenRefresco(t.getJti(), t.getUsuarioId(), t.getFamiliaId(), t.getHashToken(),
+                t.getRevocado(), t.getUsado(), t.getExpiracion().toInstant(), t.getCreadoEn().toInstant());
     }
 
     @Override @Transactional(propagation = Propagation.MANDATORY)

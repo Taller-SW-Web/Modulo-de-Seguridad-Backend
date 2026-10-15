@@ -28,6 +28,7 @@ class AutorizacionServiceTest {
     private final Map<UUID, Set<String>> permisos = new HashMap<>();
     private int consultasDePermisos;
     private int bloqueos;
+    private int consultasEnLote;
 
     private final AsociacionesRolPort doble = new AsociacionesRolPort() {
         @Override
@@ -50,6 +51,13 @@ class AutorizacionServiceTest {
         public Set<UUID> usuariosConRol(Rol rol) {
             return roles.entrySet().stream().filter(e -> e.getValue().contains(rol))
                     .map(Map.Entry::getKey).collect(Collectors.toSet());
+        }
+
+        @Override
+        public Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+            consultasEnLote++;
+            return roles.entrySet().stream().filter(e -> usuarioIds.contains(e.getKey()) && !e.getValue().isEmpty())
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         }
 
         @Override
@@ -211,5 +219,26 @@ class AutorizacionServiceTest {
         persona(Rol.CLIENTE);
 
         assertThat(servicio.usuariosConRol(Rol.ADMIN_SISTEMA)).containsExactlyInAnyOrder(a, b);
+    }
+
+    @Test
+    void resuelveLosRolesDeUnaPaginaEnUnaSolaConsulta() {
+        UUID admin = persona(Rol.ADMIN_SISTEMA);
+        UUID mixto = persona(Rol.CLIENTE, Rol.VENDEDOR);
+        UUID sinRoles = UUID.randomUUID();
+
+        Map<UUID, Set<Rol>> resultado = servicio.rolesDe(Set.of(admin, mixto, sinRoles));
+
+        assertThat(consultasEnLote).isEqualTo(1);
+        assertThat(resultado).containsOnlyKeys(admin, mixto, sinRoles);
+        assertThat(resultado.get(admin)).containsExactly(Rol.ADMIN_SISTEMA);
+        assertThat(resultado.get(mixto)).containsExactly(Rol.CLIENTE, Rol.VENDEDOR);
+        assertThat(resultado.get(sinRoles)).isEmpty();
+    }
+
+    @Test
+    void unaPaginaVaciaNoConsultaLaBase() {
+        assertThat(servicio.rolesDe(Set.of())).isEmpty();
+        assertThat(consultasEnLote).isZero();
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
@@ -21,7 +22,12 @@ class AuthServiceApplicationTests {
         assertThat(contexto.getBeansOfType(CuentasPort.class)).hasSize(1);
         assertThat(contexto.getBeansOfType(CuentaEscrituraInterna.class)).hasSize(1);
         assertThat(contexto.getBeansOfType(ConsultaCuentasService.class)).isEmpty();
-        assertThat(rutas.getHandlerMethods().keySet().stream().flatMap(r -> r.getPatternValues().stream()))
-                .doesNotContain("/api/v1/usuarios", "/api/v1/usuarios/{id}");
+        // EP-01-T003/T004 publican solo la consulta: GET del listado y del detalle, sin escritura administrativa.
+        var consultaUsuarios = rutas.getHandlerMethods().keySet().stream()
+                .filter(r -> r.getPatternValues().contains("/api/v1/usuarios")
+                        || r.getPatternValues().contains("/api/v1/usuarios/{id}"))
+                .toList();
+        assertThat(consultaUsuarios).hasSize(2).allSatisfy(r ->
+                assertThat(r.getMethodsCondition().getMethods()).containsExactly(RequestMethod.GET));
     }
 }
