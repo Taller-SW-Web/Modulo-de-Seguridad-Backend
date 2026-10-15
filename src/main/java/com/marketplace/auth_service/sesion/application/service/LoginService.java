@@ -6,6 +6,7 @@ import com.marketplace.auth_service.sesion.application.dto.PreverificacionLogin;
 import com.marketplace.auth_service.sesion.application.dto.ResultadoLogin;
 import com.marketplace.auth_service.sesion.application.dto.RevisionLogin;
 import com.marketplace.auth_service.sesion.application.dto.RolesLogin;
+import com.marketplace.auth_service.sesion.application.dto.VerificacionOtpLogin;
 import com.marketplace.auth_service.sesion.application.port.in.LoginPort;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.CapacidadesLoginPort;
@@ -101,6 +102,39 @@ public final class LoginService implements LoginPort {
         if (!capacidades.confirmarRevision(revision)) {
             return REPETIR;
         }
+        if (capacidades.contrasenaCaducada(id, roles, ahora)) {
+            return ResultadoLogin.Rechazo.CONTRASENA_CADUCADA;
+        }
+        capacidades.completarLogin(id);
+        return new ResultadoLogin.Iniciada(sesiones.abrir(id,
+                new IdentidadAutorizada(id, cuenta.nombreCompleto(), cuenta.correo(), roles.roles(), roles.permisos()),
+                contexto));
+    }
+
+    @Override
+    public ResultadoLogin completarMfa(String challengeToken, String codigo, ContextoPeticion contexto) {
+        Objects.requireNonNull(contexto, "contexto");
+        return transacciones.ejecutar(() -> switch (capacidades.verificarOtp(challengeToken, codigo)) {
+            case VerificacionOtpLogin.CodigoInvalido invalido -> new ResultadoLogin.CodigoInvalido(invalido.intentosRestantes());
+            case VerificacionOtpLogin.Rechazo rechazo -> switch (rechazo) {
+                case DESAFIO_INVALIDO -> ResultadoLogin.Rechazo.DESAFIO_INVALIDO;
+                case INTENTOS_AGOTADOS -> ResultadoLogin.Rechazo.OTP_INTENTOS_AGOTADOS;
+                case CODIGO_EXPIRADO -> ResultadoLogin.Rechazo.OTP_EXPIRADO;
+            };
+            case VerificacionOtpLogin.Verificada verificada -> completar(verificada, contexto);
+        });
+    }
+
+    /** Revalida bajo el lock de la cuenta (ya tomado por MFA en esta transacción) y abre la sesión. */
+    private ResultadoLogin completar(VerificacionOtpLogin.Verificada verificada, ContextoPeticion contexto) {
+        UUID id = verificada.usuarioId();
+        CuentaLogin cuenta = capacidades.bloquearCuenta(id);
+        Instant ahora = reloj.instant();
+        if (!cuenta.disponible() || !capacidades.proteccionPermiteLogin(id, ahora)
+                || !capacidades.confirmarRevision(verificada.revision())) {
+            return ResultadoLogin.Rechazo.DESAFIO_INVALIDO;
+        }
+        RolesLogin roles = capacidades.resolverRoles(id);
         if (capacidades.contrasenaCaducada(id, roles, ahora)) {
             return ResultadoLogin.Rechazo.CONTRASENA_CADUCADA;
         }

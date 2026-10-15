@@ -16,6 +16,7 @@ import com.marketplace.auth_service.sesion.application.dto.RolesLogin;
 import com.marketplace.auth_service.sesion.application.dto.SecretoRefresco;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.dto.UsuarioAutenticado;
+import com.marketplace.auth_service.sesion.application.dto.VerificacionOtpLogin;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.CapacidadesLoginPort;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
@@ -150,6 +151,43 @@ class LoginServiceTest {
         assertThat(capacidades.eventos).noneMatch(e -> e.startsWith("buscar"));
     }
 
+    @Test
+    void otpCorrectoAbreSesionTrasRevalidarYReiniciarProteccionEnUnaTransaccion() {
+        var resultado = servicio.completarMfa("desafio", "123456", CONTEXTO);
+
+        assertThat(resultado).isInstanceOf(ResultadoLogin.Iniciada.class);
+        assertThat(transacciones).isEqualTo(1);
+        assertThat(capacidades.eventos).containsSubsequence("tx", "verificarOtp", "bloquearCuenta", "confirmar",
+                "caducidad", "completar");
+    }
+
+    @Test
+    void otpFallidoNoAbreSesionYTraduceCadaRechazo() {
+        capacidades.otp = new VerificacionOtpLogin.CodigoInvalido(2);
+        assertThat(servicio.completarMfa("d", "000000", CONTEXTO)).isEqualTo(new ResultadoLogin.CodigoInvalido(2));
+        capacidades.otp = VerificacionOtpLogin.Rechazo.INTENTOS_AGOTADOS;
+        assertThat(servicio.completarMfa("d", "000000", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.OTP_INTENTOS_AGOTADOS);
+        capacidades.otp = VerificacionOtpLogin.Rechazo.CODIGO_EXPIRADO;
+        assertThat(servicio.completarMfa("d", "000000", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.OTP_EXPIRADO);
+        capacidades.otp = VerificacionOtpLogin.Rechazo.DESAFIO_INVALIDO;
+        assertThat(servicio.completarMfa("d", "000000", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.DESAFIO_INVALIDO);
+        assertThat(sesiones.abiertas).isZero();
+        assertThat(capacidades.eventos).doesNotContain("completar");
+    }
+
+    @Test
+    void otpCorrectoConCuentaBloqueadaEntretantoOCredencialCambiadaNoAbreSesion() {
+        capacidades.proteccionPermite = false;
+        assertThat(servicio.completarMfa("d", "123456", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.DESAFIO_INVALIDO);
+        capacidades.proteccionPermite = true;
+        capacidades.confirmaciones = new ArrayList<>(List.of(false));
+        assertThat(servicio.completarMfa("d", "123456", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.DESAFIO_INVALIDO);
+        capacidades.caducada = true;
+        capacidades.confirmaciones = new ArrayList<>(List.of(true));
+        assertThat(servicio.completarMfa("d", "123456", CONTEXTO)).isEqualTo(ResultadoLogin.Rechazo.CONTRASENA_CADUCADA);
+        assertThat(sesiones.abiertas).isZero();
+    }
+
     private static final class Doble implements CapacidadesLoginPort {
         final List<String> eventos = new ArrayList<>();
         CuentaLogin cuenta = new CuentaLogin(ID, CORREO, "Ana Prueba", true, false);
@@ -195,6 +233,11 @@ class LoginServiceTest {
             return caducada;
         }
         @Override public void completarLogin(UUID usuarioId) { eventos.add("completar"); }
+        VerificacionOtpLogin otp = new VerificacionOtpLogin.Verificada(ID, REVISION);
+        @Override public VerificacionOtpLogin verificarOtp(String token, String codigo) {
+            eventos.add("verificarOtp");
+            return otp;
+        }
     }
 
     private static final class SesionesDoble implements SesionesPort {

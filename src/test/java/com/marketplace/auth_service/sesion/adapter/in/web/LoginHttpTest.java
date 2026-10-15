@@ -54,9 +54,20 @@ class LoginHttpTest {
     static class Aplicacion {
         @Bean
         LoginPort loginPort() {
-            return (correo, contrasena, contexto) -> {
-                CORREO_RECIBIDO.set(correo);
-                return RESULTADO.get().get();
+            return new LoginPort() {
+                @Override
+                public ResultadoLogin iniciar(String correo, String contrasena,
+                                              com.marketplace.auth_service.shared.domain.ContextoPeticion contexto) {
+                    CORREO_RECIBIDO.set(correo);
+                    return RESULTADO.get().get();
+                }
+
+                @Override
+                public ResultadoLogin completarMfa(String token, String codigo,
+                                                   com.marketplace.auth_service.shared.domain.ContextoPeticion contexto) {
+                    CORREO_RECIBIDO.set(codigo);
+                    return RESULTADO.get().get();
+                }
             };
         }
     }
@@ -74,7 +85,11 @@ class LoginHttpTest {
     private final ObjectMapper json = new ObjectMapper();
 
     private HttpResponse<String> login(String cuerpo, String autorizacion) throws Exception {
-        var peticion = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/v1/auth/login"))
+        return post("/api/v1/auth/login", cuerpo, autorizacion);
+    }
+
+    private HttpResponse<String> post(String ruta, String cuerpo, String autorizacion) throws Exception {
+        var peticion = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(cuerpo));
         if (autorizacion != null) {
@@ -147,5 +162,39 @@ class LoginHttpTest {
         assertThat(caida.statusCode()).isEqualTo(503);
         assertThat(json.readTree(caida.body()).get("code").asText()).isEqualTo("NO_DISPONIBLE");
         assertThat(caida.body()).doesNotContain("10.0.0.5", "secreta");
+    }
+
+    @Test
+    void verificarOtpMapeaCadaResultadoDelContrato() throws Exception {
+        String cuerpo = "{\"challengeToken\":\"d\",\"codigo\":\"123456\"}";
+        RESULTADO.set(() -> new ResultadoLogin.CodigoInvalido(2));
+        var invalido = post("/api/v1/auth/otp/verificar", cuerpo, "Bearer basura");
+        assertThat(invalido.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(invalido.body()).get("code").asText()).isEqualTo("CODIGO_INVALIDO");
+        assertThat(json.readTree(invalido.body()).get("intentosRestantes").asInt()).isEqualTo(2);
+        assertThat(invalido.body()).doesNotContain("123456");
+
+        RESULTADO.set(() -> ResultadoLogin.Rechazo.OTP_INTENTOS_AGOTADOS);
+        assertThat(json.readTree(post("/api/v1/auth/otp/verificar", cuerpo, null).body()).get("code").asText())
+                .isEqualTo("OTP_INTENTOS_AGOTADOS");
+        RESULTADO.set(() -> ResultadoLogin.Rechazo.OTP_EXPIRADO);
+        assertThat(post("/api/v1/auth/otp/verificar", cuerpo, null).statusCode()).isEqualTo(410);
+        RESULTADO.set(() -> ResultadoLogin.Rechazo.DESAFIO_INVALIDO);
+        var desafio = post("/api/v1/auth/otp/verificar", cuerpo, null);
+        assertThat(desafio.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(desafio.body()).get("code").asText()).isEqualTo("TOKEN_INVALIDO");
+
+        CORREO_RECIBIDO.set(null);
+        var formato = post("/api/v1/auth/otp/verificar", "{\"challengeToken\":\"d\",\"codigo\":\"12a\"}", null);
+        assertThat(formato.statusCode()).isEqualTo(400);
+        assertThat(CORREO_RECIBIDO.get()).isNull();
+
+        Instant ahora = Instant.now();
+        RESULTADO.set(() -> new ResultadoLogin.Iniciada(new SesionIniciada("acceso.jwt", "refresco", 900,
+                ahora.plusSeconds(900), ahora.plusSeconds(3600),
+                new UsuarioAutenticado(UUID.randomUUID(), "Admin", "admin@g7.test", List.of("ADMIN_SISTEMA")))));
+        var ok = post("/api/v1/auth/otp/verificar", cuerpo, null);
+        assertThat(ok.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(ok.body()).get("usuario").get("roles").get(0).asText()).isEqualTo("ADMIN_SISTEMA");
     }
 }

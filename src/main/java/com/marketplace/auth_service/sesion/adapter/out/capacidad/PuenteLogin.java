@@ -6,7 +6,9 @@ import com.marketplace.auth_service.credencial.application.dto.SecretoEfimero;
 import com.marketplace.auth_service.credencial.application.port.in.CredencialesPort;
 import com.marketplace.auth_service.mfa.application.dto.ResultadoCreacionDesafio;
 import com.marketplace.auth_service.mfa.application.dto.RevisionCredencialMfa;
+import com.marketplace.auth_service.mfa.application.dto.ResultadoVerificacionOtp;
 import com.marketplace.auth_service.mfa.application.port.in.MfaPort;
+import com.marketplace.auth_service.mfa.application.port.in.OtpLoginPort;
 import com.marketplace.auth_service.proteccion.application.dto.HuellaFallo;
 import com.marketplace.auth_service.proteccion.application.port.in.ProteccionPort;
 import com.marketplace.auth_service.sesion.application.dto.CuentaLogin;
@@ -14,6 +16,7 @@ import com.marketplace.auth_service.sesion.application.dto.DesafioEmitido;
 import com.marketplace.auth_service.sesion.application.dto.PreverificacionLogin;
 import com.marketplace.auth_service.sesion.application.dto.RevisionLogin;
 import com.marketplace.auth_service.sesion.application.dto.RolesLogin;
+import com.marketplace.auth_service.sesion.application.dto.VerificacionOtpLogin;
 import com.marketplace.auth_service.sesion.application.port.out.CapacidadesLoginPort;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import com.marketplace.auth_service.shared.domain.Rol;
@@ -38,9 +41,11 @@ public final class PuenteLogin implements CapacidadesLoginPort {
     private final ProteccionPort proteccion;
     private final AutorizacionPort autorizacion;
     private final MfaPort mfa;
+    private final OtpLoginPort otp;
 
     public PuenteLogin(CuentasPort cuentas, CredencialesPort credenciales, ProteccionPort proteccion,
-                       AutorizacionPort autorizacion, MfaPort mfa) {
+                       AutorizacionPort autorizacion, MfaPort mfa, OtpLoginPort otp) {
+        this.otp = otp;
         this.cuentas = cuentas;
         this.credenciales = credenciales;
         this.proteccion = proteccion;
@@ -125,6 +130,20 @@ public final class PuenteLogin implements CapacidadesLoginPort {
     @Override
     public void completarLogin(UUID usuarioId) {
         proteccion.completarLogin(usuarioId);
+    }
+
+    @Override
+    public VerificacionOtpLogin verificarOtp(String challengeToken, String codigo) {
+        return switch (otp.verificar(challengeToken, codigo)) {
+            case ResultadoVerificacionOtp.Verificado v -> new VerificacionOtpLogin.Verificada(v.usuarioId(),
+                    new RevisionLogin(v.revision().usuarioId(), v.revision().credencialId(), v.revision().version()));
+            case ResultadoVerificacionOtp.CodigoInvalido c -> new VerificacionOtpLogin.CodigoInvalido(c.intentosRestantes());
+            case ResultadoVerificacionOtp.Rechazo r -> switch (r) {
+                case DESAFIO_INVALIDO -> VerificacionOtpLogin.Rechazo.DESAFIO_INVALIDO;
+                case INTENTOS_AGOTADOS -> VerificacionOtpLogin.Rechazo.INTENTOS_AGOTADOS;
+                case CODIGO_EXPIRADO -> VerificacionOtpLogin.Rechazo.CODIGO_EXPIRADO;
+            };
+        };
     }
 
     private static CuentaLogin aCuenta(CuentaSnapshot c) {

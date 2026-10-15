@@ -22,5 +22,14 @@ public sealed interface ResultadoLogin {
         }
     }
 
-    enum Rechazo implements ResultadoLogin { CREDENCIALES_INVALIDAS, CONTRASENA_CADUCADA }
+    /** Segundo factor: código incorrecto con intentos restantes (SPEC-09 ESC-09.4). */
+    record CodigoInvalido(int intentosRestantes) implements ResultadoLogin { }
+
+    enum Rechazo implements ResultadoLogin {
+        CREDENCIALES_INVALIDAS, CONTRASENA_CADUCADA,
+        /** Desafío MFA inexistente, vencido, manipulado o ya no aplicable (ESC-09.11). */
+        DESAFIO_INVALIDO,
+        OTP_INTENTOS_AGOTADOS,
+        OTP_EXPIRADO
+    }
 }
