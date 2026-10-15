@@ -129,14 +129,26 @@ class ProteccionJpaPostgresTest {
         assertThatThrownBy(() -> persistencia.reiniciarRacha(new RachaFallo(usuario,rachaId,"k2",AHORA)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
-    @Test void hmacPermaneceDeduplicableTrasReconstruirProveedorYLeerRacha() {
-        var r=crearRacha();
+    @Test @Transactional(propagation=Propagation.NOT_SUPPORTED)
+    void hmacPermaneceDeduplicableTrasReconstruirProveedorYLeerRacha() {
+        var tx=new TransactionTemplate(transacciones);
         byte[] prueba="contraseña-de-prueba".getBytes(StandardCharsets.UTF_8);
         var p=new HuellaProteccionJca("k1",Map.of("k1",new byte[32]));
-        assertThat(persistencia.insertarHuellaSiNueva(p.generar(r,prueba,AHORA))).isTrue();
+        tx.executeWithoutResult(estado -> {
+            var r=crearRacha();
+            assertThat(persistencia.insertarHuellaSiNueva(p.generar(r,prueba,AHORA))).isTrue();
+        });
+
+        // El primer commit termina su contexto JPA. Otro proveedor y otra transacción
+        // reconstruyen el contexto desde la base, sin reutilizar la racha en memoria.
         var reinicio=new HuellaProteccionJca("k1",Map.of("k1",new byte[32]));
-        var historica=persistencia.buscarRacha(usuario).orElseThrow();
-        assertThat(persistencia.insertarHuellaSiNueva(reinicio.generar(historica,prueba,AHORA.plusSeconds(900000)))).isFalse();
+        tx.executeWithoutResult(estado -> {
+            var historica=persistencia.bloquearRacha(usuario).orElseThrow();
+            assertThat(historica.rachaId()).isEqualTo(rachaId);
+            assertThat(historica.hashKeyId()).isEqualTo("k1");
+            assertThat(persistencia.insertarHuellaSiNueva(
+                    reinicio.generar(historica,prueba,AHORA.plusSeconds(900000)))).isFalse();
+        });
         assertThat(persistencia.contarHuellas(usuario,rachaId)).isEqualTo(1);
     }
     @Test void preservaHistoricoYLeAsignaRevisionSinCambiarTipoOHasta() {

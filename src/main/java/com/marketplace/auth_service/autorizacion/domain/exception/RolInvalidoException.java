@@ -6,7 +6,15 @@ package com.marketplace.auth_service.autorizacion.domain.exception;
  */
 public class RolInvalidoException extends RuntimeException {
 
+    private final String codigo;
+
     public RolInvalidoException(String codigo) {
         super("El código de rol no pertenece al catálogo cerrado: " + codigo);
+        this.codigo = codigo;
+    }
+
+    /** El código recibido; {@code null} si no llegó ninguno. */
+    public String codigo() {
+        return codigo;
     }
 }
