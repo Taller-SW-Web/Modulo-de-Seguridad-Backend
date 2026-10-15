@@ -17,17 +17,11 @@ import java.util.UUID;
 public interface UsuarioEstadoEfectivoRepository extends JpaRepository<UsuarioEstadoEfectivoJpaEntity, UUID> {
     Optional<UsuarioEstadoEfectivoJpaEntity> findById(UUID id);
 
-    @Query("SELECT u FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) ORDER BY u.createdAt DESC")
+    @Query("SELECT u FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estado = :estado) ORDER BY u.id ASC")
     Page<UsuarioEstadoEfectivoJpaEntity> findByFiltro(
             @Param("estado") EstadoCuenta estado,
-            @Param("correoFragmento") String correoFragmento,
             Pageable pageable);
 
-    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE (:estado IS NULL OR u.estadoEfectivo = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%')))")
-    long countByFiltro(
-            @Param("estado") EstadoCuenta estado,
-            @Param("correoFragmento") String correoFragmento);
-
-    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE u.id IN :ids AND u.estadoEfectivo = 'ACTIVO'")
+    @Query("SELECT COUNT(u) FROM UsuarioEstadoEfectivoJpaEntity u WHERE u.id IN :ids AND u.estado = 'ACTIVO'")
     long countActiveByIds(@Param("ids") Set<UUID> ids);
 }

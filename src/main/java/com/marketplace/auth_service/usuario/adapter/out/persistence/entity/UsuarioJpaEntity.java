@@ -68,13 +68,6 @@ public class UsuarioJpaEntity {
     @Column(name = "actualizado_en")
     private OffsetDateTime actualizadoEn;
 
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
-
-    @Column(name = "tipo_documento", length = 20)
-    private String tipoDocumento;
-
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public String getCorreo() { return correo; }
@@ -109,8 +102,4 @@ public class UsuarioJpaEntity {
     public void setCreadoEn(OffsetDateTime creadoEn) { this.creadoEn = creadoEn; }
     public OffsetDateTime getActualizadoEn() { return actualizadoEn; }
     public void setActualizadoEn(OffsetDateTime actualizadoEn) { this.actualizadoEn = actualizadoEn; }
-    public Long getVersion() { return version; }
-    public void setVersion(Long version) { this.version = version; }
-    public String getTipoDocumento() { return tipoDocumento; }
-    public void setTipoDocumento(String tipoDocumento) { this.tipoDocumento = tipoDocumento; }
 }

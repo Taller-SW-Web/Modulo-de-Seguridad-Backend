@@ -57,8 +57,6 @@ class CuentaEscrituraAdapterContractTest {
         entity.setCanalOrigen(com.marketplace.auth_service.usuario.domain.model.CanalOrigen.WEB);
         entity.setIntentosFallidosConsecutivos(0);
         entity.setBloqueosSeguidos(0);
-        entity.setTipoDocumento("DNI");
-        entity.setVersion(1L);
 
         lenient().when(usuarioJpaRepository.findById(eq(usuarioId))).thenReturn(java.util.Optional.of(entity));
         lenient().when(usuarioJpaRepository.saveAndFlush(any(com.marketplace.auth_service.usuario.adapter.out.persistence.entity.UsuarioJpaEntity.class))).thenAnswer(inv -> inv.getArgument(0));

@@ -40,10 +40,7 @@ public class CuentaEscrituraAdapter implements CuentaEscrituraInterna {
         if (cambio.celular() != null) {
             entity.setCelular(cambio.celular());
         }
-        if (cambio.tipoDocumento() != null) {
-            entity.setTipoDocumento(cambio.tipoDocumento());
-        }
-        // numeroDocumento se maneja via Valery (encriptado/HMAC) - no aquí
+        // tipoDocumento se maneja via Valery en perfil_cliente - no aquí
 
         // NO tocar: roles, estado, passwordHash, contadores, MFA, fechas, versión
 

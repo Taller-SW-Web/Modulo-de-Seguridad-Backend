@@ -24,27 +24,28 @@ public final class UsuarioPersistenceMapper {
                 entity.isCorreoVerificado(),
                 entity.isMfaHabilitado(),
                 entity.getBloqueosSeguidos(),
-                entity.getTipoDocumento(),
-                enmascararDocumento(null), // documento_hmac está en perfil_cliente, no en usuario
+                null, // tipoDocumento no está en usuario (está en perfil_cliente)
+                enmascararDocumento(null),
                 roles != null ? roles : Set.of()
         );
     }
 
-    public static CuentaSnapshot toSnapshotConEstadoEfectivo(UsuarioEstadoEfectivoJpaEntity entity, Set<String> roles) {
-        if (entity == null) return null;
+    public static CuentaSnapshot toSnapshotConEstadoEfectivo(UsuarioJpaEntity usuario, UsuarioEstadoEfectivoJpaEntity estadoEfectivo, Set<String> roles) {
+        if (usuario == null) return null;
+        EstadoCuenta estadoEfectivoEnum = estadoEfectivo != null ? estadoEfectivo.getEstado() : usuario.getEstado();
         return new CuentaSnapshot(
-                entity.getId(),
-                entity.getNombres(),
-                entity.getApellidos(),
-                entity.getCorreo(),
-                entity.getCelular(),
-                entity.getEstado().name(),
-                entity.getEstadoEfectivo().name(),
-                entity.isCorreoVerificado(),
-                entity.isMfaHabilitado(),
-                entity.getBloqueosSeguidos(),
-                entity.getTipoDocumento(),
-                enmascararDocumento(null), // documento_hmac está en perfil_cliente, no en usuario
+                usuario.getId(),
+                usuario.getNombres(),
+                usuario.getApellidos(),
+                usuario.getCorreo(),
+                usuario.getCelular(),
+                usuario.getEstado().name(),
+                estadoEfectivoEnum.name(),
+                usuario.isCorreoVerificado(),
+                usuario.isMfaHabilitado(),
+                usuario.getBloqueosSeguidos(),
+                null, // tipoDocumento está en perfil_cliente
+                enmascararDocumento(null),
                 roles != null ? roles : Set.of()
         );
     }

@@ -27,7 +27,7 @@ public interface UsuarioJpaRepository extends JpaRepository<UsuarioJpaEntity, UU
     @Query("SELECT COUNT(u) FROM UsuarioJpaEntity u WHERE u.id IN :ids AND u.estado = 'ACTIVO'")
     long countActiveByIds(@Param("ids") Set<UUID> ids);
 
-    @Query("SELECT u FROM UsuarioJpaEntity u WHERE (:estado IS NULL OR u.estado = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) ORDER BY u.createdAt DESC")
+    @Query("SELECT u FROM UsuarioJpaEntity u WHERE (:estado IS NULL OR u.estado = :estado) AND (:correoFragmento IS NULL OR LOWER(u.correo) LIKE LOWER(CONCAT('%', :correoFragmento, '%'))) ORDER BY u.creadoEn DESC")
     Page<UsuarioJpaEntity> findByFiltro(
             @Param("estado") EstadoCuenta estado,
             @Param("correoFragmento") String correoFragmento,
