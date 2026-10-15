@@ -10,6 +10,27 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CredencialJpaRepository extends JpaRepository<CredencialJpaEntity, UUID> {
+    /** Proyección de valores actuales; no materializa una entidad cacheada en L1. */
+    interface LecturaActual {
+        UUID getUsuarioId();
+        String getPasswordHash();
+        java.time.OffsetDateTime getActualizadoEn();
+        Long getVersion();
+    }
+
+    @Query("""
+            select c.usuarioId as usuarioId, c.passwordHash as passwordHash,
+                   c.actualizadoEn as actualizadoEn, c.version as version
+            from CredencialJpaEntity c where c.usuarioId = :usuarioId
+            """)
+    Optional<LecturaActual> leerActual(@Param("usuarioId") UUID usuarioId);
+
+    @Query("""
+            select (count(c) > 0) from CredencialJpaEntity c
+            where c.usuarioId = :usuarioId and c.version = :version
+            """)
+    boolean existeRevision(@Param("usuarioId") UUID usuarioId, @Param("version") long version);
+
     Optional<CredencialJpaEntity> findByUsuarioId(UUID usuarioId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
