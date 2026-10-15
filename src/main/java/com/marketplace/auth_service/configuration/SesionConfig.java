@@ -1,13 +1,5 @@
 package com.marketplace.auth_service.configuration;
 
-import com.marketplace.auth_service.credencial.application.port.in.CredencialesPort;
-import com.marketplace.auth_service.mfa.application.port.in.MfaPort;
-import com.marketplace.auth_service.proteccion.application.port.in.ProteccionPort;
-import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteLogin;
-import com.marketplace.auth_service.sesion.adapter.out.transaccion.TransaccionLoginSpring;
-import com.marketplace.auth_service.sesion.application.port.in.LoginPort;
-import com.marketplace.auth_service.sesion.application.service.LoginService;
-import org.springframework.transaction.PlatformTransactionManager;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.sesion.adapter.in.transaction.SesionTransaccional;
@@ -38,10 +30,4 @@ public class SesionConfig {
                 clock.getIfAvailable(Clock::systemUTC)), persistencia, criptografia, cuentas);
     }
 
-    @Bean LoginPort loginPort(CuentasPort cuentas, CredencialesPort credenciales, ProteccionPort proteccion,
-            AutorizacionPort autorizacion, MfaPort mfa, SesionesPort sesiones, PlatformTransactionManager transacciones,
-            ObjectProvider<Clock> clock) {
-        return new LoginService(new PuenteLogin(cuentas, credenciales, proteccion, autorizacion, mfa), sesiones,
-                new TransaccionLoginSpring(transacciones), clock.getIfAvailable(Clock::systemUTC));
-    }
 }
