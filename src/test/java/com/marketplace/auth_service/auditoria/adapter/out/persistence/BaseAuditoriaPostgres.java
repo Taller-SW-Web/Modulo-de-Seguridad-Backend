@@ -9,14 +9,14 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
 /** Esquema observado pre-V106 + migración propuesta; sin UPDATE por punto y coma en DO. */
-final class BaseAuditoriaPostgres {
+public final class BaseAuditoriaPostgres {
     private BaseAuditoriaPostgres() { }
 
-    static void cargarEsquema(Connection conexion) throws SQLException, IOException {
+    public static void cargarEsquema(Connection conexion) throws SQLException, IOException {
         ejecutar(conexion, new ClassPathResource("auditoria/base-observada/schema.sql"));
     }
 
-    static void migrar(Connection conexion) throws SQLException, IOException {
+    public static void migrar(Connection conexion) throws SQLException, IOException {
         if (!conexion.getAutoCommit()) {
             throw new IllegalStateException("La prueba de migración requiere su propia transacción");
         }

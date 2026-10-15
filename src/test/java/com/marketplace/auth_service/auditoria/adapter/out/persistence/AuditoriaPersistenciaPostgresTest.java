@@ -66,6 +66,11 @@ class AuditoriaPersistenciaPostgresTest {
         registro.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
+    @Autowired
+    AuditoriaJpaAdapter adaptador;
+    @Autowired
+    JdbcTemplate jdbc;
+
     private static RegistroAuditoria registro() {
         return new RegistroAuditoria(UUID.randomUUID(), AccionAuditable.ROL_ASIGNADO,
                 Resultado.EXITO, ActorTipo.USUARIO, "sub-1", UUID.randomUUID(), AHORA,
@@ -73,7 +78,7 @@ class AuditoriaPersistenciaPostgresTest {
     }
 
     @Test
-    void historicoRecibeRegistroIdYMigraSinPerderFilas(AuditoriaJpaAdapter adaptador, JdbcTemplate jdbc) {
+    void historicoRecibeRegistroIdYMigraSinPerderFilas() {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM auditoria_seguridad", Long.class))
                 .isEqualTo(1L);
         assertThat(jdbc.queryForObject(
@@ -87,7 +92,7 @@ class AuditoriaPersistenciaPostgresTest {
     }
 
     @Test
-    void registroIdDuplicadoNoCreaSegundaFila(AuditoriaJpaAdapter adaptador) {
+    void registroIdDuplicadoNoCreaSegundaFila() {
         var primero = registro();
         adaptador.guardar(primero);
         assertThat(adaptador.existeRegistro(primero.registroId())).isTrue();
@@ -96,7 +101,7 @@ class AuditoriaPersistenciaPostgresTest {
     }
 
     @Test
-    void updateDirectoLoRechazaElTrigger(JdbcTemplate jdbc) {
+    void updateDirectoLoRechazaElTrigger() {
         assertThatThrownBy(() -> jdbc.execute("UPDATE auditoria_seguridad SET accion = 'SESION_FALLIDA'"))
                 .hasMessageContaining("solo anexado");
     }
