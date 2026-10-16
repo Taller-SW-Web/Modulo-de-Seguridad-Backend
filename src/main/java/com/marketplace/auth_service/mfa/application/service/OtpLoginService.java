@@ -9,6 +9,7 @@ import com.marketplace.auth_service.mfa.application.port.in.OtpLoginPort;
 import com.marketplace.auth_service.mfa.application.port.out.CriptografiaMfaPort;
 import com.marketplace.auth_service.mfa.application.port.out.CuentasMfaPort;
 import com.marketplace.auth_service.mfa.application.port.out.EntregaOtpPort;
+import com.marketplace.auth_service.mfa.application.port.out.HechosMfaPort;
 import com.marketplace.auth_service.mfa.application.port.out.PersistenciaMfaPort;
 import com.marketplace.auth_service.mfa.domain.model.CanalOtp;
 import com.marketplace.auth_service.mfa.domain.model.ContextoOtp;
@@ -43,10 +44,18 @@ public final class OtpLoginService implements OtpLoginPort {
     private final EntregaOtpPort entrega;
     private final Clock reloj;
     private final Supplier<UUID> identificadores;
+    private final HechosMfaPort hechos;
 
     public OtpLoginService(ValidadorDesafioLogin validador, CuentasMfaPort cuentas, PersistenciaMfaPort persistencia,
                            CriptografiaMfaPort criptografia, EntregaOtpPort entrega, Clock reloj,
                            Supplier<UUID> identificadores) {
+        this(validador, cuentas, persistencia, criptografia, entrega, reloj, identificadores, usuario -> { });
+    }
+
+    public OtpLoginService(ValidadorDesafioLogin validador, CuentasMfaPort cuentas, PersistenciaMfaPort persistencia,
+                           CriptografiaMfaPort criptografia, EntregaOtpPort entrega, Clock reloj,
+                           Supplier<UUID> identificadores, HechosMfaPort hechos) {
+        this.hechos = Objects.requireNonNull(hechos);
         this.validador = Objects.requireNonNull(validador);
         this.cuentas = Objects.requireNonNull(cuentas);
         this.persistencia = Objects.requireNonNull(persistencia);
@@ -93,6 +102,7 @@ public final class OtpLoginService implements OtpLoginPort {
         var generado = criptografia.generarOtp(contexto);
         persistencia.guardarOtp(Otp.nuevo(contexto, generado.hashCodigo(), generado.hashKeyId(), canal, destino, ahora));
         entrega.programar(canal, destino, generado.codigo());
+        hechos.otpSolicitado(actual.usuarioId());
 
         int restanteDesafio = (int) Math.max(1, Math.min(300, Duration.between(ahora, actual.expiraEn()).toSeconds()));
         return new ResultadoSolicitudOtp.Enviado(CanalMfa.valueOf(canal.name()), enmascarar(destino, canal),

@@ -69,6 +69,7 @@ class LoginServiceTest {
         assertThat(capacidades.eventos).containsSubsequence("buscar:" + CORREO, "preverificar", "tx",
                 "bloquearCuenta", "confirmar", "caducidad", "completar");
         assertThat(capacidades.eventos).doesNotContain("guardAdmin", "fallo");
+        assertThat(capacidades.eventos).containsSubsequence("completar", "audit:SESION_INICIADA");
     }
 
     @Test
@@ -78,7 +79,8 @@ class LoginServiceTest {
         var resultado = servicio.iniciar(CORREO, "mala", CONTEXTO);
 
         assertThat(resultado).isEqualTo(ResultadoLogin.Rechazo.CREDENCIALES_INVALIDAS);
-        assertThat(capacidades.eventos).containsSubsequence("guardAdmin", "bloquearCuenta", "fallo:" + ID);
+        assertThat(capacidades.eventos).containsSubsequence("guardAdmin", "bloquearCuenta", "fallo:" + ID,
+                "audit:SESION_FALLIDA");
         assertThat(sesiones.abiertas).isZero();
     }
 
@@ -158,7 +160,7 @@ class LoginServiceTest {
         assertThat(resultado).isInstanceOf(ResultadoLogin.Iniciada.class);
         assertThat(transacciones).isEqualTo(1);
         assertThat(capacidades.eventos).containsSubsequence("tx", "verificarOtp", "bloquearCuenta", "confirmar",
-                "caducidad", "completar");
+                "caducidad", "completar", "audit:OTP_VERIFICADO", "audit:SESION_INICIADA");
     }
 
     @Test
@@ -234,6 +236,9 @@ class LoginServiceTest {
         }
         @Override public void completarLogin(UUID usuarioId) { eventos.add("completar"); }
         VerificacionOtpLogin otp = new VerificacionOtpLogin.Verificada(ID, REVISION);
+        @Override public void auditar(String accion, boolean exito, Optional<UUID> usuarioId, ContextoPeticion c) {
+            eventos.add("audit:" + accion);
+        }
         @Override public VerificacionOtpLogin verificarOtp(String token, String codigo) {
             eventos.add("verificarOtp");
             return otp;

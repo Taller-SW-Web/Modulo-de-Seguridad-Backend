@@ -74,6 +74,7 @@ public final class LoginService implements LoginPort {
                                  String secreto, ContextoPeticion contexto) {
         if (orientativa.isEmpty()) {
             capacidades.registrarFallo(Optional.empty(), correo, secreto, contexto);
+            capacidades.auditar("SESION_FALLIDA", false, Optional.empty(), contexto);
             return ResultadoLogin.Rechazo.CREDENCIALES_INVALIDAS;
         }
         UUID id = orientativa.get().id();
@@ -86,10 +87,12 @@ public final class LoginService implements LoginPort {
         }
         if (!previa.coincide()) {
             capacidades.registrarFallo(Optional.of(id), correo, secreto, contexto);
+            capacidades.auditar("SESION_FALLIDA", false, Optional.of(id), contexto);
             return ResultadoLogin.Rechazo.CREDENCIALES_INVALIDAS;
         }
         Instant ahora = reloj.instant();
         if (!cuenta.disponible() || !capacidades.proteccionPermiteLogin(id, ahora)) {
+            capacidades.auditar("SESION_FALLIDA", false, Optional.of(id), contexto);
             return ResultadoLogin.Rechazo.CREDENCIALES_INVALIDAS;
         }
         RevisionLogin revision = previa.revision().orElseThrow();
@@ -106,6 +109,7 @@ public final class LoginService implements LoginPort {
             return ResultadoLogin.Rechazo.CONTRASENA_CADUCADA;
         }
         capacidades.completarLogin(id);
+        capacidades.auditar("SESION_INICIADA", true, Optional.of(id), contexto);
         return new ResultadoLogin.Iniciada(sesiones.abrir(id,
                 new IdentidadAutorizada(id, cuenta.nombreCompleto(), cuenta.correo(), roles.roles(), roles.permisos()),
                 contexto));
@@ -115,10 +119,16 @@ public final class LoginService implements LoginPort {
     public ResultadoLogin completarMfa(String challengeToken, String codigo, ContextoPeticion contexto) {
         Objects.requireNonNull(contexto, "contexto");
         return transacciones.ejecutar(() -> switch (capacidades.verificarOtp(challengeToken, codigo)) {
-            case VerificacionOtpLogin.CodigoInvalido invalido -> new ResultadoLogin.CodigoInvalido(invalido.intentosRestantes());
+            case VerificacionOtpLogin.CodigoInvalido invalido -> {
+                capacidades.auditar("OTP_FALLIDO", false, Optional.empty(), contexto);
+                yield new ResultadoLogin.CodigoInvalido(invalido.intentosRestantes());
+            }
             case VerificacionOtpLogin.Rechazo rechazo -> switch (rechazo) {
                 case DESAFIO_INVALIDO -> ResultadoLogin.Rechazo.DESAFIO_INVALIDO;
-                case INTENTOS_AGOTADOS -> ResultadoLogin.Rechazo.OTP_INTENTOS_AGOTADOS;
+                case INTENTOS_AGOTADOS -> {
+                    capacidades.auditar("OTP_FALLIDO", false, Optional.empty(), contexto);
+                    yield ResultadoLogin.Rechazo.OTP_INTENTOS_AGOTADOS;
+                }
                 case CODIGO_EXPIRADO -> ResultadoLogin.Rechazo.OTP_EXPIRADO;
             };
             case VerificacionOtpLogin.Verificada verificada -> completar(verificada, contexto);
@@ -139,6 +149,8 @@ public final class LoginService implements LoginPort {
             return ResultadoLogin.Rechazo.CONTRASENA_CADUCADA;
         }
         capacidades.completarLogin(id);
+        capacidades.auditar("OTP_VERIFICADO", true, Optional.of(id), contexto);
+        capacidades.auditar("SESION_INICIADA", true, Optional.of(id), contexto);
         return new ResultadoLogin.Iniciada(sesiones.abrir(id,
                 new IdentidadAutorizada(id, cuenta.nombreCompleto(), cuenta.correo(), roles.roles(), roles.permisos()),
                 contexto));

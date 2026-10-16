@@ -1,6 +1,8 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.mfa.adapter.in.transaction.OtpLoginTransaccional;
+import com.marketplace.auth_service.mfa.adapter.out.capacidad.HechosMfaAdapter;
 import com.marketplace.auth_service.mfa.adapter.out.entrega.EntregaOtpNoDisponible;
 import com.marketplace.auth_service.mfa.adapter.out.entrega.EntregaOtpSmtp;
 import com.marketplace.auth_service.mfa.application.port.in.OtpLoginPort;
@@ -47,10 +49,10 @@ public class MfaConfig {
 
     @Bean OtpLoginPort otpLoginPort(CuentasMfaPort cuentas, RolesMfaPort roles, RevisionCredencialMfaPort credenciales,
                                     PersistenciaMfaPort persistencia, CriptografiaMfaPort criptografia,
-                                    EntregaOtpPort entrega, ObjectProvider<Clock> reloj) {
+                                    EntregaOtpPort entrega, AuditoriaPort auditoria, ObjectProvider<Clock> reloj) {
         Clock clock = reloj.getIfAvailable(Clock::systemUTC);
         return new OtpLoginTransaccional(new OtpLoginService(
                 new ValidadorDesafioLogin(persistencia, criptografia, cuentas, roles, credenciales, clock),
-                cuentas, persistencia, criptografia, entrega, clock, UUID::randomUUID));
+                cuentas, persistencia, criptografia, entrega, clock, UUID::randomUUID, new HechosMfaAdapter(auditoria)));
     }
 }

@@ -46,6 +46,12 @@ public interface CapacidadesLoginPort {
 
     void completarLogin(UUID usuarioId);
 
+    /**
+     * Hecho no crítico de sesión/OTP (SESION_INICIADA, SESION_FALLIDA, OTP_VERIFICADO, OTP_FALLIDO):
+     * se registra después del commit y su fallo no afecta al login. Nunca lleva secretos.
+     */
+    void auditar(String accion, boolean exito, java.util.Optional<UUID> usuarioId, ContextoPeticion contexto);
+
     /** Verifica el código del desafío (MFA, Luis) dentro de la transacción del login. */
     VerificacionOtpLogin verificarOtp(String challengeToken, String codigo);
 }
