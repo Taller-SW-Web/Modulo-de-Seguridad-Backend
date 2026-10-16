@@ -25,4 +25,7 @@ public interface EfectosCambioContrasenaPort {
 
     /** {@code CONTRASENA_CAMBIADA}: crítica, en el mismo commit. */
     void auditarCambio(UUID usuarioId, ContextoPeticion contexto);
+
+    /** Aviso cifrado y durable en el mismo commit, sin transporte SMTP bajo locks. */
+    void avisarCambio(UUID usuarioId);
 }
