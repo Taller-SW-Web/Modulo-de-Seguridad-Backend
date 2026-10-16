@@ -47,9 +47,9 @@ Solo explícito; nunca `baseline-on-migrate=true`, repair ni DROP.
 
 ## 2. Migrate V101 → V106 + catálogo R__
 
-Copiar los 6 archivos revisados a `src/main/resources/db/migration/` en el PR
-de la ventana y ejecutar con el mismo Flyway CLI del paso 1 (no deja ningún
-proceso levantado):
+Los 6 archivos revisados ya están en `src/main/resources/db/migration/`, idénticos
+a las propuestas (lo comprueba `MigracionesAlineadasTest`). Ejecutar con el mismo
+Flyway CLI del paso 1 (no deja ningún proceso levantado):
 
 ```
 flyway -url="$DB_MIGRATION_JDBC_URL" -user="$DB_MIGRATION_USERNAME" \
