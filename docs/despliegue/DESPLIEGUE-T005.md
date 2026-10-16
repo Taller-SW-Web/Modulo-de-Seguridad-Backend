@@ -43,7 +43,12 @@ Opcionales: `G7_FIXTURES_CUENTAS_HABILITADAS=true` + `G7_FIXTURES_CUENTAS_CLAVE`
 (secreta) para cargar las cuentas de prueba A/B/V/ADM/M/L/C (EP-01-T007) en el
 primer arranque; desactivarlo después. `G7_FIXTURES_CUENTAS_CORREO_ADM` cambia solo el
 correo de la cuenta ADM (ADMIN_SISTEMA, MFA obligatorio) para que el OTP llegue a un buzón
-real en la demo. Sin SMTP configurado, `POST /auth/otp/solicitar` responde 503 sin consumir cuota. `G7_SALUD_BROKER`/`G7_SALUD_CORREO=true`
+real en la demo. Solicitar OTP por EMAIL guarda el correo cifrado en el outbox
+en el mismo commit del código y la cuota: requiere las claves `AUTH_OUTBOX_AES_*`.
+Si falla ese encolado, revierte la solicitud; si SMTP falla después, el mensaje
+queda para el worker, sin devolver cuota ni extender la vigencia del código/desafío.
+Una solicitud aceptada no acredita que el correo haya llegado al buzón.
+`G7_SALUD_BROKER`/`G7_SALUD_CORREO=true`
 cuando existan broker y SMTP (TEC-INFRA-T004).
 
 ## Archivos secretos
