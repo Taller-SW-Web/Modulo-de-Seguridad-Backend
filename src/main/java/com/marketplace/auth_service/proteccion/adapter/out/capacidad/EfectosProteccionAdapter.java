@@ -41,7 +41,7 @@ public final class EfectosProteccionAdapter implements EfectosProteccionPort {
         detalle.put("hasta", hasta == null ? "sin vencimiento" : hasta.toString());
         auditoria.registrarCritica(new RegistroSeguro(UUID.randomUUID(), "CUENTA_BLOQUEADA", "EXITO", "SISTEMA", null,
                 cuenta.usuarioId(), ahora, contexto.ip(), contexto.agente(), detalle));
-        Map<String, String> carga = new HashMap<>(Map.of("usuarioId", cuenta.usuarioId().toString(), "tipo", "AUTOMATICO",
+        Map<String, String> carga = new HashMap<>(Map.of("usuarioId", cuenta.usuarioId().toString(), "automatico", "true",
                 "fecha", ahora.toString()));
         if (hasta != null) {
             carga.put("hasta", hasta.toString());
@@ -61,7 +61,7 @@ public final class EfectosProteccionAdapter implements EfectosProteccionPort {
                 cuenta.usuarioId().toString(), cuenta.usuarioId(), ahora, contexto.ip(), contexto.agente(),
                 Map.of("via", "ENLACE")));
         mensajeria.guardarEvento(new EventoUsuario(UUID.randomUUID(), "usuario.desbloqueado",
-                Map.of("usuarioId", cuenta.usuarioId().toString(), "fecha", ahora.toString())));
+                Map.of("usuarioId", cuenta.usuarioId().toString(), "via", "ENLACE", "fecha", ahora.toString())));
         mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "correo.cuenta_desbloqueada", cuenta.correo(),
                 "Tu cuenta fue desbloqueada y ya puedes iniciar sesión.\n\nSi no fuiste tú, cambia tu contraseña.\n"));
     }

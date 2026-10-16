@@ -6,6 +6,7 @@ import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort
 import com.marketplace.auth_service.auditoria.application.port.out.CifradoMensajesPort;
 import com.marketplace.auth_service.auditoria.application.port.out.EnvioCorreoPort;
 import com.marketplace.auth_service.auditoria.application.port.out.OutboxPort;
+import com.marketplace.auth_service.auditoria.application.port.out.PublicadorEventosPort;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -73,6 +74,57 @@ public final class MensajeriaService implements MensajeriaPort {
             }
         }
         return entregados;
+    }
+
+    /**
+     * Un ciclo del publicador de eventos (TEC-INFRA-T004): reclama eventos pendientes y los publica
+     * con el sobre del catálogo; marca ENVIADO solo tras la confirmación del broker.
+     */
+    public int procesarEventos(PublicadorEventosPort publicador) {
+        Instant ahora = reloj.instant();
+        int publicados = 0;
+        for (OutboxPort.Mensaje m : outbox.reclamarEventos(LOTE, ahora, ahora.plus(LEASE))) {
+            try {
+                publicador.publicar(m.topico(), sobre(m));
+                outbox.marcarEnviado(m.id(), reloj.instant());
+                publicados++;
+            } catch (RuntimeException e) {
+                int intento = m.intentos() + 1;
+                outbox.marcarFallo(m.id(), e.getClass().getSimpleName(),
+                        reloj.instant().plus(Duration.ofMinutes(1L << Math.min(intento - 1, 3))), intento >= MAX_INTENTOS);
+            }
+        }
+        return publicados;
+    }
+
+    /** Sobre común del catálogo: eventoId, tipo, version, fecha, usuarioId y datos propios de cada tipo. */
+    static Map<String, Object> sobre(OutboxPort.Mensaje m) {
+        Map<String, String> carga = m.payload();
+        Map<String, Object> sobre = new java.util.LinkedHashMap<>();
+        sobre.put("eventoId", carga.getOrDefault("eventoId", m.id().toString()));
+        sobre.put("tipo", m.topico());
+        sobre.put("version", 1);
+        sobre.put("fecha", carga.get("fecha"));
+        sobre.put("usuarioId", carga.get("usuarioId"));
+        Map<String, Object> datos = new java.util.LinkedHashMap<>();
+        switch (m.topico()) {
+            case "usuario.bloqueado" -> {
+                datos.put("automatico", !"false".equals(carga.getOrDefault("automatico", "true")));
+                datos.put("hasta", carga.get("hasta"));
+            }
+            case "usuario.desbloqueado" -> datos.put("via", carga.getOrDefault("via", "ENLACE"));
+            case "usuario.roles_cambiados" -> {
+                String roles = carga.getOrDefault("roles", "");
+                datos.put("roles", roles.isBlank() ? java.util.List.of() : java.util.List.of(roles.split(",")));
+            }
+            default -> carga.forEach((clave, valor) -> {
+                if (!java.util.Set.of("eventoId", "tipo", "fecha", "usuarioId").contains(clave)) {
+                    datos.put(clave, valor);
+                }
+            });
+        }
+        sobre.put("datos", datos);
+        return sobre;
     }
 
     static String asunto(String topico) {

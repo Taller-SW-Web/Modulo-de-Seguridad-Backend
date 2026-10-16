@@ -40,6 +40,16 @@ public class OutboxJpaAdapter implements OutboxPort {
     }
 
     @Override @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<Mensaje> reclamarEventos(int lote, Instant ahora, Instant reservadoHasta) {
+        UUID reserva = UUID.randomUUID();
+        if (filas.reservarEventos(lote, utc(ahora), utc(reservadoHasta), reserva) == 0) {
+            return List.of();
+        }
+        return filas.findByReservaId(reserva).stream()
+                .map(f -> new Mensaje(f.getId(), f.getTopico(), f.getPayload(), f.getIntentos())).toList();
+    }
+
+    @Override @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void marcarEnviado(UUID id, Instant ahora) {
         filas.marcarEnviado(id, utc(ahora));
     }

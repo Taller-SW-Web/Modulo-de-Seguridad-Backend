@@ -36,6 +36,8 @@ Render como propuesta por su nivel gratuito con Docker y archivos secretos.
 | `G7_CORREO_REMITENTE` | remitente visible (por defecto el usuario SMTP) | no |
 | `AUTH_OUTBOX_AES_KEY_ID` / `AUTH_OUTBOX_AES_KEY` | id sin `:` y clave Base64 de 32 bytes: cifra destino y texto de los correos del outbox | sí (la clave) |
 | `G7_SPA_URL` | origen público de la SPA para el enlace de desbloqueo del correo | no |
+| `G7_EVENTOS_PUBLICAR` | `true` para publicar los eventos del outbox en RabbitMQ (por defecto `false`: quedan PENDIENTE) | no |
+| `SPRING_RABBITMQ_ADDRESSES` | URI AMQPS del broker, p. ej. `amqps://usuario:clave@host/vhost` (CloudAMQP) | sí |
 
 Opcionales: `G7_FIXTURES_CUENTAS_HABILITADAS=true` + `G7_FIXTURES_CUENTAS_CLAVE`
 (secreta) para cargar las cuentas de prueba A/B/V/ADM/M/L/C (EP-01-T007) en el
