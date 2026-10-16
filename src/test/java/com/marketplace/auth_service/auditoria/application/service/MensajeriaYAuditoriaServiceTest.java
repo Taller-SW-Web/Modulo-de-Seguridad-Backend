@@ -10,9 +10,11 @@ import com.marketplace.auth_service.auditoria.application.dto.EventoUsuario;
 import com.marketplace.auth_service.auditoria.application.dto.RegistroSeguro;
 import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.OutboxPort;
+import com.marketplace.auth_service.auditoria.application.port.out.ReintentoAuditoriaPort;
 import com.marketplace.auth_service.auditoria.domain.exception.AccionNoCatalogadaException;
 import com.marketplace.auth_service.auditoria.domain.exception.DetalleInseguroException;
 import com.marketplace.auth_service.auditoria.domain.exception.MensajeriaNoDisponibleException;
+import com.marketplace.auth_service.auditoria.domain.exception.RegistroDiferidoNoDisponibleException;
 import com.marketplace.auth_service.auditoria.domain.model.RegistroAuditoria;
 import java.time.Clock;
 import java.time.Instant;
@@ -76,6 +78,37 @@ class MensajeriaYAuditoriaServiceTest {
 
         pendientes.forEach(Runnable::run);
         assertThat(registros.filas).hasSize(1);
+    }
+
+    private static final class SiempreFalla implements AuditoriaPersistenciaPort {
+        @Override public long guardar(RegistroAuditoria r) { throw new IllegalStateException("db"); }
+        @Override public boolean existeRegistro(UUID id) { return false; }
+        @Override public AuditoriaPersistenciaPort.Pagina listarDeObjetivo(UUID o, int p, int t) {
+            throw new IllegalStateException("db");
+        }
+    }
+
+    @Test
+    void falloTrasCommitDifiereALaColaDurableSinRevertirElHecho() {
+        var registros = new SiempreFalla();
+        List<RegistroSeguro> diferidos = new ArrayList<>();
+        var servicio = new AuditoriaService(registros, Runnable::run, diferidos::add);
+        var dto = registro(UUID.randomUUID(), "SESION_FALLIDA", TITULAR, Map.of());
+
+        servicio.registrarNoCriticaTrasCommit(dto);
+
+        assertThat(diferidos).containsExactly(dto);
+    }
+
+    @Test
+    void sinColaElFalloSeDeclaraSinAfirmarEscritura() {
+        var registros = new SiempreFalla();
+        ReintentoAuditoriaPort sinCola = registro -> { throw new IllegalStateException("broker"); };
+        var servicio = new AuditoriaService(registros, Runnable::run, sinCola);
+
+        assertThatThrownBy(() -> servicio.registrarNoCriticaTrasCommit(
+                registro(UUID.randomUUID(), "SESION_FALLIDA", TITULAR, Map.of())))
+                .isInstanceOf(RegistroDiferidoNoDisponibleException.class);
     }
 
     @Test
