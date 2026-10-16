@@ -4,7 +4,9 @@ import com.marketplace.auth_service.auditoria.application.dto.PaginaActividad;
 import com.marketplace.auth_service.auditoria.application.dto.RegistroSeguro;
 import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
+import com.marketplace.auth_service.auditoria.application.port.out.ReintentoAuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.TareasTrasCommitPort;
+import com.marketplace.auth_service.auditoria.domain.exception.RegistroDiferidoNoDisponibleException;
 import com.marketplace.auth_service.auditoria.domain.model.ActorTipo;
 import com.marketplace.auth_service.auditoria.domain.model.RegistroAuditoria;
 import com.marketplace.auth_service.auditoria.domain.model.Resultado;
@@ -28,10 +30,20 @@ public final class AuditoriaService implements AuditoriaPort {
 
     private final AuditoriaPersistenciaPort persistencia;
     private final TareasTrasCommitPort trasCommit;
+    private final ReintentoAuditoriaPort reintentos;
 
     public AuditoriaService(AuditoriaPersistenciaPort persistencia, TareasTrasCommitPort trasCommit) {
+        this(persistencia, trasCommit, registro -> {
+            throw new RegistroDiferidoNoDisponibleException(
+                    new IllegalStateException("sin cola de reintento configurada"));
+        });
+    }
+
+    public AuditoriaService(AuditoriaPersistenciaPort persistencia, TareasTrasCommitPort trasCommit,
+                            ReintentoAuditoriaPort reintentos) {
         this.persistencia = Objects.requireNonNull(persistencia);
         this.trasCommit = Objects.requireNonNull(trasCommit);
+        this.reintentos = Objects.requireNonNull(reintentos);
     }
 
     @Override
@@ -43,8 +55,16 @@ public final class AuditoriaService implements AuditoriaPort {
     public void registrarNoCriticaTrasCommit(RegistroSeguro registro) {
         RegistroAuditoria modelo = aModelo(registro);
         trasCommit.trasCommit(() -> {
-            if (!persistencia.existeRegistro(modelo.registroId())) {
-                persistencia.guardar(modelo);
+            try {
+                if (!persistencia.existeRegistro(modelo.registroId())) {
+                    persistencia.guardar(modelo);
+                }
+            } catch (RuntimeException fallo) {
+                try {
+                    reintentos.diferir(registro);
+                } catch (RuntimeException diferido) {
+                    throw new RegistroDiferidoNoDisponibleException(diferido);
+                }
             }
         });
     }
