@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -18,15 +19,17 @@ import java.util.UUID;
 /**
  * Mensajería por outbox (TEC-INFRA-T003/T004). El productor guarda en su commit; el worker
  * reclama correos en lote (SKIP LOCKED, lease 60 s), los descifra y los envía fuera de locks,
- * con reintentos (1, 2, 4, 8 min) y FALLIDO al quinto. Los eventos públicos quedan
- * PENDIENTE hasta que exista el publicador del broker.
+ * con un intento inicial y tres reintentos (10, 30, 60 s); FALLIDO al cuarto fallo.
+ * Los eventos públicos solo se marcan ENVIADO después de la confirmación del broker.
  */
 public final class MensajeriaService implements MensajeriaPort {
 
     public static final String PREFIJO_CORREO = "correo.";
     static final int LOTE = 20;
     static final Duration LEASE = Duration.ofSeconds(60);
-    static final int MAX_INTENTOS = 5;
+    private static final List<Duration> ESPERAS_REINTENTO = List.of(
+            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60));
+    static final int MAX_INTENTOS = 4;
 
     private final OutboxPort outbox;
     private final CifradoMensajesPort cifrado;
@@ -68,9 +71,7 @@ public final class MensajeriaService implements MensajeriaPort {
                 outbox.marcarEnviado(m.id(), reloj.instant());
                 entregados++;
             } catch (RuntimeException e) {
-                int intento = m.intentos() + 1;
-                outbox.marcarFallo(m.id(), e.getClass().getSimpleName(),
-                        reloj.instant().plus(Duration.ofMinutes(1L << Math.min(intento - 1, 3))), intento >= MAX_INTENTOS);
+                registrarFallo(m, e);
             }
         }
         return entregados;
@@ -89,12 +90,17 @@ public final class MensajeriaService implements MensajeriaPort {
                 outbox.marcarEnviado(m.id(), reloj.instant());
                 publicados++;
             } catch (RuntimeException e) {
-                int intento = m.intentos() + 1;
-                outbox.marcarFallo(m.id(), e.getClass().getSimpleName(),
-                        reloj.instant().plus(Duration.ofMinutes(1L << Math.min(intento - 1, 3))), intento >= MAX_INTENTOS);
+                registrarFallo(m, e);
             }
         }
         return publicados;
+    }
+
+    private void registrarFallo(OutboxPort.Mensaje mensaje, RuntimeException fallo) {
+        int intento = mensaje.intentos() + 1;
+        boolean definitivo = intento >= MAX_INTENTOS;
+        Instant proximo = definitivo ? null : reloj.instant().plus(ESPERAS_REINTENTO.get(intento - 1));
+        outbox.marcarFallo(mensaje.id(), fallo.getClass().getSimpleName(), proximo, definitivo);
     }
 
     /** Sobre común del catálogo: eventoId, tipo, version, fecha, usuarioId y datos propios de cada tipo. */
