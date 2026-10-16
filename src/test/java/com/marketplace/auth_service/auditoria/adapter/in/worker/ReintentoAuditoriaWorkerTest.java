@@ -19,6 +19,7 @@ import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -60,6 +61,7 @@ class ReintentoAuditoriaWorkerTest {
                     BROKER.getHost(), BROKER.getAmqpPort());
             fabrica.setUsername(BROKER.getAdminUsername());
             fabrica.setPassword(BROKER.getAdminPassword());
+            fabrica.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.SIMPLE);
             return fabrica;
         }
 
@@ -117,6 +119,13 @@ class ReintentoAuditoriaWorkerTest {
     @Autowired ReintentoAuditoriaWorker worker;
     @Autowired RabbitTemplate rabbit;
     @Autowired JdbcTemplate jdbc;
+    @Autowired RabbitAdmin admin;
+
+    @org.junit.jupiter.api.BeforeEach
+    void purgarColas() {
+        admin.purgeQueue(ColaReintentoAuditoriaRabbit.COLA, false);
+        admin.purgeQueue(ColaReintentoAuditoriaRabbit.DLQ, false);
+    }
 
     private static RegistroSeguro dto() {
         return new RegistroSeguro(UUID.randomUUID(), "SESION_FALLIDA", "FALLO", "USUARIO",
