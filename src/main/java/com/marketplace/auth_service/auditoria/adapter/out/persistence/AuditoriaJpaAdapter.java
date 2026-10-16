@@ -4,6 +4,7 @@ import com.marketplace.auth_service.auditoria.adapter.out.persistence.mapper.Aud
 import com.marketplace.auth_service.auditoria.adapter.out.persistence.repository.AuditoriaSeguridadJpaRepository;
 import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
 import com.marketplace.auth_service.auditoria.domain.model.RegistroAuditoria;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,5 +25,12 @@ public class AuditoriaJpaAdapter implements AuditoriaPersistenciaPort {
 
     @Override public boolean existeRegistro(UUID registroId) {
         return registros.existsByRegistroId(registroId);
+    }
+
+    @Override public Pagina listarDeObjetivo(UUID objetivo, int pagina, int tamano) {
+        var resultado = registros.findByObjetivoUsuarioIdOrderByFechaDescIdDesc(objetivo, PageRequest.of(pagina - 1, tamano));
+        return new Pagina(resultado.getContent().stream()
+                .flatMap(fila -> AuditoriaPersistenceMapper.aDominio(fila).stream()).toList(),
+                resultado.getTotalElements());
     }
 }
