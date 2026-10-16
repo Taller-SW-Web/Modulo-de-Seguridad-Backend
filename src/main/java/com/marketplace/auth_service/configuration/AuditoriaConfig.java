@@ -112,7 +112,8 @@ public class AuditoriaConfig {
     @Bean
     ReintentoAuditoriaWorker reintentoAuditoriaWorker(org.springframework.amqp.rabbit.core.RabbitTemplate rabbit,
                                                      ObjectMapper json,
-                                                     AuditoriaPersistenciaPort persistencia) {
-        return new ReintentoAuditoriaWorker(rabbit, json, persistencia);
+                                                     AuditoriaPersistenciaPort persistencia,
+                                                     PlatformTransactionManager transacciones) {
+        return new ReintentoAuditoriaWorker(rabbit, json, persistencia, transacciones);
     }
 }

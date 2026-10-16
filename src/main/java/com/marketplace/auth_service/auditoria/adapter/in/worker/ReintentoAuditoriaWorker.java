@@ -20,37 +20,46 @@ import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Reintento durable de auditoría no crítica (EP-06-T003): sondea la cola
  * privada, inserta con deduplicación y reintenta 10/30/60 s; al cuarto fallo
  * rechaza a la DLQ. Nunca revierte el hecho ya confirmado.
+ *
+ * <p>Orden garantizado: el ack (o la republicación confirmada) ocurre siempre
+ * <b>después</b> de confirmar la transacción de PostgreSQL, y la republicación
+ * espera confirmación del broker <b>antes</b> de confirmar el original. Así un
+ * fallo de commit o de republicación nunca hace desaparecer el registro.
  */
 public class ReintentoAuditoriaWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ReintentoAuditoriaWorker.class);
     static final Duration[] ESPERAS = {Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60)};
     static final int MAX_INTENTOS = 3;
+    private static final long ESPERA_CONFIRMACION_MS = 5_000;
 
     private final RabbitTemplate rabbit;
     private final ObjectMapper json;
     private final AuditoriaPersistenciaPort persistencia;
+    private final TransactionTemplate txNueva;
 
     public ReintentoAuditoriaWorker(RabbitTemplate rabbit, ObjectMapper json,
-                                    AuditoriaPersistenciaPort persistencia) {
+                                    AuditoriaPersistenciaPort persistencia,
+                                    PlatformTransactionManager transacciones) {
         this.rabbit = Objects.requireNonNull(rabbit);
         this.json = Objects.requireNonNull(json);
         this.persistencia = Objects.requireNonNull(persistencia);
+        Objects.requireNonNull(transacciones, "transacciones");
+        this.txNueva = new TransactionTemplate(transacciones);
     }
 
     @Scheduled(fixedDelayString = "${g7.auditoria.reintento-ms:2000}")
-    @Transactional
     public void reintentar() {
         try {
             rabbit.execute(channel -> {
@@ -77,12 +86,12 @@ public class ReintentoAuditoriaWorker {
             log.warn("auditoría: mensaje ilegible a DLQ ({})", e.getClass().getSimpleName());
             return;
         }
-        if (persistencia.existeRegistro(dto.registroId())) {
+        if (existe(dto.registroId())) {
             canal.basicAck(entrega, false);
             return;
         }
         try {
-            persistencia.guardar(aModelo(dto));
+            guardar(dto);
             canal.basicAck(entrega, false);
         } catch (RuntimeException e) {
             if (intentos >= MAX_INTENTOS) {
@@ -91,9 +100,17 @@ public class ReintentoAuditoriaWorker {
                 return;
             }
             Thread.sleep(ESPERAS[intentos].toMillis());
-            reencolar(canal, dto, intentos + 1);
+            reencolarConfirmado(canal, dto, intentos + 1);
             canal.basicAck(entrega, false);
         }
+    }
+
+    private boolean existe(UUID registroId) {
+        return Boolean.TRUE.equals(txNueva.execute(estado -> persistencia.existeRegistro(registroId)));
+    }
+
+    private void guardar(RegistroSeguro dto) {
+        txNueva.executeWithoutResult(estado -> persistencia.guardar(aModelo(dto)));
     }
 
     private int intentosDe(com.rabbitmq.client.BasicProperties propiedades) {
@@ -150,7 +167,7 @@ public class ReintentoAuditoriaWorker {
                 dto.detalle());
     }
 
-    private void reencolar(Channel canal, RegistroSeguro dto, int intentos) throws Exception {
+    private void reencolarConfirmado(Channel canal, RegistroSeguro dto, int intentos) throws Exception {
         Map<String, Object> cabeceras = new LinkedHashMap<>();
         cabeceras.put(ColaReintentoAuditoriaRabbit.INTENTOS, intentos);
         com.rabbitmq.client.AMQP.BasicProperties propiedades =
@@ -171,7 +188,9 @@ public class ReintentoAuditoriaWorker {
         cuerpo.put("ip", dto.ip());
         cuerpo.put("agente", dto.agente());
         cuerpo.put("detalle", dto.detalle());
+        canal.confirmSelect();
         canal.basicPublish("", ColaReintentoAuditoriaRabbit.COLA, propiedades,
                 json.writeValueAsBytes(cuerpo));
+        canal.waitForConfirmsOrDie(ESPERA_CONFIRMACION_MS);
     }
 }
