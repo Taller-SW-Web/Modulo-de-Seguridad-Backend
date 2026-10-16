@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.credencial.application.port.in.CredencialesPort;
 import com.marketplace.auth_service.mfa.application.port.in.MfaPort;
@@ -26,9 +27,9 @@ public class LoginConfig {
 
     @Bean
     LoginPort loginPort(CuentasPort cuentas, CredencialesPort credenciales, ProteccionPort proteccion,
-                        AutorizacionPort autorizacion, MfaPort mfa, OtpLoginPort otp, SesionesPort sesiones,
+                        AutorizacionPort autorizacion, MfaPort mfa, OtpLoginPort otp, AuditoriaPort auditoria, SesionesPort sesiones,
                         PlatformTransactionManager transacciones, ObjectProvider<Clock> clock) {
-        return new LoginService(new PuenteLogin(cuentas, credenciales, proteccion, autorizacion, mfa, otp), sesiones,
+        return new LoginService(new PuenteLogin(cuentas, credenciales, proteccion, autorizacion, mfa, otp, auditoria), sesiones,
                 new TransaccionLoginSpring(transacciones), clock.getIfAvailable(Clock::systemUTC));
     }
 }

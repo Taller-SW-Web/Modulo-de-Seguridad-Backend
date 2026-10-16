@@ -1,5 +1,7 @@
 package com.marketplace.auth_service.sesion.adapter.out.capacidad;
 
+import com.marketplace.auth_service.auditoria.application.dto.RegistroSeguro;
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.credencial.application.dto.RevisionCredencial;
 import com.marketplace.auth_service.credencial.application.dto.SecretoEfimero;
@@ -42,10 +44,12 @@ public final class PuenteLogin implements CapacidadesLoginPort {
     private final AutorizacionPort autorizacion;
     private final MfaPort mfa;
     private final OtpLoginPort otp;
+    private final AuditoriaPort auditoria;
 
     public PuenteLogin(CuentasPort cuentas, CredencialesPort credenciales, ProteccionPort proteccion,
-                       AutorizacionPort autorizacion, MfaPort mfa, OtpLoginPort otp) {
+                       AutorizacionPort autorizacion, MfaPort mfa, OtpLoginPort otp, AuditoriaPort auditoria) {
         this.otp = otp;
+        this.auditoria = auditoria;
         this.cuentas = cuentas;
         this.credenciales = credenciales;
         this.proteccion = proteccion;
@@ -130,6 +134,13 @@ public final class PuenteLogin implements CapacidadesLoginPort {
     @Override
     public void completarLogin(UUID usuarioId) {
         proteccion.completarLogin(usuarioId);
+    }
+
+    @Override
+    public void auditar(String accion, boolean exito, Optional<UUID> usuarioId, ContextoPeticion contexto) {
+        auditoria.registrarNoCriticaTrasCommit(new RegistroSeguro(UUID.randomUUID(), accion, exito ? "EXITO" : "FALLO",
+                usuarioId.isPresent() ? "USUARIO" : "SISTEMA", usuarioId.map(UUID::toString).orElse(null),
+                usuarioId.orElse(null), Instant.now(), contexto.ip(), contexto.agente(), java.util.Map.of()));
     }
 
     @Override
