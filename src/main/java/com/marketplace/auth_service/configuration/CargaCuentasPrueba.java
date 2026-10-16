@@ -61,10 +61,26 @@ public final class CargaCuentasPrueba {
     private final CredencialesPort politica;
     private final TransactionTemplate transaccion;
     private final SecretoEfimero clave;
+    private final List<Cuenta> catalogo;
 
     public CargaCuentasPrueba(AltaCuentaPruebaInterna cuentas, CredencialPruebaInterna credenciales,
                               RolesPruebaInterna roles, CredencialesPort politica,
                               PlatformTransactionManager transacciones, SecretoEfimero clave) {
+        this(cuentas, credenciales, roles, politica, transacciones, clave, null);
+    }
+
+    /**
+     * {@code correoAdm}: buzón real para la cuenta ADM, que necesita recibir el OTP en una demo
+     * (MFA obligatorio por rol de gestión). Solo cambia el correo; el UUID sigue siendo el estable.
+     */
+    public CargaCuentasPrueba(AltaCuentaPruebaInterna cuentas, CredencialPruebaInterna credenciales,
+                              RolesPruebaInterna roles, CredencialesPort politica,
+                              PlatformTransactionManager transacciones, SecretoEfimero clave, String correoAdm) {
+        this.catalogo = correoAdm == null || correoAdm.isBlank() ? CATALOGO : CATALOGO.stream()
+                .map(c -> !"ADM".equals(c.etiqueta()) ? c : new Cuenta(c.etiqueta(),
+                        new CuentaPrueba(c.identidad().id(), correoAdm, c.identidad().nombres(),
+                                c.identidad().apellidos(), c.identidad().mfaVoluntario()), c.roles()))
+                .toList();
         this.cuentas = Objects.requireNonNull(cuentas);
         this.credenciales = Objects.requireNonNull(credenciales);
         this.roles = Objects.requireNonNull(roles);
@@ -77,7 +93,7 @@ public final class CargaCuentasPrueba {
     public List<Resultado> cargar() {
         return transaccion.execute(estado -> {
             List<Resultado> resultados = new ArrayList<>();
-            for (Cuenta cuenta : CATALOGO) {
+            for (Cuenta cuenta : catalogo) {
                 UUID id = cuenta.identidad().id();
                 boolean creada = cuentas.asegurar(cuenta.identidad());
                 if (creada) {

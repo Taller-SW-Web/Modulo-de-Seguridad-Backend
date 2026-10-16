@@ -193,4 +193,20 @@ class CuentasPruebaPostgresTest {
         assertThat(creadas).isEmpty();
         assertThat(jdbc.queryForObject("select count(*) from credencial", Integer.class)).isZero();
     }
+
+    @Test
+    void correoAdmConfigurableSoloCambiaElCorreoDeLaCuentaAdm() {
+        var conCorreo = new CargaCuentasPrueba(altas, credencialesPrueba, roles, credenciales, transacciones,
+                new SecretoEfimero(CLAVE), "  Demo.Admin@Ejemplo.test ");
+
+        var resultados = conCorreo.cargar();
+
+        assertThat(jdbc.queryForObject("select correo from usuario where id = ?", String.class, ADM))
+                .isEqualTo("demo.admin@ejemplo.test");
+        assertThat(jdbc.queryForObject("select correo from usuario where id = ?", String.class, A))
+                .isEqualTo("cliente.a@fixtures.g7.test");
+        assertThat(resultados).filteredOn(r -> r.etiqueta().equals("ADM")).singleElement()
+                .extracting(CargaCuentasPrueba.Resultado::id).isEqualTo(ADM);
+        assertThat(autorizacion.resolver(ADM).codigosRoles()).containsExactly("ADMIN_SISTEMA");
+    }
 }
