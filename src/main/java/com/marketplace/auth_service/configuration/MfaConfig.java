@@ -49,10 +49,13 @@ public class MfaConfig {
 
     @Bean OtpLoginPort otpLoginPort(CuentasMfaPort cuentas, RolesMfaPort roles, RevisionCredencialMfaPort credenciales,
                                     PersistenciaMfaPort persistencia, CriptografiaMfaPort criptografia,
-                                    EntregaOtpPort entrega, AuditoriaPort auditoria, ObjectProvider<Clock> reloj) {
+                                    EntregaOtpPort entrega, ObjectProvider<AuditoriaPort> auditoria,
+                                    ObjectProvider<Clock> reloj) {
+        AuditoriaPort registro = auditoria.getIfAvailable();
         Clock clock = reloj.getIfAvailable(Clock::systemUTC);
         return new OtpLoginTransaccional(new OtpLoginService(
                 new ValidadorDesafioLogin(persistencia, criptografia, cuentas, roles, credenciales, clock),
-                cuentas, persistencia, criptografia, entrega, clock, UUID::randomUUID, new HechosMfaAdapter(auditoria)));
+                cuentas, persistencia, criptografia, entrega, clock, UUID::randomUUID,
+                registro == null ? usuario -> { } : new HechosMfaAdapter(registro)));
     }
 }
