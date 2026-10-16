@@ -28,10 +28,18 @@ Render como propuesta por su nivel gratuito con Docker y archivos secretos.
 | `G7_PASSWORD_COMUNES_ARCHIVO` | `/etc/secrets/password-comunes.txt` | (ruta) |
 | `G7_CORS_ORIGENES` | origen exacto de la SPA, p. ej. `https://<spa>.vercel.app` (varios: separados por coma; nunca `*`) | no |
 | `PORT` | lo inyecta la plataforma (por defecto 8080) | no |
+| `AUTH_FALLOS_HMAC_KEY_ID` / `AUTH_FALLOS_HMAC_KEY` | id corto y clave Base64 ≥ 32 bytes para huellas de fallos (protección) | sí (la clave) |
+| `AUTH_OTP_HMAC_KEY_ID` / `AUTH_OTP_HMAC_KEY` | id corto y clave Base64 ≥ 32 bytes para desafíos y códigos OTP | sí (la clave) |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | SMTP real, p. ej. `smtp.gmail.com` / `587` | no |
+| `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | cuenta y contraseña de aplicación del SMTP | sí |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` / `…_STARTTLS_ENABLE` | `true` / `true` | no |
+| `G7_CORREO_REMITENTE` | remitente visible (por defecto el usuario SMTP) | no |
 
 Opcionales: `G7_FIXTURES_CUENTAS_HABILITADAS=true` + `G7_FIXTURES_CUENTAS_CLAVE`
 (secreta) para cargar las cuentas de prueba A/B/V/ADM/M/L/C (EP-01-T007) en el
-primer arranque; desactivarlo después. `G7_SALUD_BROKER`/`G7_SALUD_CORREO=true`
+primer arranque; desactivarlo después. `G7_FIXTURES_CUENTAS_CORREO_ADM` cambia solo el
+correo de la cuenta ADM (ADMIN_SISTEMA, MFA obligatorio) para que el OTP llegue a un buzón
+real en la demo. Sin SMTP configurado, `POST /auth/otp/solicitar` responde 503 sin consumir cuota. `G7_SALUD_BROKER`/`G7_SALUD_CORREO=true`
 cuando existan broker y SMTP (TEC-INFRA-T004).
 
 ## Archivos secretos

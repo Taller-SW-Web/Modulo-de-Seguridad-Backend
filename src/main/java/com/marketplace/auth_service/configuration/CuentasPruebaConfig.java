@@ -61,12 +61,14 @@ public class CuentasPruebaConfig {
     CargaCuentasPrueba cargaCuentasPrueba(AltaCuentaPruebaInterna cuentas, CredencialPruebaInterna credenciales,
                                           RolesPruebaInterna roles, CredencialesPort politica,
                                           PlatformTransactionManager transacciones,
-                                          @Value("${g7.fixtures.cuentas.clave:}") String clave) {
+                                          @Value("${g7.fixtures.cuentas.clave:}") String clave,
+                                          @Value("${g7.fixtures.cuentas.correo-adm:}") String correoAdm) {
         if (clave.isBlank()) {
             throw new IllegalStateException("g7.fixtures.cuentas.habilitadas=true exige g7.fixtures.cuentas.clave "
                     + "(G7_FIXTURES_CUENTAS_CLAVE)");
         }
-        return new CargaCuentasPrueba(cuentas, credenciales, roles, politica, transacciones, new SecretoEfimero(clave));
+        return new CargaCuentasPrueba(cuentas, credenciales, roles, politica, transacciones, new SecretoEfimero(clave),
+                correoAdm);
     }
 
     @Bean
