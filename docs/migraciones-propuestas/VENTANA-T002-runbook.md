@@ -56,3 +56,16 @@ psql "$DB_MIGRATION_JDBC_URL" -f docs/migraciones-propuestas/grants-g7-runtime.s
 3. `DELETE/TRUNCATE` sobre auditoría → rechazados.
 4. Lectura/escritura operativa en tablas de dominio → OK.
 5. `flyway info` muestra 100 (baseline) + 101–106 aplicadas, 0 pendientes.
+
+## 5. Ejecución 15-oct-2026 (Christian, en solitario por instrucción expresa)
+
+- Prechequeos: 22 tablas = diseño, sin historial Flyway, token_refresco vacío.
+- Baseline explícito 100 + migrate V101→V106 + R__ catálogo: 7/7 SUCCESS (Flyway 11.7.2).
+- Grants aplicados salvo ALTER ROLE (el pooler lo prohíbe; defaults ya mínimos,
+  verificado: nosuperuser, nobypassrls, login).
+- Verificado como g7_runtime: INSERT ok; UPDATE/DELETE/TRUNCATE rechazados; SELECT ok.
+  Fila de prueba eliminada (auditoría en 0 filas).
+- Backup: plan free SIN backups (verificado en dashboard con captura).
+  Riesgo aceptado: tablas vacías + DDL solo aditivo + inventario/schema en repo.
+- Passwords solo en memoria; g7_runtime en custodia privada de Christian.
+- Estado: ventana EJECUTADA. Pendiente confirmación del equipo sobre el riesgo sin backup.
