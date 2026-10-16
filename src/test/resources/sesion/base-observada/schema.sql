@@ -170,20 +170,19 @@ CREATE TABLE IF NOT EXISTS "perfil_cliente" (
 	"documento_cifrado" text,
 	"fecha_nacimiento" date,
 	"documento_key_id" varchar(50),
-	"documento_hmac" varchar(64),
 	PRIMARY KEY("usuario_id"),
-	-- Un documento sin tipo, cifrado sin la clave con que se cifró o sin su HMAC no se puede leer ni buscar.
+	-- Un documento sin tipo o cifrado sin la clave con que se cifró no se puede leer ni buscar.
+	-- V107 agrega "documento_hmac" con su CHECK e índice; esta base es pre-V107 a propósito
+	-- para que los tests que aplican db/migration la migren sin duplicar la columna.
 	CONSTRAINT "ck_perfil_cliente_documento" CHECK (
-		("tipo_documento" IS NULL AND "documento_cifrado" IS NULL AND "documento_key_id" IS NULL AND "documento_hmac" IS NULL)
-		OR ("tipo_documento" IS NOT NULL AND "documento_cifrado" IS NOT NULL AND "documento_key_id" IS NOT NULL AND "documento_hmac" IS NOT NULL)
+		("tipo_documento" IS NULL AND "documento_cifrado" IS NULL AND "documento_key_id" IS NULL)
+		OR ("tipo_documento" IS NOT NULL AND "documento_cifrado" IS NOT NULL AND "documento_key_id" IS NOT NULL)
 	)
 );
 COMMENT ON TABLE "perfil_cliente" IS 'Atributos de CLIENTE (SPEC-16). Documento cifrado AES con clave fuera de BD.';
 COMMENT ON COLUMN "perfil_cliente"."documento_cifrado" IS 'AES; se expone enmascarado *****234';
 COMMENT ON COLUMN "perfil_cliente"."documento_key_id" IS 'key_id de la clave AES, para rotación sin re-cifrar.';
-COMMENT ON COLUMN "perfil_cliente"."documento_hmac" IS 'HMAC-SHA256 en hex de tipo y número normalizados, con clave de servidor: permite buscar sin descifrar (ADR-007, RF-03.8).';
 -- Un documento pertenece a una sola cuenta, y es lo que usa la búsqueda en tienda (RF-03.7).
-CREATE UNIQUE INDEX "uq_perfil_cliente_documento_hmac" ON "perfil_cliente" ("documento_hmac");
 
 CREATE TABLE IF NOT EXISTS "perfil_vendedor" (
 	"usuario_id" uuid NOT NULL,
