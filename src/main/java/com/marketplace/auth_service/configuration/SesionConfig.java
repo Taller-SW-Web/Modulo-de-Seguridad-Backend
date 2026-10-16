@@ -10,6 +10,7 @@ import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.*;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
+import com.marketplace.auth_service.proteccion.application.port.in.ProteccionPort;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,8 +21,10 @@ import java.time.Clock;
 public class SesionConfig {
     @Bean CriptografiaSesionPort criptografiaSesionPort() { return new SesionCryptoAdapter(); }
     @Bean FirmadorAccesoPort firmadorAccesoPort(FirmaPort firma) { return new PuenteFirmaAcceso(firma); }
-    @Bean PuenteCuentasSesion puenteCuentasSesion(CuentasPort cuentas, AutorizacionPort autorizacion) {
-        return new PuenteCuentasSesion(cuentas, autorizacion);
+    @Bean PuenteCuentasSesion puenteCuentasSesion(CuentasPort cuentas, AutorizacionPort autorizacion,
+            ObjectProvider<ProteccionPort> proteccion, ObjectProvider<Clock> reloj) {
+        return new PuenteCuentasSesion(cuentas, autorizacion, proteccion.getIfAvailable(),
+                reloj.getIfAvailable(Clock::systemUTC));
     }
     @Bean SesionesPort sesionesPort(PersistenciaSesionPort persistencia, CriptografiaSesionPort criptografia,
             FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad, BloqueoCuentaSesionPort cuentas,
