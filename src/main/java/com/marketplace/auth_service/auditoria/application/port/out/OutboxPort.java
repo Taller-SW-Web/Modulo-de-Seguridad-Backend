@@ -16,6 +16,9 @@ public interface OutboxPort {
     /** Reserva hasta {@code lote} correos pendientes vencidos para reintento; nunca dos workers el mismo. */
     List<Mensaje> reclamarCorreos(int lote, Instant ahora, Instant reservadoHasta);
 
+    /** Reserva hasta {@code lote} eventos públicos pendientes (todo lo que no es correo). */
+    List<Mensaje> reclamarEventos(int lote, Instant ahora, Instant reservadoHasta);
+
     /** Enviado: marca ENVIADO y purga el contenido sensible del payload. */
     void marcarEnviado(UUID id, Instant ahora);
 

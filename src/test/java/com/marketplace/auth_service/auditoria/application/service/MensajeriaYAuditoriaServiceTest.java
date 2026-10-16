@@ -103,6 +103,10 @@ class MensajeriaYAuditoriaServiceTest {
             return filas.values().stream().filter(m -> m.topico().startsWith("correo.")
                     && "PENDIENTE".equals(estado.get(m.id()))).limit(lote).toList();
         }
+        @Override public List<Mensaje> reclamarEventos(int lote, Instant ahora, Instant hasta) {
+            return filas.values().stream().filter(m -> !m.topico().startsWith("correo.")
+                    && "PENDIENTE".equals(estado.get(m.id()))).limit(lote).toList();
+        }
         @Override public void marcarEnviado(UUID id, Instant ahora) { estado.put(id, "ENVIADO"); filas.put(id,
                 new Mensaje(id, filas.get(id).topico(), Map.of(), filas.get(id).intentos())); }
         @Override public void marcarFallo(UUID id, String error, Instant proximo, boolean definitivo) {
@@ -174,5 +178,44 @@ class MensajeriaYAuditoriaServiceTest {
         alterado[alterado.length - 3] = alterado[alterado.length - 3] == 'A' ? 'B' : 'A';
         assertThatThrownBy(() -> aes.descifrar(new String(alterado))).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new CifradoMensajesAesGcm("k1", new byte[16])).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> datos(Map<String, Object> sobre) {
+        return (Map<String, Object>) sobre.get("datos");
+    }
+
+    @Test
+    void eventosSePublicanConElSobreDelCatalogoYSoloSeMarcanTrasConfirmar() {
+        var outbox = new Outbox();
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
+        UUID bloqueo = UUID.randomUUID();
+        UUID roles = UUID.randomUUID();
+        servicio.guardarEvento(new EventoUsuario(bloqueo, "usuario.bloqueado", Map.of("usuarioId", TITULAR.toString(),
+                "automatico", "true", "fecha", AHORA.toString())));
+        servicio.guardarEvento(new EventoUsuario(roles, "usuario.roles_cambiados", Map.of("usuarioId", TITULAR.toString(),
+                "roles", "CLIENTE,VENDEDOR", "fecha", AHORA.toString())));
+        List<Map<String, Object>> publicados = new ArrayList<>();
+
+        assertThat(servicio.procesarEventos((tipo, sobre) -> publicados.add(sobre))).isEqualTo(2);
+
+        assertThat(publicados.get(0)).containsEntry("eventoId", bloqueo.toString()).containsEntry("tipo", "usuario.bloqueado")
+                .containsEntry("version", 1).containsEntry("usuarioId", TITULAR.toString());
+        assertThat(datos(publicados.get(0))).containsEntry("automatico", true).containsEntry("hasta", null);
+        assertThat(datos(publicados.get(1))).containsEntry("roles", List.of("CLIENTE", "VENDEDOR"));
+        assertThat(outbox.estado.get(bloqueo)).isEqualTo("ENVIADO");
+    }
+
+    @Test
+    void brokerSinConfirmarDejaElEventoPendienteParaReintentar() {
+        var outbox = new Outbox();
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
+        UUID id = UUID.randomUUID();
+        servicio.guardarEvento(new EventoUsuario(id, "usuario.desbloqueado", Map.of("usuarioId", TITULAR.toString())));
+
+        assertThat(servicio.procesarEventos((tipo, sobre) -> { throw new IllegalStateException("sin confirmación"); }))
+                .isZero();
+        assertThat(outbox.estado.get(id)).isEqualTo("PENDIENTE");
+        assertThat(outbox.filas.get(id).intentos()).isEqualTo(1);
     }
 }

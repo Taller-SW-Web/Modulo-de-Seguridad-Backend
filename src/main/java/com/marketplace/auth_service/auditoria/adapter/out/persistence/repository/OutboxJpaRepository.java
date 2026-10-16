@@ -23,6 +23,18 @@ public interface OutboxJpaRepository extends JpaRepository<OutboxJpaEntity, UUID
     int reservar(@Param("lote") int lote, @Param("ahora") OffsetDateTime ahora,
                  @Param("hasta") OffsetDateTime hasta, @Param("reserva") UUID reserva);
 
+    /** Igual que {@link #reservar} para los eventos públicos (topico fuera de correo.%). */
+    @Modifying
+    @Query(value = """
+            UPDATE outbox SET reservado_hasta = :hasta, reserva_id = :reserva
+            WHERE id IN (SELECT id FROM outbox
+                         WHERE estado = 'PENDIENTE' AND topico NOT LIKE 'correo.%'
+                           AND (proximo_intento_en IS NULL OR proximo_intento_en <= :ahora)
+                           AND (reservado_hasta IS NULL OR reservado_hasta < :ahora)
+                         ORDER BY creado_en LIMIT :lote FOR UPDATE SKIP LOCKED)""", nativeQuery = true)
+    int reservarEventos(@Param("lote") int lote, @Param("ahora") OffsetDateTime ahora,
+                        @Param("hasta") OffsetDateTime hasta, @Param("reserva") UUID reserva);
+
     List<OutboxJpaEntity> findByReservaId(UUID reserva);
 
     /** Enviado: purga el contenido sensible (destino y texto cifrados). */
