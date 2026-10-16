@@ -86,7 +86,15 @@ public class ReintentoAuditoriaWorker {
             log.warn("auditoría: mensaje ilegible a DLQ ({})", e.getClass().getSimpleName());
             return;
         }
-        if (existe(dto.registroId())) {
+        boolean yaExiste;
+        try {
+            yaExiste = existe(dto.registroId());
+        } catch (RuntimeException e) {
+            canal.basicNack(entrega, false, true);
+            log.warn("auditoría: deduplicación fallida, mensaje reencolado ({})", e.getClass().getSimpleName());
+            return;
+        }
+        if (yaExiste) {
             canal.basicAck(entrega, false);
             return;
         }
@@ -99,9 +107,21 @@ public class ReintentoAuditoriaWorker {
                 log.warn("auditoría: registro {} a DLQ tras {} intentos", dto.registroId(), intentos);
                 return;
             }
-            Thread.sleep(ESPERAS[intentos].toMillis());
-            reencolarConfirmado(canal, dto, intentos + 1);
-            canal.basicAck(entrega, false);
+            try {
+                Thread.sleep(ESPERAS[intentos].toMillis());
+            } catch (InterruptedException interrumpido) {
+                Thread.currentThread().interrupt();
+                canal.basicNack(entrega, false, true);
+                return;
+            }
+            try {
+                reencolarConfirmado(canal, dto, intentos + 1);
+                canal.basicAck(entrega, false);
+            } catch (Exception republicado) {
+                canal.basicNack(entrega, false, true);
+                log.warn("auditoría: republicación fallida, mensaje reencolado ({})",
+                        republicado.getClass().getSimpleName());
+            }
         }
     }
 
