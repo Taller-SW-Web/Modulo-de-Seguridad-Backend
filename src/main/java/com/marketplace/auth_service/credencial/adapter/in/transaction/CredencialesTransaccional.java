@@ -12,7 +12,13 @@ import java.util.UUID;
 public class CredencialesTransaccional implements CredencialesPort {
     private final CredencialesPort delegado;
     public CredencialesTransaccional(CredencialesPort delegado) { this.delegado = delegado; }
-    @Override @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+    /**
+     * Sin transacción propia: Argon2id es lento a propósito y no debe retener una conexión del
+     * pool mientras calcula (con 50 logins concurrentes y 5 conexiones, el pool se agotaba). La
+     * lectura de la credencial usa la transacción corta del repositorio; si el llamador ya tiene
+     * una, se une a ella (EP-02-T007).
+     */
+    @Override @Transactional(propagation = Propagation.SUPPORTS)
     public PreverificacionCredencial preverificar(Optional<UUID> usuarioId, SecretoEfimero secreto) {
         return delegado.preverificar(usuarioId, secreto);
     }
@@ -22,7 +28,8 @@ public class CredencialesTransaccional implements CredencialesPort {
     public boolean evaluarCaducidad(UUID usuarioId, Set<Rol> roles, Instant instante) {
         return delegado.evaluarCaducidad(usuarioId, roles, instante);
     }
-    @Override @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+    /** Igual que {@link #preverificar}: compara contra el historial con Argon2id sin retener conexión. */
+    @Override @Transactional(propagation = Propagation.SUPPORTS)
     public ValidacionPassword validarNueva(UUID usuarioId, SecretoEfimero secreto) {
         return delegado.validarNueva(usuarioId, secreto);
     }
