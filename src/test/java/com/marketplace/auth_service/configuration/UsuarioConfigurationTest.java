@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.usuario.adapter.in.transaction.ConsultaUsuariosTransaccional;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.*;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.repository.*;
@@ -14,8 +15,10 @@ import static org.mockito.Mockito.*;
 class UsuarioConfigurationTest {
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     @ComponentScan(basePackages="com.marketplace.auth_service.usuario",
+            // Solo componentes de producción: fuera las configuraciones propias de otras pruebas.
             excludeFilters=@ComponentScan.Filter(type=FilterType.ANNOTATION,
-                    classes=org.springframework.boot.test.context.TestConfiguration.class))
+                    classes={org.springframework.boot.test.context.TestConfiguration.class,
+                            org.springframework.boot.SpringBootConfiguration.class}))
     static class EscaneoReal { }
     final ApplicationContextRunner runner=new ApplicationContextRunner()
             .withUserConfiguration(UsuarioConfiguration.class,EscaneoReal.class)
@@ -31,6 +34,8 @@ class UsuarioConfigurationTest {
             assertThat(c.getBeansOfType(ConsultaCuentasService.class)).isEmpty();
             assertThat(c.getBeansOfType(UsuarioRepositoryAdapter.class)).hasSize(1);
             assertThat(c.getBeansOfType(CuentaEscrituraAdapter.class)).hasSize(1);
+            assertThat(c).hasSingleBean(ConsultaUsuariosPort.class);
+            assertThat(c.getBean(ConsultaUsuariosPort.class)).isInstanceOf(ConsultaUsuariosTransaccional.class);
         });
     }
 }

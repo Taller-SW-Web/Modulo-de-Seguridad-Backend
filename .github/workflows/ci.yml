@@ -67,3 +67,26 @@ jobs:
             build/test-results/test/
           if-no-files-found: warn
           retention-days: 7
+
+  imagen:
+    name: Backend - imagen Docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Construir la imagen de despliegue (TEC-INFRA-T005)
+        run: docker build --pull -t g7-auth-service:ci .
+      - name: Comprobar usuario sin privilegios, Java 21 y jar
+        run: |
+          test "$(docker run --rm --entrypoint id g7-auth-service:ci -un)" = "g7"
+          docker run --rm --entrypoint java g7-auth-service:ci -version 2>&1 | grep -q 'version "21'
+          docker run --rm --entrypoint sh g7-auth-service:ci -c 'test -s /app/app.jar'
+      - name: Comprobar que la imagen no lleva secretos ni fuentes
+        run: |
+          if docker run --rm --entrypoint sh g7-auth-service:ci -c \
+            'find / -xdev \( -name "*.pem" -o -name ".env" -o -name "*.key" -o -path "/fuente*" \) 2>/dev/null | grep -v "^/etc/ssl\|^/usr/share\|^/usr/lib/ssl\|^/proc"'; then
+            echo '::error::La imagen contiene archivos privados o fuentes.'
+            exit 1
+          fi

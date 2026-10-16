@@ -6,6 +6,8 @@ import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.Permiso;
 import com.marketplace.auth_service.shared.domain.Rol;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -76,4 +78,18 @@ public interface AutorizacionPort {
      * efectivo, sin consultar {@code usuario_rol} desde su repositorio.
      */
     Set<UUID> usuariosConRol(Rol rol);
+
+    /**
+     * Roles actuales de varias personas en una sola consulta, para proyectar una
+     * página de cuentas (EP-01-T003) sin una lectura por fila. Quien no tiene roles
+     * aparece con un conjunto vacío. La implementación por defecto resuelve uno a
+     * uno; el servicio real la reemplaza por una consulta en lote.
+     */
+    default Map<UUID, Set<Rol>> rolesDe(Set<UUID> usuarioIds) {
+        Map<UUID, Set<Rol>> roles = new HashMap<>();
+        for (UUID id : usuarioIds) {
+            roles.put(id, resolver(id).roles());
+        }
+        return roles;
+    }
 }

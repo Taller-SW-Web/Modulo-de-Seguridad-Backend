@@ -3,6 +3,7 @@ package com.marketplace.auth_service.credencial.adapter.out.persistence;
 import com.marketplace.auth_service.credencial.adapter.out.persistence.mapper.*;
 import com.marketplace.auth_service.credencial.adapter.out.persistence.repository.*;
 import com.marketplace.auth_service.credencial.application.dto.RevisionCredencial;
+import com.marketplace.auth_service.credencial.application.port.out.EscrituraCredencialPort;
 import com.marketplace.auth_service.credencial.application.port.out.PersistenciaCredencialesPort;
 import com.marketplace.auth_service.credencial.domain.model.*;
 import org.springframework.stereotype.Repository;
@@ -11,7 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public class CredencialesJpaAdapter implements PersistenciaCredencialesPort {
+public class CredencialesJpaAdapter implements PersistenciaCredencialesPort, EscrituraCredencialPort {
     private final CredencialJpaRepository credenciales;
     private final PasswordHistorialJpaRepository historiales;
     public CredencialesJpaAdapter(CredencialJpaRepository credenciales, PasswordHistorialJpaRepository historiales) {
@@ -39,5 +40,17 @@ public class CredencialesJpaAdapter implements PersistenciaCredencialesPort {
                     .thenComparing(e -> e.id().toString(), java.util.Comparator.reverseOrder()))
                 .limit(4).toList();
         return new PasswordHistorial(ventana);
+    }
+
+    @Override @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reemplazar(UUID usuarioId, String hashNuevo, java.time.Instant ahora) {
+        var actual = credenciales.findById(usuarioId)
+                .orElseThrow(() -> new IllegalStateException("La cuenta no tiene credencial"));
+        var momento = ahora.atOffset(java.time.ZoneOffset.UTC);
+        actual.reemplazarHash(hashNuevo, momento);
+        credenciales.saveAndFlush(actual);
+        historiales.saveAndFlush(new com.marketplace.auth_service.credencial.adapter.out.persistence.entity
+                .PasswordHistorialJpaEntity(UUID.randomUUID(), usuarioId, hashNuevo, momento));
     }
 }
