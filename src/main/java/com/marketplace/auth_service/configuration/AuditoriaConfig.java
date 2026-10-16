@@ -1,7 +1,10 @@
 package com.marketplace.auth_service.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.auditoria.adapter.in.transaction.AuditoriaTransaccional;
 import com.marketplace.auth_service.auditoria.adapter.in.worker.EnvioCorreosWorker;
+import com.marketplace.auth_service.auditoria.adapter.in.worker.ReintentoAuditoriaWorker;
+import com.marketplace.auth_service.auditoria.adapter.out.cola.ColaReintentoAuditoriaRabbit;
 import com.marketplace.auth_service.auditoria.adapter.out.correo.EnvioCorreoSmtp;
 import com.marketplace.auth_service.auditoria.adapter.out.crypto.CifradoMensajesAesGcm;
 import com.marketplace.auth_service.auditoria.adapter.out.crypto.CifradoMensajesDenegado;
@@ -12,6 +15,7 @@ import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.CifradoMensajesPort;
 import com.marketplace.auth_service.auditoria.application.port.out.OutboxPort;
+import com.marketplace.auth_service.auditoria.application.port.out.ReintentoAuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.service.AuditoriaService;
 import com.marketplace.auth_service.auditoria.application.service.MensajeriaService;
 import java.time.Clock;
@@ -37,8 +41,10 @@ public class AuditoriaConfig {
     private static final Logger log = LoggerFactory.getLogger(AuditoriaConfig.class);
 
     @Bean
-    AuditoriaPort auditoriaPort(AuditoriaPersistenciaPort persistencia, PlatformTransactionManager transacciones) {
-        return new AuditoriaTransaccional(new AuditoriaService(persistencia, new TareasTrasCommitSpring(transacciones)));
+    AuditoriaPort auditoriaPort(AuditoriaPersistenciaPort persistencia, PlatformTransactionManager transacciones,
+                                ReintentoAuditoriaPort reintentos) {
+        return new AuditoriaTransaccional(
+                new AuditoriaService(persistencia, new TareasTrasCommitSpring(transacciones), reintentos));
     }
 
     @Bean
@@ -75,5 +81,38 @@ public class AuditoriaConfig {
     @Bean
     EnvioCorreosWorker envioCorreosWorker(MensajeriaService mensajeria) {
         return new EnvioCorreosWorker(mensajeria);
+    }
+
+    /**
+     * Cola privada durable de reintentos (EP-06-T003) + DLQ. RabbitAdmin las
+     * declara al conectar; nunca son eventos públicos ni suscripción G5.
+     */
+    @Bean
+    org.springframework.amqp.core.Queue colaAuditoriaPendiente() {
+        return org.springframework.amqp.core.QueueBuilder
+                .durable(ColaReintentoAuditoriaRabbit.COLA)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(ColaReintentoAuditoriaRabbit.DLQ)
+                .build();
+    }
+
+    @Bean
+    org.springframework.amqp.core.Queue colaAuditoriaDlq() {
+        return org.springframework.amqp.core.QueueBuilder
+                .durable(ColaReintentoAuditoriaRabbit.DLQ)
+                .build();
+    }
+
+    @Bean
+    ReintentoAuditoriaPort reintentoAuditoriaPort(org.springframework.amqp.rabbit.core.RabbitTemplate rabbit,
+                                                 ObjectMapper json) {
+        return new ColaReintentoAuditoriaRabbit(rabbit, json);
+    }
+
+    @Bean
+    ReintentoAuditoriaWorker reintentoAuditoriaWorker(org.springframework.amqp.rabbit.core.RabbitTemplate rabbit,
+                                                     ObjectMapper json,
+                                                     AuditoriaPersistenciaPort persistencia) {
+        return new ReintentoAuditoriaWorker(rabbit, json, persistencia);
     }
 }
