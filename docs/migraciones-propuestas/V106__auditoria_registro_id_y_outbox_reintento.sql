@@ -1,5 +1,5 @@
 -- V106 — Christian: registro_id en auditoría + reclamo durable en outbox
--- BORRADOR pendiente de revisión del equipo y backup confirmado. NO APLICAR.
+-- Revisada y ensayada (ventana T002, 26/26). Se aplica solo en la ventana con backup confirmado.
 -- Fuentes: DISENO-PERSISTENCIA §7; EP-06-T001; TEC-INFRA-T003.
 -- Conjunta EP-06-T001/TEC-INFRA-T003: una sola V106 del dueño.
 
