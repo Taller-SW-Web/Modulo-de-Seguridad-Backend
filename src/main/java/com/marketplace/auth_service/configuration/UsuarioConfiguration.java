@@ -1,9 +1,11 @@
 package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.proteccion.application.port.in.ConsultaBloqueosPort;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.ConsultaUsuariosTransaccional;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
 import com.marketplace.auth_service.usuario.adapter.out.capacidad.AutorizacionUsuariosAdapter;
+import com.marketplace.auth_service.usuario.adapter.out.capacidad.BloqueosConsultaAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.capacidad.RolesConsultaAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.CuentaEscrituraAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.UsuarioRepositoryAdapter;
@@ -37,10 +39,14 @@ public class UsuarioConfiguration {
         return new CuentasPortTransaccional(new ConsultaCuentasService(usuarios, roles));
     }
 
-    /** Listado y detalle administrativos (EP-01-T003/T004) sobre CuentasPort y AutorizacionPort. */
+    /**
+     * Listado y detalle administrativos (EP-01-T003/T004) sobre CuentasPort y AutorizacionPort,
+     * con el bloqueo vigente leído de protección (RF-15.6).
+     */
     @Bean
-    ConsultaUsuariosPort consultaUsuariosPort(CuentasPort cuentas, AutorizacionPort autorizacion) {
-        return new ConsultaUsuariosTransaccional(
-                new ConsultaUsuariosService(cuentas, new AutorizacionUsuariosAdapter(autorizacion)));
+    ConsultaUsuariosPort consultaUsuariosPort(CuentasPort cuentas, AutorizacionPort autorizacion,
+                                              ConsultaBloqueosPort bloqueos) {
+        return new ConsultaUsuariosTransaccional(new ConsultaUsuariosService(cuentas,
+                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(bloqueos)));
     }
 }
