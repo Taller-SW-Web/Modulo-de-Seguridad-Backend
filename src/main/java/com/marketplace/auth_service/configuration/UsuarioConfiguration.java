@@ -17,6 +17,7 @@ import com.marketplace.auth_service.usuario.application.port.out.RolesConsultaPo
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
 import com.marketplace.auth_service.usuario.application.service.ConsultaCuentasService;
 import com.marketplace.auth_service.usuario.application.service.ConsultaUsuariosService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -45,8 +46,11 @@ public class UsuarioConfiguration {
      */
     @Bean
     ConsultaUsuariosPort consultaUsuariosPort(CuentasPort cuentas, AutorizacionPort autorizacion,
-                                              ConsultaBloqueosPort bloqueos) {
+                                              ObjectProvider<ConsultaBloqueosPort> bloqueos) {
+        // Se resuelve al consultar: los contextos parciales que no componen protección
+        // arrancan igual, y si se lee un BLOQUEADO sin proveedor falla explícito (nunca omite).
+        ConsultaBloqueosPort proteccion = ids -> bloqueos.getObject().vigentes(ids);
         return new ConsultaUsuariosTransaccional(new ConsultaUsuariosService(cuentas,
-                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(bloqueos)));
+                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(proteccion)));
     }
 }
