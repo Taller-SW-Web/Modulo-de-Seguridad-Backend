@@ -2,8 +2,14 @@ package com.marketplace.auth_service.configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.identidad.adapter.in.security.AccesoAuthenticationManager;
+import com.marketplace.auth_service.identidad.adapter.in.security.IntegracionAuthenticationManager;
+import com.marketplace.auth_service.identidad.adapter.in.security.ReglasIntegracion;
 import com.marketplace.auth_service.identidad.adapter.in.security.RespuestasAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
+import com.marketplace.auth_service.identidad.application.port.out.AuditoriaAccesoPort;
+import com.marketplace.auth_service.shared.domain.ScopeServicio;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,6 +22,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.time.Clock;
 import java.util.Set;
 
 /**
@@ -51,6 +58,18 @@ public class SeguridadConfig {
     /** Salud para la plataforma de despliegue (TEC-INFRA-T005): solo UP/DOWN, sin detalles. */
     static final String SALUD = "/actuator/health";
 
+    /** Token de servicio (SPEC-17 RF-17.4): el módulo se autentica con client_id y client_secret, no con Bearer. */
+    static final String TOKEN_SERVICIO = "/api/v1/auth/token";
+
+    /**
+     * Rutas de integración (SPEC-17/18) que aceptan token de servicio, con el scope
+     * que exige cada una. Fuera de esta lista un token de servicio recibe 403
+     * {@code TOKEN_NO_APLICABLE}: un módulo no actúa en nombre de una persona (ESC-17.4).
+     */
+    static final String INTROSPECCION = "/api/v1/auth/introspeccion";
+    static final String ROLES = "/api/v1/roles";
+    static final String PERMISOS = "/api/v1/permisos";
+
     /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
     static final String[] PUBLICAS_SESION_POST = {
             "/api/v1/auth/login",
@@ -61,9 +80,14 @@ public class SeguridadConfig {
     };
 
     @Bean
-    SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json) throws Exception {
+    SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json,
+                                        ObjectProvider<AuditoriaAccesoPort> auditoria,
+                                        ObjectProvider<Clock> reloj) throws Exception {
         AuthenticationManager accesos = new AccesoAuthenticationManager(firmaPort);
-        RespuestasAcceso respuestas = new RespuestasAcceso(json);
+        AuthenticationManager integracion = new IntegracionAuthenticationManager(firmaPort);
+        // Los contextos parciales de prueba no cargan auditoría: sin ella, el 403 no se registra.
+        RespuestasAcceso respuestas = new RespuestasAcceso(json,
+                auditoria.getIfAvailable(() -> denegacion -> { }), reloj.getIfAvailable(Clock::systemUTC));
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -79,10 +103,15 @@ public class SeguridadConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/desbloquear").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
                         .requestMatchers(HttpMethod.GET, SALUD).permitAll()
+                        .requestMatchers(HttpMethod.POST, TOKEN_SERVICIO).permitAll()
+                        .requestMatchers(HttpMethod.POST, INTROSPECCION)
+                            .access(ReglasIntegracion.soloServicio(ScopeServicio.TOKENS_INTROSPECCION))
+                        .requestMatchers(HttpMethod.GET, ROLES, PERMISOS)
+                            .access(ReglasIntegracion.soloServicio(ScopeServicio.ROLES_LEER))
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
-                        .authenticationManagerResolver(peticion -> accesos)
+                        .authenticationManagerResolver(peticion -> esDeIntegracion(peticion) ? integracion : accesos)
                         .authenticationEntryPoint(respuestas)
                         .accessDeniedHandler(respuestas))
                 .exceptionHandling(errores -> errores
@@ -101,10 +130,18 @@ public class SeguridadConfig {
         Set<String> sesionPost = Set.of(PUBLICAS_SESION_POST);
         return peticion -> publicas.contains(peticion.getRequestURI())
                 || ("POST".equals(peticion.getMethod()) && sesionPost.contains(peticion.getRequestURI()))
+                || ("POST".equals(peticion.getMethod()) && TOKEN_SERVICIO.equals(peticion.getRequestURI()))
                 || ("POST".equals(peticion.getMethod()) && "/api/v1/auth/desbloquear".equals(peticion.getRequestURI()))
                 || ("GET".equals(peticion.getMethod())
                     && ("/api/v1/password/politica".equals(peticion.getRequestURI())
                         || SALUD.equals(peticion.getRequestURI())))
                 ? null : cabecera.resolve(peticion);
+    }
+
+    /** Rutas que validan con el gestor de integración (persona o servicio). */
+    static boolean esDeIntegracion(HttpServletRequest peticion) {
+        String ruta = peticion.getRequestURI();
+        return ("POST".equals(peticion.getMethod()) && INTROSPECCION.equals(ruta))
+                || ("GET".equals(peticion.getMethod()) && (ROLES.equals(ruta) || PERMISOS.equals(ruta)));
     }
 }
