@@ -211,13 +211,16 @@ contra el entorno desplegado es TEC-IDENTIDAD-T005.
   `docs/migraciones-propuestas/concesiones-servicio.sql`.
 - **Filtro:** las rutas de integración usan `IntegracionAuthenticationManager`
   (persona **o** servicio) y `ReglasIntegracion` exige el scope; sin él, 403
-  `SCOPE_INSUFICIENTE` sin decir cuál. Cualquier otra ruta sigue rechazando el
+  `SCOPE_INSUFICIENTE` sin decir cuál, y se audita como `ACCESO_DENEGADO` no
+  crítico (ESC-17.8: actor `MODULO` o `USUARIO`, método, ruta y `jti`; si la
+  auditoría falla, el 403 sale igual). Cualquier otra ruta sigue rechazando el
   token de servicio con 403 `TOKEN_NO_APLICABLE` (ESC-17.4). Un token de servicio
   sin `aud: api-seguridad` es 401.
 - **Introspección:** firma → `FIRMA_INVALIDA`/`TOKEN_VENCIDO`; sesión del `jti`
   (DAT-01) → `TOKEN_REVOCADO`; cuenta → `USUARIO_INACTIVO`/`USUARIO_BLOQUEADO`;
   roles distintos de los del token → `TOKEN_REVOCADO`. Sin transacción envolvente:
-  cada puerto consultado abre la suya.
+  cada consulta abre la suya. Sesiones exige una existente (MANDATORY), así que
+  `EstadoIdentidadAdapter` la abre (REQUIRES_NEW) y un rechazo solo revierte esa.
 - **Rotación (RF-17.3):** `AUTH_CLAVE_PUBLICA_ANTERIOR` (PEM X.509) publica y acepta
   la clave retirada junto a la actual; la emisión usa siempre la actual. Se quita
   pasadas al menos 24 h. El descubrimiento anuncia `token_endpoint`,
@@ -225,5 +228,4 @@ contra el entorno desplegado es TEC-IDENTIDAD-T005.
 
 ## Pendiente
 
-Consultas SPEC-18 de usuarios y direcciones (FEAT-06) y la auditoría de los
-403 de scope (`ACCESO_DENEGADO`, ESC-17.8).
+Consultas SPEC-18 de usuarios y direcciones (FEAT-06).

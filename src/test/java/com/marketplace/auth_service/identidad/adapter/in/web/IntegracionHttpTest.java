@@ -12,9 +12,11 @@ import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsServicio;
+import com.marketplace.auth_service.identidad.application.dto.DenegacionAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.identidad.application.port.in.IntrospeccionPort;
 import com.marketplace.auth_service.identidad.application.port.in.TokenServicioPort;
+import com.marketplace.auth_service.identidad.application.port.out.AuditoriaAccesoPort;
 import com.marketplace.auth_service.identidad.application.port.out.EstadoIdentidadPort;
 import com.marketplace.auth_service.identidad.application.service.EmitirTokenServicioService;
 import com.marketplace.auth_service.identidad.application.service.IntrospeccionService;
@@ -53,8 +55,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * Integración de módulos sobre un servidor HTTP real (SPEC-17 ESC-17.3/17.4/
@@ -70,6 +75,8 @@ class IntegracionHttpTest {
     private static final String ISSUER = BASE + "/api/v1/auth";
     private static final String SECRETO = "secreto-de-prueba-solo-para-este-test-0123456789";
     private static final Set<UUID> ACCESOS_VIGENTES = ConcurrentHashMap.newKeySet();
+    private static final List<DenegacionAcceso> DENEGACIONES = new CopyOnWriteArrayList<>();
+    private static final AtomicBoolean FALLA_AUDITORIA = new AtomicBoolean();
 
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
@@ -108,6 +115,17 @@ class IntegracionHttpTest {
                     return new Permisos(List.of("VENDEDOR"), List.of("cliente.buscar", "cliente.registrar"));
                 }
             });
+        }
+
+        /** Registra cada 403 de scope (ESC-17.8); puede simular que la auditoría falla. */
+        @Bean
+        AuditoriaAccesoPort auditoriaAccesoPort() {
+            return denegacion -> {
+                if (FALLA_AUDITORIA.get()) {
+                    throw new IllegalStateException("auditoría caída");
+                }
+                DENEGACIONES.add(denegacion);
+            };
         }
 
         @Bean
@@ -240,6 +258,46 @@ class IntegracionHttpTest {
             assertThat(problema.get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
             assertThat(respuesta.body()).doesNotContain("tokens:introspeccion");
         }
+    }
+
+    @Test
+    void cadaScopeInsuficienteSeAuditaComoAccesoDenegadoSinElScopeQueFaltaba() throws Exception {
+        UUID persona = UUID.randomUUID();
+        String acceso = firmaPort.firmar(new ClaimsAcceso(persona, "x@ejemplo.com", List.of(), List.of())).token();
+        DENEGACIONES.clear();
+
+        introspeccionar(tokenDe("modulo-ventas"), acceso);
+        get("/api/v1/roles", acceso);
+
+        assertThat(DENEGACIONES).extracting(DenegacionAcceso::actorTipo, DenegacionAcceso::actorId,
+                DenegacionAcceso::metodo, DenegacionAcceso::ruta).containsExactly(
+                tuple("MODULO", "modulo-ventas", "POST", "/api/v1/auth/introspeccion"),
+                tuple("USUARIO", persona.toString(), "GET", "/api/v1/roles"));
+        assertThat(DENEGACIONES).allSatisfy(d -> assertThat(d.jti()).isNotNull());
+        assertThat(DENEGACIONES.toString()).doesNotContain("tokens:introspeccion", "roles:leer", acceso);
+    }
+
+    @Test
+    void siLaAuditoriaFallaElScopeInsuficienteSigueSiendo403() throws Exception {
+        FALLA_AUDITORIA.set(true);
+        try {
+            HttpResponse<String> respuesta = introspeccionar(tokenDe("modulo-ventas"), "cualquiera");
+
+            assertThat(respuesta.statusCode()).isEqualTo(403);
+            assertThat(json.readTree(respuesta.body()).get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
+        } finally {
+            FALLA_AUDITORIA.set(false);
+        }
+    }
+
+    @Test
+    void lasRespuestasPermitidasNoSeAuditan() throws Exception {
+        DENEGACIONES.clear();
+
+        get("/api/v1/roles", tokenDe("modulo-productos"));
+        introspeccionar(null, "cualquiera");
+
+        assertThat(DENEGACIONES).isEmpty();
     }
 
     @Test

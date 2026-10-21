@@ -6,8 +6,10 @@ import com.marketplace.auth_service.identidad.adapter.in.security.IntegracionAut
 import com.marketplace.auth_service.identidad.adapter.in.security.ReglasIntegracion;
 import com.marketplace.auth_service.identidad.adapter.in.security.RespuestasAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
+import com.marketplace.auth_service.identidad.application.port.out.AuditoriaAccesoPort;
 import com.marketplace.auth_service.shared.domain.ScopeServicio;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +22,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.time.Clock;
 import java.util.Set;
 
 /**
@@ -77,10 +80,14 @@ public class SeguridadConfig {
     };
 
     @Bean
-    SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json) throws Exception {
+    SecurityFilterChain cadenaSeguridad(HttpSecurity http, FirmaPort firmaPort, ObjectMapper json,
+                                        ObjectProvider<AuditoriaAccesoPort> auditoria,
+                                        ObjectProvider<Clock> reloj) throws Exception {
         AuthenticationManager accesos = new AccesoAuthenticationManager(firmaPort);
         AuthenticationManager integracion = new IntegracionAuthenticationManager(firmaPort);
-        RespuestasAcceso respuestas = new RespuestasAcceso(json);
+        // Los contextos parciales de prueba no cargan auditoría: sin ella, el 403 no se registra.
+        RespuestasAcceso respuestas = new RespuestasAcceso(json,
+                auditoria.getIfAvailable(() -> denegacion -> { }), reloj.getIfAvailable(Clock::systemUTC));
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())

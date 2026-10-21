@@ -1,6 +1,9 @@
 package com.marketplace.auth_service.identidad.adapter.in.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketplace.auth_service.identidad.application.dto.DenegacionAcceso;
+import com.marketplace.auth_service.identidad.application.port.out.AuditoriaAccesoPort;
+import com.marketplace.auth_service.shared.adapter.web.ContextoPeticiones;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -8,12 +11,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 import java.io.IOException;
+import java.time.Clock;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Errores del filtro de acceso con el formato del contrato (RFC 7807), nunca
@@ -27,13 +37,27 @@ import java.io.IOException;
  *   <li>Autenticado sin permiso para la ruta: {@code 403 SCOPE_INSUFICIENTE}.</li>
  *   <li>Validación imposible por falta de clave: {@code 503 NO_DISPONIBLE}.</li>
  * </ul>
+ *
+ * <p>Cada 403 {@code SCOPE_INSUFICIENTE} se audita como {@code ACCESO_DENEGADO}
+ * (SPEC-17 ESC-17.8). Si la auditoría falla, se anota en el log y el 403 sale igual.
  */
 public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedHandler {
 
-    private final ObjectMapper json;
+    private static final Logger log = LoggerFactory.getLogger(RespuestasAcceso.class);
 
+    private final ObjectMapper json;
+    private final AuditoriaAccesoPort auditoria;
+    private final Clock reloj;
+
+    /** Sin auditoría: solo para contextos parciales que no la cargan. */
     public RespuestasAcceso(ObjectMapper json) {
+        this(json, denegacion -> { }, Clock.systemUTC());
+    }
+
+    public RespuestasAcceso(ObjectMapper json, AuditoriaAccesoPort auditoria, Clock reloj) {
         this.json = json;
+        this.auditoria = Objects.requireNonNull(auditoria, "auditoria");
+        this.reloj = Objects.requireNonNull(reloj, "reloj");
     }
 
     @Override
@@ -55,8 +79,34 @@ public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedH
     @Override
     public void handle(HttpServletRequest peticion, HttpServletResponse respuesta, AccessDeniedException e)
             throws IOException {
+        auditar(peticion);
         escribir(respuesta, Problemas.problema(HttpStatus.FORBIDDEN, "SCOPE_INSUFICIENTE",
                 "Permisos insuficientes", null));
+    }
+
+    private void auditar(HttpServletRequest peticion) {
+        Authentication quien = SecurityContextHolder.getContext().getAuthentication();
+        DenegacionAcceso denegacion;
+        if (quien instanceof ServicioAutenticado servicio) {
+            denegacion = denegacion(peticion, DenegacionAcceso.MODULO, servicio.getPrincipal().clientId(),
+                    servicio.getPrincipal().jti());
+        } else if (quien instanceof ActorAutenticado persona) {
+            denegacion = denegacion(peticion, DenegacionAcceso.USUARIO, persona.getPrincipal().sub().toString(),
+                    persona.getPrincipal().jti());
+        } else {
+            return;
+        }
+        try {
+            auditoria.accesoDenegado(denegacion);
+        } catch (RuntimeException e) {
+            log.warn("No se pudo registrar ACCESO_DENEGADO en {}: {}", peticion.getRequestURI(),
+                    e.getClass().getSimpleName());
+        }
+    }
+
+    private DenegacionAcceso denegacion(HttpServletRequest peticion, String tipo, String id, UUID jti) {
+        return new DenegacionAcceso(tipo, id, jti, peticion.getMethod(), peticion.getRequestURI(),
+                ContextoPeticiones.desde(peticion), reloj.instant());
     }
 
     private void escribir(HttpServletResponse respuesta, ProblemDetail problema) throws IOException {
