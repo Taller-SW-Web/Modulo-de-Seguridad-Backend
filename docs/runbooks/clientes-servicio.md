@@ -39,7 +39,7 @@ Por cada `client_id` de la matriz (ocho previstos: `modulo-marketplace`,
    ```
 
 4. Entregar el secreto al equipo dueño por **canal privado** (no WhatsApp grupal,
-   no issue, no PR). Después, borrar la variable: `unset SECRETO`.
+   no issue, no PR). No borrar todavía la variable: el §4 la usa.
 
 ## 3. Conceder scopes
 
@@ -57,6 +57,12 @@ curl -s -X POST "$BASE/api/v1/auth/token" \
 
 Debe responder 200 con `scopes`. El `accessToken` **no** se pega en chats ni en
 evidencia: basta con anotar el `client_id`, los scopes y la hora.
+
+Solo después de comprobar la emisión, borrar el secreto de la sesión:
+
+```bash
+unset SECRETO
+```
 
 ## 5. Revocar o rotar un secreto
 
