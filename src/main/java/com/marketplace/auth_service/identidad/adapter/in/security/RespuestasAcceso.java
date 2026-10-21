@@ -38,8 +38,9 @@ import java.util.UUID;
  *   <li>Validación imposible por falta de clave: {@code 503 NO_DISPONIBLE}.</li>
  * </ul>
  *
- * <p>Cada 403 {@code SCOPE_INSUFICIENTE} se audita como {@code ACCESO_DENEGADO}
- * (SPEC-17 ESC-17.8). Si la auditoría falla, se anota en el log y el 403 sale igual.
+ * <p>Cada 403 se audita como {@code ACCESO_DENEGADO}: {@code SCOPE_INSUFICIENTE}
+ * (SPEC-17 ESC-17.8) y {@code TOKEN_NO_APLICABLE} (ESC-17.4). Si la auditoría
+ * falla, se anota en el log y el 403 sale igual.
  */
 public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedHandler {
 
@@ -63,7 +64,11 @@ public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedH
     @Override
     public void commence(HttpServletRequest peticion, HttpServletResponse respuesta, AuthenticationException e)
             throws IOException {
-        if (e instanceof TokenNoAplicableAuthenticationException) {
+        if (e instanceof TokenNoAplicableAuthenticationException noAplicable) {
+            // ESC-17.4: un módulo intentó actuar como persona. El client_id y el jti ya están verificados.
+            registrar(peticion, denegacion(peticion, DenegacionAcceso.TOKEN_NO_APLICABLE, DenegacionAcceso.MODULO,
+                    noAplicable.clientId() == null ? "desconocido" : noAplicable.clientId(),
+                    uuidONulo(noAplicable.jti())));
             escribir(respuesta, Problemas.problema(HttpStatus.FORBIDDEN, "TOKEN_NO_APLICABLE",
                     "Este endpoint requiere un token de usuario", null));
         } else if (e instanceof AuthenticationServiceException) {
@@ -86,16 +91,16 @@ public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedH
 
     private void auditar(HttpServletRequest peticion) {
         Authentication quien = SecurityContextHolder.getContext().getAuthentication();
-        DenegacionAcceso denegacion;
         if (quien instanceof ServicioAutenticado servicio) {
-            denegacion = denegacion(peticion, DenegacionAcceso.MODULO, servicio.getPrincipal().clientId(),
-                    servicio.getPrincipal().jti());
+            registrar(peticion, denegacion(peticion, DenegacionAcceso.SCOPE_INSUFICIENTE, DenegacionAcceso.MODULO,
+                    servicio.getPrincipal().clientId(), servicio.getPrincipal().jti()));
         } else if (quien instanceof ActorAutenticado persona) {
-            denegacion = denegacion(peticion, DenegacionAcceso.USUARIO, persona.getPrincipal().sub().toString(),
-                    persona.getPrincipal().jti());
-        } else {
-            return;
+            registrar(peticion, denegacion(peticion, DenegacionAcceso.SCOPE_INSUFICIENTE, DenegacionAcceso.USUARIO,
+                    persona.getPrincipal().sub().toString(), persona.getPrincipal().jti()));
         }
+    }
+
+    private void registrar(HttpServletRequest peticion, DenegacionAcceso denegacion) {
         try {
             auditoria.accesoDenegado(denegacion);
         } catch (RuntimeException e) {
@@ -104,9 +109,17 @@ public class RespuestasAcceso implements AuthenticationEntryPoint, AccessDeniedH
         }
     }
 
-    private DenegacionAcceso denegacion(HttpServletRequest peticion, String tipo, String id, UUID jti) {
-        return new DenegacionAcceso(tipo, id, jti, peticion.getMethod(), peticion.getRequestURI(),
+    private DenegacionAcceso denegacion(HttpServletRequest peticion, String motivo, String tipo, String id, UUID jti) {
+        return new DenegacionAcceso(motivo, tipo, id, jti, peticion.getMethod(), peticion.getRequestURI(),
                 ContextoPeticiones.desde(peticion), reloj.instant());
+    }
+
+    private static UUID uuidONulo(String valor) {
+        try {
+            return valor == null ? null : UUID.fromString(valor);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private void escribir(HttpServletResponse respuesta, ProblemDetail problema) throws IOException {

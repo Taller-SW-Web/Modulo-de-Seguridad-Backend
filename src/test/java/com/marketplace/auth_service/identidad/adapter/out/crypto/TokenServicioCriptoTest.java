@@ -93,7 +93,13 @@ class TokenServicioCriptoTest {
         TokenServicioFirmado deServicio = servicio(List.of("api-seguridad"), List.of("usuarios:leer"));
 
         assertThatThrownBy(() -> servicio.validarServicio(acceso.token())).isInstanceOf(TokenNoAplicableException.class);
-        assertThatThrownBy(() -> servicio.validar(deServicio.token())).isInstanceOf(TokenNoAplicableException.class);
+        assertThatThrownBy(() -> servicio.validar(deServicio.token()))
+                .isInstanceOfSatisfying(TokenNoAplicableException.class, e -> {
+                    // ESC-17.4: identifica al módulo para auditar, sin llevar el token.
+                    assertThat(e.clientId()).isEqualTo("modulo-despacho");
+                    assertThat(e.jti()).isEqualTo(deServicio.jti().toString());
+                    assertThat(e.getMessage()).doesNotContain(deServicio.token());
+                });
     }
 
     @Test

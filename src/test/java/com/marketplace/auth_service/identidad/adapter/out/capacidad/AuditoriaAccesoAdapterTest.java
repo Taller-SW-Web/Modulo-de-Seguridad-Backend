@@ -24,7 +24,7 @@ class AuditoriaAccesoAdapterTest {
         UUID jti = UUID.randomUUID();
         Instant fecha = Instant.parse("2026-10-21T15:00:00Z");
 
-        new AuditoriaAccesoAdapter(auditoria).accesoDenegado(new DenegacionAcceso("MODULO", "modulo-chatbot", jti,
+        new AuditoriaAccesoAdapter(auditoria).accesoDenegado(new DenegacionAcceso("SCOPE_INSUFICIENTE", "MODULO", "modulo-chatbot", jti,
                 "GET", "/api/v1/roles", new ContextoPeticion("10.0.0.7", "curl/8", UUID.randomUUID()), fecha));
 
         ArgumentCaptor<RegistroSeguro> registro = ArgumentCaptor.forClass(RegistroSeguro.class);
@@ -38,6 +38,6 @@ class AuditoriaAccesoAdapterTest {
         assertThat(r.fecha()).isEqualTo(fecha);
         assertThat(r.ip()).isEqualTo("10.0.0.7");
         assertThat(r.agente()).isEqualTo("curl/8");
-        assertThat(r.detalle()).isEqualTo(Map.of("metodo", "GET", "ruta", "/api/v1/roles", "jti", jti.toString()));
+        assertThat(r.detalle()).isEqualTo(Map.of("motivo", "SCOPE_INSUFICIENTE", "metodo", "GET", "ruta", "/api/v1/roles", "jti", jti.toString()));
     }
 }

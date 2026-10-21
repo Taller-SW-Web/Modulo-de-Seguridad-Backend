@@ -273,7 +273,10 @@ class IntegracionHttpTest {
                 DenegacionAcceso::metodo, DenegacionAcceso::ruta).containsExactly(
                 tuple("MODULO", "modulo-ventas", "POST", "/api/v1/auth/introspeccion"),
                 tuple("USUARIO", persona.toString(), "GET", "/api/v1/roles"));
-        assertThat(DENEGACIONES).allSatisfy(d -> assertThat(d.jti()).isNotNull());
+        assertThat(DENEGACIONES).allSatisfy(d -> {
+            assertThat(d.motivo()).isEqualTo("SCOPE_INSUFICIENTE");
+            assertThat(d.jti()).isNotNull();
+        });
         assertThat(DENEGACIONES.toString()).doesNotContain("tokens:introspeccion", "roles:leer", acceso);
     }
 
@@ -314,10 +317,38 @@ class IntegracionHttpTest {
 
     @Test
     void unTokenDeServicioNoActuaEnNombreDeUnaPersona() throws Exception {
-        HttpResponse<String> respuesta = get("/api/v1/prueba/persona", tokenDe("modulo-productos"));
+        String servicio = tokenDe("modulo-productos");
+        UUID jti = firmaPort.validarServicio(servicio).jti();
+        DENEGACIONES.clear();
+
+        HttpResponse<String> respuesta = get("/api/v1/prueba/persona", servicio);
 
         assertThat(respuesta.statusCode()).isEqualTo(403);
         assertThat(json.readTree(respuesta.body()).get("code").asText()).isEqualTo("TOKEN_NO_APLICABLE");
+        // ESC-17.4: el intento queda registrado, con el módulo y el jti, nunca el Bearer.
+        assertThat(DENEGACIONES).singleElement().satisfies(d -> {
+            assertThat(d.motivo()).isEqualTo("TOKEN_NO_APLICABLE");
+            assertThat(d.actorTipo()).isEqualTo("MODULO");
+            assertThat(d.actorId()).isEqualTo("modulo-productos");
+            assertThat(d.jti()).isEqualTo(jti);
+            assertThat(d.metodo()).isEqualTo("GET");
+            assertThat(d.ruta()).isEqualTo("/api/v1/prueba/persona");
+        });
+        assertThat(DENEGACIONES.toString()).doesNotContain(servicio);
+    }
+
+    @Test
+    void siLaAuditoriaFallaElTokenNoAplicableSigueSiendo403() throws Exception {
+        String servicio = tokenDe("modulo-productos");
+        FALLA_AUDITORIA.set(true);
+        try {
+            HttpResponse<String> respuesta = get("/api/v1/prueba/persona", servicio);
+
+            assertThat(respuesta.statusCode()).isEqualTo(403);
+            assertThat(json.readTree(respuesta.body()).get("code").asText()).isEqualTo("TOKEN_NO_APLICABLE");
+        } finally {
+            FALLA_AUDITORIA.set(false);
+        }
     }
 
     // ── Catálogo (SPEC-18 ESC-18.7) ──────────────────────────

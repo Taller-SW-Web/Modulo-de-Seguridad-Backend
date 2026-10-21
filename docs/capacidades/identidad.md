@@ -214,7 +214,8 @@ contra el entorno desplegado es TEC-IDENTIDAD-T005.
   `SCOPE_INSUFICIENTE` sin decir cuál, y se audita como `ACCESO_DENEGADO` no
   crítico (ESC-17.8: actor `MODULO` o `USUARIO`, método, ruta y `jti`; si la
   auditoría falla, el 403 sale igual). Cualquier otra ruta sigue rechazando el
-  token de servicio con 403 `TOKEN_NO_APLICABLE` (ESC-17.4). Un token de servicio
+  token de servicio con 403 `TOKEN_NO_APLICABLE` (ESC-17.4), y ese intento
+  también se audita como `ACCESO_DENEGADO` (actor `MODULO`, `client_id` y `jti`). Un token de servicio
   sin `aud: api-seguridad` es 401.
 - **Introspección:** firma → `FIRMA_INVALIDA`/`TOKEN_VENCIDO`; sesión del `jti`
   (DAT-01) → `TOKEN_REVOCADO`; cuenta → `USUARIO_INACTIVO`/`USUARIO_BLOQUEADO`;

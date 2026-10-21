@@ -11,9 +11,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Puente hacia auditoría: un 403 de scope es {@code ACCESO_DENEGADO} con
- * resultado {@code FALLO}, no crítico. El detalle lleva método, ruta y jti;
- * nunca el token ni el scope que faltaba (ESC-17.8).
+ * Puente hacia auditoría: un 403 de la frontera es {@code ACCESO_DENEGADO} con
+ * resultado {@code FALLO}, no crítico. El detalle lleva motivo, método, ruta y
+ * jti; nunca el token ni el scope que faltaba (ESC-17.4, ESC-17.8).
  */
 public final class AuditoriaAccesoAdapter implements AuditoriaAccesoPort {
 
@@ -26,6 +26,7 @@ public final class AuditoriaAccesoAdapter implements AuditoriaAccesoPort {
     @Override
     public void accesoDenegado(DenegacionAcceso d) {
         Map<String, String> detalle = new HashMap<>();
+        detalle.put("motivo", d.motivo());
         detalle.put("metodo", d.metodo());
         detalle.put("ruta", d.ruta());
         if (d.jti() != null) {

@@ -181,7 +181,7 @@ public class FirmarAccesoService implements FirmaPort {
     /** Perfil de persona sobre claims ya verificados; el de servicio se separa con 403. */
     private AccesoValidado perfilDePersona(ClaimsVerificados claims) {
         if (TIPO_SERVICIO.equals(claims.tipo())) {
-            throw new TokenNoAplicableException();
+            throw new TokenNoAplicableException(claims.sub(), claims.jti());
         }
         if (!ContenidoAcceso.TIPO.equals(claims.tipo())) {
             throw new TokenInvalidoException("perfil no es un acceso de persona");
