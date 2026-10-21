@@ -117,6 +117,78 @@ class TokenUnUsoJpaPostgresTest {
         assertThat(primera).isTrue(); assertThat(segunda).isFalse();
     }
 
+    @Test void propositosDeVerificacionRecuperacionYCambioCorreoSePersistenAislados() {
+        String correoNuevo = "nuevo-" + usuarioId + "@example.test";
+        var verificacion = tx.execute(s -> service.emitir(usuarioId, PropositoToken.VERIFICAR_CORREO,
+                Duration.ofHours(24)));
+        var recuperacion = tx.execute(s -> service.emitir(usuarioId, PropositoToken.RECUPERACION,
+                Duration.ofMinutes(30)));
+        var cambioCorreo = tx.execute(s -> service.emitirCambioCorreo(usuarioId, correoNuevo));
+
+        var filaVerificacion = repository.findById(verificacion.id()).orElseThrow();
+        var filaRecuperacion = repository.findById(recuperacion.id()).orElseThrow();
+        var filaCambioCorreo = repository.findById(cambioCorreo.id()).orElseThrow();
+        assertThat(filaVerificacion.getProposito().name()).isEqualTo("VERIFICAR_CORREO");
+        assertThat(filaRecuperacion.getProposito().name()).isEqualTo("RECUPERACION");
+        assertThat(filaCambioCorreo.getProposito().name()).isEqualTo("CAMBIO_CORREO");
+        assertThat(filaVerificacion.getDestino()).isNull();
+        assertThat(filaRecuperacion.getDestino()).isNull();
+        assertThat(filaCambioCorreo.getDestino()).isEqualTo(correoNuevo);
+        assertThat(filaVerificacion.getHashToken()).hasSize(64).isNotEqualTo(verificacion.tokenClaro());
+        assertThat(filaRecuperacion.getHashToken()).hasSize(64).isNotEqualTo(recuperacion.tokenClaro());
+        assertThat(filaCambioCorreo.getHashToken()).hasSize(64).isNotEqualTo(cambioCorreo.tokenClaro());
+        assertThat(filaVerificacion.getExpiraEn().toInstant()).isEqualTo(verificacion.expiraEn());
+        assertThat(filaRecuperacion.getExpiraEn().toInstant()).isEqualTo(recuperacion.expiraEn());
+        assertThat(filaCambioCorreo.getExpiraEn().toInstant()).isEqualTo(cambioCorreo.expiraEn());
+
+        var halladoCambio = service.localizar(filaCambioCorreo.getHashToken(), PropositoToken.CAMBIO_CORREO)
+                .orElseThrow();
+        assertThat(halladoCambio.destino()).isEqualTo(correoNuevo);
+        assertThat(halladoCambio.toString()).doesNotContain(correoNuevo);
+        assertThat(service.localizar(filaCambioCorreo.getHashToken(), PropositoToken.RECUPERACION)).isEmpty();
+        Boolean propositoIncorrecto = tx.execute(s -> Boolean.valueOf(service.consumir(verificacion.id(),
+                usuarioId, PropositoToken.RECUPERACION, Instant.now())));
+        assertThat(propositoIncorrecto).isFalse();
+        Boolean primeraVerificacion = tx.execute(s -> Boolean.valueOf(service.consumir(verificacion.id(),
+                usuarioId, PropositoToken.VERIFICAR_CORREO, Instant.now())));
+        Boolean segundaVerificacion = tx.execute(s -> Boolean.valueOf(service.consumir(verificacion.id(),
+                usuarioId, PropositoToken.VERIFICAR_CORREO, Instant.now())));
+        Boolean primeraRecuperacion = tx.execute(s -> Boolean.valueOf(service.consumir(recuperacion.id(),
+                usuarioId, PropositoToken.RECUPERACION, Instant.now())));
+        Boolean primerCambioCorreo = tx.execute(s -> Boolean.valueOf(service.consumir(cambioCorreo.id(),
+                usuarioId, PropositoToken.CAMBIO_CORREO, Instant.now())));
+        assertThat(primeraVerificacion).isTrue();
+        assertThat(segundaVerificacion).isFalse();
+        assertThat(primeraRecuperacion).isTrue();
+        assertThat(primerCambioCorreo).isTrue();
+    }
+
+    @Test void reemisionInvalidaSoloTokensDelMismoProposito() {
+        var verificacionAnterior = tx.execute(s -> service.emitir(usuarioId, PropositoToken.VERIFICAR_CORREO,
+                Duration.ofHours(24)));
+        var recuperacionAnterior = tx.execute(s -> service.emitir(usuarioId, PropositoToken.RECUPERACION,
+                Duration.ofMinutes(30)));
+        var cambioAnterior = tx.execute(s -> service.emitirCambioCorreo(usuarioId, "anterior@example.test"));
+
+        var verificacionNueva = tx.execute(s -> service.emitir(usuarioId, PropositoToken.VERIFICAR_CORREO,
+                Duration.ofHours(24)));
+        assertThat(repository.findById(verificacionAnterior.id()).orElseThrow().isUsado()).isTrue();
+        assertThat(repository.findById(recuperacionAnterior.id()).orElseThrow().isUsado()).isFalse();
+        assertThat(repository.findById(cambioAnterior.id()).orElseThrow().isUsado()).isFalse();
+
+        var recuperacionNueva = tx.execute(s -> service.emitir(usuarioId, PropositoToken.RECUPERACION,
+                Duration.ofMinutes(30)));
+        assertThat(repository.findById(recuperacionAnterior.id()).orElseThrow().isUsado()).isTrue();
+        assertThat(repository.findById(verificacionNueva.id()).orElseThrow().isUsado()).isFalse();
+        assertThat(repository.findById(cambioAnterior.id()).orElseThrow().isUsado()).isFalse();
+
+        var cambioNuevo = tx.execute(s -> service.emitirCambioCorreo(usuarioId, "nuevo@example.test"));
+        assertThat(repository.findById(cambioAnterior.id()).orElseThrow().isUsado()).isTrue();
+        assertThat(repository.findById(verificacionNueva.id()).orElseThrow().isUsado()).isFalse();
+        assertThat(repository.findById(recuperacionNueva.id()).orElseThrow().isUsado()).isFalse();
+        assertThat(repository.findById(cambioNuevo.id()).orElseThrow().getDestino()).isEqualTo("nuevo@example.test");
+    }
+
     @Test void tokenDesbloqueoHistoricoSinContextoSeRechazaComoNoEncontrado() {
         assertThat(repository.findById(ID_TOKEN_HISTORICO).orElseThrow().getContextoId()).isNull();
         var localizado = tx.execute(s -> service.localizar(HASH_TOKEN_HISTORICO,

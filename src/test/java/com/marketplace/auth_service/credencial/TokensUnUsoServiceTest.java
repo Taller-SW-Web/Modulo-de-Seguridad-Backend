@@ -80,6 +80,49 @@ class TokensUnUsoServiceTest {
         assertTrue(service.consumir(segundo.id(), usuario, PropositoToken.DESBLOQUEO_AUTOMATICO, revisionNueva, AHORA));
     }
 
+    @Test void emiteVerificacionRecuperacionYCambioCorreoConPropositoYDestinoCorrectos() {
+        RepositorioFalso db = new RepositorioFalso();
+        var service = new TokensUnUsoService(db, Clock.fixed(AHORA, ZoneOffset.UTC), new SecureRandom());
+        UUID usuario = UUID.randomUUID();
+        String correoNuevo = "nuevo@example.test";
+
+        var verificacion = service.emitir(usuario, PropositoToken.VERIFICAR_CORREO,
+                TokensUnUsoService.TTL_VERIFICACION);
+        var recuperacion = service.emitir(usuario, PropositoToken.RECUPERACION,
+                TokensUnUsoService.TTL_RECUPERACION_MAX);
+        var cambioCorreo = service.emitirCambioCorreo(usuario, correoNuevo);
+
+        assertEquals(PropositoTokenUnUso.VERIFICAR_CORREO, db.tokens.get(verificacion.id()).proposito());
+        assertNull(db.tokens.get(verificacion.id()).destino());
+        assertEquals(AHORA.plus(Duration.ofHours(24)), verificacion.expiraEn());
+        assertEquals(PropositoTokenUnUso.RECUPERACION, db.tokens.get(recuperacion.id()).proposito());
+        assertEquals(AHORA.plus(Duration.ofMinutes(30)), recuperacion.expiraEn());
+        assertEquals(PropositoTokenUnUso.CAMBIO_CORREO, db.tokens.get(cambioCorreo.id()).proposito());
+        assertEquals(correoNuevo, db.tokens.get(cambioCorreo.id()).destino());
+        assertEquals(AHORA.plus(Duration.ofHours(24)), cambioCorreo.expiraEn());
+
+        var encontrado = service.localizar(TokenUnUsoHashing.sha256Hex(cambioCorreo.tokenClaro()),
+                PropositoToken.CAMBIO_CORREO).orElseThrow();
+        assertEquals(correoNuevo, encontrado.destino());
+        assertFalse(encontrado.toString().contains(correoNuevo));
+        assertTrue(service.localizar(TokenUnUsoHashing.sha256Hex(cambioCorreo.tokenClaro()),
+                PropositoToken.RECUPERACION).isEmpty());
+        assertFalse(service.consumir(verificacion.id(), usuario, PropositoToken.RECUPERACION, AHORA));
+        assertTrue(service.consumir(verificacion.id(), usuario, PropositoToken.VERIFICAR_CORREO, AHORA));
+        assertFalse(service.consumir(verificacion.id(), usuario, PropositoToken.VERIFICAR_CORREO, AHORA));
+        assertTrue(service.consumir(recuperacion.id(), usuario, PropositoToken.RECUPERACION, AHORA));
+        assertTrue(service.consumir(cambioCorreo.id(), usuario, PropositoToken.CAMBIO_CORREO, AHORA));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.emitir(usuario, PropositoToken.VERIFICAR_CORREO, Duration.ofHours(23)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.emitir(usuario, PropositoToken.RECUPERACION, Duration.ofMinutes(31)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.emitir(usuario, PropositoToken.CAMBIO_CORREO, Duration.ofHours(24)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.emitirCambioCorreo(usuario, " "));
+    }
+
     private static final class RepositorioFalso implements TokenUnUsoRepositoryPort {
         private final Map<UUID, TokenUnUso> tokens = new LinkedHashMap<>();
         @Override public void guardar(TokenUnUso token) { tokens.put(token.id(), token); }

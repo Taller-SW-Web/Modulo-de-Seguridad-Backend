@@ -21,6 +21,8 @@ import java.util.UUID;
 
 /** Núcleo puro de emisión, localización, consumo e invalidación. */
 public final class TokensUnUsoService implements TokensUnUsoPort {
+    public static final Duration TTL_VERIFICACION = Duration.ofHours(24);
+    public static final Duration TTL_RECUPERACION_MAX = Duration.ofMinutes(30);
     public static final Duration TTL_DESBLOQUEO = Duration.ofMinutes(30);
     private final TokenUnUsoRepositoryPort repositorio;
     private final Clock reloj;
@@ -47,18 +49,37 @@ public final class TokensUnUsoService implements TokensUnUsoPort {
     @Override public TokenEmitido emitir(UUID usuarioId, PropositoToken proposito, Duration ttl) {
         if (proposito == PropositoToken.DESBLOQUEO_AUTOMATICO)
             throw new IllegalArgumentException("DESBLOQUEO_AUTOMATICO requiere la revisión UUID del bloqueo");
-        return emitir(usuarioId, proposito, null, ttl);
+        return emitirConDatos(usuarioId, proposito, null, null, ttl);
     }
 
     @Override public TokenEmitido emitir(UUID usuarioId, PropositoToken proposito, UUID contextoId, Duration ttl) {
+        return emitirConDatos(usuarioId, proposito, contextoId, null, ttl);
+    }
+
+    @Override public TokenEmitido emitirCambioCorreo(UUID usuarioId, String destino) {
+        return emitirConDatos(usuarioId, PropositoToken.CAMBIO_CORREO, null,
+                Objects.requireNonNull(destino, "destino"), TTL_VERIFICACION);
+    }
+
+    private TokenEmitido emitirConDatos(UUID usuarioId, PropositoToken proposito, UUID contextoId,
+                                        String destino, Duration ttl) {
         Objects.requireNonNull(usuarioId); Objects.requireNonNull(proposito); Objects.requireNonNull(ttl);
         if (ttl.isZero() || ttl.isNegative()) throw new IllegalArgumentException("El TTL debe ser positivo");
+        if (proposito == PropositoToken.VERIFICAR_CORREO && !TTL_VERIFICACION.equals(ttl))
+            throw new IllegalArgumentException("VERIFICAR_CORREO vence a las 24 horas");
+        if (proposito == PropositoToken.RECUPERACION && ttl.compareTo(TTL_RECUPERACION_MAX) > 0)
+            throw new IllegalArgumentException("RECUPERACION no puede exceder 30 minutos");
         if (proposito == PropositoToken.DESBLOQUEO_AUTOMATICO) {
             Objects.requireNonNull(contextoId, "contextoId");
             if (!TTL_DESBLOQUEO.equals(ttl)) throw new IllegalArgumentException("El enlace de desbloqueo vence a los 30 minutos");
         }
-        if (proposito == PropositoToken.CAMBIO_CORREO)
-            throw new UnsupportedOperationException("CAMBIO_CORREO requiere el destino que su tarea propietaria definirá");
+        if (proposito == PropositoToken.CAMBIO_CORREO) {
+            if (destino == null || destino.isBlank() || destino.length() > 254)
+                throw new IllegalArgumentException("CAMBIO_CORREO requiere un destino válido");
+            if (!TTL_VERIFICACION.equals(ttl)) throw new IllegalArgumentException("CAMBIO_CORREO vence a las 24 horas");
+        } else if (destino != null) {
+            throw new IllegalArgumentException("El destino solo aplica a CAMBIO_CORREO");
+        }
 
         // PostgreSQL timestamptz stores microsecond precision; align persisted and returned times.
         Instant ahora = reloj.instant().truncatedTo(ChronoUnit.MICROS);
@@ -72,7 +93,7 @@ public final class TokensUnUsoService implements TokensUnUsoPort {
 
         // La invalidación y la inserción deben quedar en el mismo commit del productor.
         repositorio.invalidarPrevios(usuarioId, dominio, ahora);
-        repositorio.guardar(new TokenUnUso(id, usuarioId, dominio, hash, contextoId, expira, ahora, false));
+        repositorio.guardar(new TokenUnUso(id, usuarioId, dominio, hash, contextoId, destino, expira, ahora, false));
         return new TokenEmitido(id, claro, expira);
     }
 
@@ -99,6 +120,6 @@ public final class TokensUnUsoService implements TokensUnUsoPort {
     private static TokenUnUsoSnapshot snapshot(TokenUnUso t) {
         return new TokenUnUsoSnapshot(t.id(), t.usuarioId(), PropositoToken.valueOf(
                 t.proposito() == PropositoTokenUnUso.DESBLOQUEO_AUTOMATICO ? "DESBLOQUEO_AUTOMATICO" : t.proposito().name()),
-                t.contextoId(), t.expiraEn(), t.creadoEn(), t.usado());
+                t.contextoId(), t.destino(), t.expiraEn(), t.creadoEn(), t.usado());
     }
 }
