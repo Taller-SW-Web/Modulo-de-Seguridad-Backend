@@ -31,6 +31,10 @@ public class TokensUnUsoTransaccional implements TokensUnUsoPort {
         return servicio.emitir(usuarioId, proposito, contextoId, ttl);
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
+    public TokenEmitido emitirCambioCorreo(UUID usuarioId, String destino) {
+        return servicio.emitirCambioCorreo(usuarioId, destino);
+    }
+    @Override @Transactional(propagation = Propagation.MANDATORY)
     public boolean consumir(UUID id, UUID usuarioId, PropositoToken proposito, Instant ahora) {
         return servicio.consumir(id, usuarioId, proposito, ahora);
     }
