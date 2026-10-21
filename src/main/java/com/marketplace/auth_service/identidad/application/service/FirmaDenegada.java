@@ -3,8 +3,12 @@ package com.marketplace.auth_service.identidad.application.service;
 import com.marketplace.auth_service.identidad.application.dto.AccesoFirmado;
 import com.marketplace.auth_service.identidad.application.dto.AccesoValidado;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ClaimsServicio;
 import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.dto.Descubrimiento;
+import com.marketplace.auth_service.identidad.application.dto.InspeccionAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ServicioValidado;
+import com.marketplace.auth_service.identidad.application.dto.TokenServicioFirmado;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.identidad.domain.exception.FirmaNoDisponibleException;
 
@@ -31,6 +35,11 @@ public class FirmaDenegada implements FirmaPort {
     }
 
     @Override
+    public TokenServicioFirmado firmarServicio(ClaimsServicio claims) {
+        throw new FirmaNoDisponibleException(motivo);
+    }
+
+    @Override
     public List<ClavePublica> jwks() {
         throw new FirmaNoDisponibleException(motivo);
     }
@@ -42,6 +51,16 @@ public class FirmaDenegada implements FirmaPort {
 
     @Override
     public AccesoValidado validar(String token) {
+        throw new FirmaNoDisponibleException(motivo);
+    }
+
+    @Override
+    public ServicioValidado validarServicio(String token) {
+        throw new FirmaNoDisponibleException(motivo);
+    }
+
+    @Override
+    public InspeccionAcceso inspeccionar(String token) {
         throw new FirmaNoDisponibleException(motivo);
     }
 }
