@@ -22,6 +22,11 @@ public interface EfectosRegistroPort {
     /** {@code USUARIO_CREADO} crítico, en la transacción del alta (RF-01.6, RF-12.6). */
     void auditarCreacion(UUID usuarioId, String canalOrigen, ContextoPeticion contexto);
 
-    /** {@code USUARIO_CREADO} fallido, sin identificar la cuenta existente (RF-01.6). */
-    void auditarRechazo(String motivo, String canalOrigen, ContextoPeticion contexto);
+    /**
+     * {@code USUARIO_CREADO} fallido, sin identificar la cuenta existente (RF-01.6).
+     *
+     * @param canalOrigen {@code null} si el recibido no era válido
+     * @param campos      campos inválidos de un rechazo {@code VALIDACION}; vacía en los demás
+     */
+    void auditarRechazo(String motivo, String canalOrigen, List<String> campos, ContextoPeticion contexto);
 }

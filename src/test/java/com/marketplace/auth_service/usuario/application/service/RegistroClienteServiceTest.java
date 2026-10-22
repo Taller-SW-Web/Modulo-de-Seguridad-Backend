@@ -89,6 +89,14 @@ class RegistroClienteServiceTest {
     }
 
     @Test
+    void solicitudInvalidaSoloAuditaLosNombresDeCampoSinAbrirElAlta() {
+        servicio.auditarSolicitudInvalida(List.of("correo", "aceptaTerminos"), null, CONTEXTO);
+
+        assertThat(pasos).containsExactly("auditoria:FALLO:VALIDACION:correo,aceptaTerminos");
+        assertThat(creadas).isEmpty();
+    }
+
+    @Test
     void laSolicitudNoExponeLaContrasena() {
         assertThat(solicitud("WEB").toString()).doesNotContain(CLAVE, "maria");
     }
@@ -125,9 +133,8 @@ class RegistroClienteServiceTest {
         }
 
         @Override
-        public void auditarRechazo(String motivo, String canalOrigen, ContextoPeticion contexto) {
-            assertThat(revertida).isTrue();
-            pasos.add("auditoria:FALLO:" + motivo);
+        public void auditarRechazo(String motivo, String canalOrigen, List<String> campos, ContextoPeticion contexto) {
+            pasos.add("auditoria:FALLO:" + motivo + (campos.isEmpty() ? "" : ":" + String.join(",", campos)));
         }
     }
 }

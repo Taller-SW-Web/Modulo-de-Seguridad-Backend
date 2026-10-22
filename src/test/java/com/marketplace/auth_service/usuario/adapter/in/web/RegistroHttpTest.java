@@ -43,13 +43,21 @@ class RegistroHttpTest {
 
     static final UUID CREADA = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    /** Decide por el correo y recuerda lo recibido. */
+    /** Rechazo 400 auditado: nombres de campo y canal válido recibido. */
+    record Auditada(List<String> campos, String canalOrigen) { }
+
+    /** Decide por el correo (o la contraseña vacía) y recuerda lo recibido. */
     static final class RegistroSimulado implements RegistroClientePort {
         final List<SolicitudRegistro> recibidas = new ArrayList<>();
+        final List<Auditada> auditadas = new ArrayList<>();
 
         @Override
         public ResultadoRegistro registrar(SolicitudRegistro solicitud, ContextoPeticion contexto) {
             recibidas.add(solicitud);
+            if (solicitud.contrasena().isEmpty()) {
+                return new ResultadoRegistro.PoliticaIncumplida(List.of(
+                        new ResultadoRegistro.ReglaIncumplida("LONGITUD_MINIMA", 10)));
+            }
             return switch (solicitud.correo()) {
                 case "existente@correo.com" -> ResultadoRegistro.Rechazo.CORREO_NO_DISPONIBLE;
                 case "debil@correo.com" -> new ResultadoRegistro.PoliticaIncumplida(List.of(
@@ -57,6 +65,11 @@ class RegistroHttpTest {
                         new ResultadoRegistro.ReglaIncumplida("CARACTER_ESPECIAL", null)));
                 default -> new ResultadoRegistro.Creada(CREADA);
             };
+        }
+
+        @Override
+        public void auditarSolicitudInvalida(List<String> campos, String canalOrigen, ContextoPeticion contexto) {
+            auditadas.add(new Auditada(List.copyOf(campos), canalOrigen));
         }
     }
 
@@ -78,7 +91,10 @@ class RegistroHttpTest {
     final HttpClient cliente = HttpClient.newHttpClient();
     final ObjectMapper json = new ObjectMapper();
 
-    @BeforeEach void limpiar() { registro.recibidas.clear(); }
+    @BeforeEach void limpiar() {
+        registro.recibidas.clear();
+        registro.auditadas.clear();
+    }
 
     static Map<String, Object> valido() {
         var cuerpo = new LinkedHashMap<String, Object>();
@@ -139,6 +155,8 @@ class RegistroHttpTest {
         errorDe(registrar(falso, null), "aceptaTerminos");
         errorDe(registrar(ausente, null), "aceptaTerminos");
         assertThat(registro.recibidas).isEmpty();
+        assertThat(registro.auditadas).containsExactly(new Auditada(List.of("aceptaTerminos"), "WEB"),
+                new Auditada(List.of("aceptaTerminos"), "WEB"));
     }
 
     @Test void celularNoPeruanoResponde400() throws Exception {
@@ -148,6 +166,7 @@ class RegistroHttpTest {
             errorDe(registrar(cuerpo, null), "celular");
         }
         assertThat(registro.recibidas).isEmpty();
+        assertThat(registro.auditadas).hasSize(2).allSatisfy(a -> assertThat(a.campos()).containsExactly("celular"));
     }
 
     @Test void correoInvalidoCanalDesconocidoYFaltantesResponden400PorCampo() throws Exception {
@@ -161,6 +180,26 @@ class RegistroHttpTest {
         errorDe(respuesta, "canalOrigen");
         errorDe(respuesta, "nombres");
         assertThat(registro.recibidas).isEmpty();
+        // El canal inválido no se audita como canal: solo como campo rechazado.
+        assertThat(registro.auditadas).containsExactly(
+                new Auditada(List.of("correo", "nombres", "canalOrigen"), null));
+    }
+
+    @Test void contrasenaVaciaLlegaALaPoliticaY422PeroAusenteEs400Auditado() throws Exception {
+        var vacia = valido();
+        vacia.put("contrasena", "");
+        var respuestaVacia = registrar(vacia, null);
+
+        assertThat(respuestaVacia.statusCode()).isEqualTo(422);
+        assertThat(json.readTree(respuestaVacia.body()).path("code").asText()).isEqualTo("POLITICA_INCUMPLIDA");
+        assertThat(registro.recibidas).singleElement().satisfies(s -> assertThat(s.contrasena()).isEmpty());
+        assertThat(registro.auditadas).isEmpty();
+
+        var ausente = valido();
+        ausente.remove("contrasena");
+        errorDe(registrar(ausente, null), "contrasena");
+        assertThat(registro.recibidas).hasSize(1);
+        assertThat(registro.auditadas).containsExactly(new Auditada(List.of("contrasena"), "WEB"));
     }
 
     @Test void contrasenaCortaNoSeRechazaPorFormaSinoPorPolitica() throws Exception {

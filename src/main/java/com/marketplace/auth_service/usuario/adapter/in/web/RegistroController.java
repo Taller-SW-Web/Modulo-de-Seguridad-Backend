@@ -54,17 +54,21 @@ public class RegistroController {
     public ResponseEntity<?> registrar(@RequestBody(required = false) RegistroRequest cuerpo,
                                        HttpServletRequest peticion) {
         var cuerpoLeido = cuerpo == null ? new RegistroRequest(null, null, null, null, null, null, null) : cuerpo;
+        var contexto = ContextoPeticiones.desde(peticion);
+        String canal = cuerpoLeido.canalOrigen() == null ? CanalOrigen.WEB.name() : cuerpoLeido.canalOrigen();
         List<Map<String, String>> errores = validar(cuerpoLeido);
         if (!errores.isEmpty()) {
+            // RF-01.6: el rechazo por forma también se audita, solo con los nombres de los campos.
+            registro.auditarSolicitudInvalida(errores.stream().map(e -> e.get("campo")).toList(),
+                    canalValido(canal) ? canal : null, contexto);
             ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION",
                     "Datos de entrada inválidos", null);
             problema.setProperty("errores", errores);
             return ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema);
         }
-        String canal = cuerpoLeido.canalOrigen() == null ? CanalOrigen.WEB.name() : cuerpoLeido.canalOrigen();
         var solicitud = new SolicitudRegistro(cuerpoLeido.correo(), cuerpoLeido.nombres(), cuerpoLeido.apellidos(),
                 cuerpoLeido.celular(), canal, cuerpoLeido.contrasena());
-        return switch (registro.registrar(solicitud, ContextoPeticiones.desde(peticion))) {
+        return switch (registro.registrar(solicitud, contexto)) {
             case ResultadoRegistro.Creada creada -> ResponseEntity.status(HttpStatus.CREATED)
                     .body(new RegistroResponse(creada.id().toString(), "PENDIENTE_VERIFICACION"));
             case ResultadoRegistro.Rechazo rechazo -> Problemas.respuesta(HttpStatus.CONFLICT, "CORREO_NO_DISPONIBLE",
@@ -82,7 +86,8 @@ public class RegistroController {
         } else if (c.correo().strip().length() > 254 || !CORREO.matcher(c.correo().strip()).matches()) {
             errores.add(error("correo", "No es un correo válido."));
         }
-        if (c.contrasena() == null || c.contrasena().isEmpty()) {
+        // Solo falta si no llega: una contraseña vacía la rechaza la política con 422 (contrato, RegistroRequest).
+        if (c.contrasena() == null) {
             errores.add(error("contrasena", "Es obligatoria."));
         }
         texto(errores, "nombres", c.nombres());
@@ -95,11 +100,14 @@ public class RegistroController {
         if (!Boolean.TRUE.equals(c.aceptaTerminos())) {
             errores.add(error("aceptaTerminos", "Debes aceptar los términos y el tratamiento de datos personales."));
         }
-        if (c.canalOrigen() != null && Arrays.stream(CanalOrigen.values())
-                .noneMatch(canal -> canal.name().equals(c.canalOrigen()))) {
+        if (c.canalOrigen() != null && !canalValido(c.canalOrigen())) {
             errores.add(error("canalOrigen", "No es un canal permitido."));
         }
         return errores;
+    }
+
+    private static boolean canalValido(String canal) {
+        return Arrays.stream(CanalOrigen.values()).anyMatch(valor -> valor.name().equals(canal));
     }
 
     private static void texto(List<Map<String, String>> errores, String campo, String valor) {

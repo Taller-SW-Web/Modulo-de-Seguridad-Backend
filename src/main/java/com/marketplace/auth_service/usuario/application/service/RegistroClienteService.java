@@ -9,6 +9,7 @@ import com.marketplace.auth_service.usuario.application.port.out.EfectosRegistro
 import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import com.marketplace.auth_service.usuario.domain.model.CuentaNueva;
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -55,11 +56,18 @@ public final class RegistroClienteService implements RegistroClientePort {
             return new ResultadoRegistro.Creada(cuenta.id());
         });
         switch (resultado) {
-            case ResultadoRegistro.Rechazo rechazo -> efectos.auditarRechazo(rechazo.name(), canal.name(), contexto);
+            case ResultadoRegistro.Rechazo rechazo ->
+                    efectos.auditarRechazo(rechazo.name(), canal.name(), List.of(), contexto);
             case ResultadoRegistro.PoliticaIncumplida ignorada ->
-                    efectos.auditarRechazo("POLITICA_INCUMPLIDA", canal.name(), contexto);
+                    efectos.auditarRechazo("POLITICA_INCUMPLIDA", canal.name(), List.of(), contexto);
             case ResultadoRegistro.Creada creada -> { }
         }
         return resultado;
+    }
+
+    @Override
+    public void auditarSolicitudInvalida(List<String> campos, String canalOrigen, ContextoPeticion contexto) {
+        Objects.requireNonNull(contexto);
+        efectos.auditarRechazo("VALIDACION", canalOrigen, List.copyOf(campos), contexto);
     }
 }

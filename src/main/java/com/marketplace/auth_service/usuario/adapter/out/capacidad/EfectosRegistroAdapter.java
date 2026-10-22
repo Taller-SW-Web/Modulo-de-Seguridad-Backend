@@ -10,6 +10,7 @@ import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoRegistro;
 import com.marketplace.auth_service.usuario.application.port.out.EfectosRegistroPort;
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -74,10 +75,15 @@ public final class EfectosRegistroAdapter implements EfectosRegistroPort {
     }
 
     @Override
-    public void auditarRechazo(String motivo, String canalOrigen, ContextoPeticion contexto) {
+    public void auditarRechazo(String motivo, String canalOrigen, List<String> campos, ContextoPeticion contexto) {
         // Sin actor ni objetivo: identificar la cuenta existente revelaría que el correo está registrado.
+        // Solo nombres de campos, nunca valores: el detalle no admite contraseñas (RF-12.5).
+        var detalle = new LinkedHashMap<String, String>();
+        detalle.put("via", "REGISTRO_PUBLICO");
+        detalle.put("motivo", motivo);
+        if (canalOrigen != null) detalle.put("canalOrigen", canalOrigen);
+        if (!campos.isEmpty()) detalle.put("campos", String.join(",", campos));
         auditoria.registrarNoCriticaTrasCommit(new RegistroSeguro(UUID.randomUUID(), "USUARIO_CREADO", "FALLO",
-                "SISTEMA", null, null, reloj.instant(), contexto.ip(), contexto.agente(),
-                Map.of("via", "REGISTRO_PUBLICO", "canalOrigen", canalOrigen, "motivo", motivo)));
+                "SISTEMA", null, null, reloj.instant(), contexto.ip(), contexto.agente(), detalle));
     }
 }
