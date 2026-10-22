@@ -8,6 +8,8 @@ import com.marketplace.auth_service.perfil.application.dto.CambioAtributos;
 import com.marketplace.auth_service.perfil.application.dto.CampoEditable;
 import com.marketplace.auth_service.perfil.application.dto.PerfilProyectado;
 import com.marketplace.auth_service.perfil.domain.model.AtributoInvalidoException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -140,5 +142,63 @@ class EditarPerfilPropioTest {
             assertThat(e.getMessage()).doesNotContain("TELEFONO-SECRETO");
             assertThat(e.campo()).isEqualTo("celular");
         }
+    }
+
+    // --- Efectos (EP-08-T007): evento y auditoría con nombres de campo, jamás valores ---
+
+    private static final class EfectosGrabados implements com.marketplace.auth_service.perfil.application.port.out.EfectosPerfilPort {
+        final List<String> llamadas = new ArrayList<>();
+
+        @Override
+        public void atributosActualizados(UUID actorId, UUID usuarioId, List<String> campos) {
+            llamadas.add(actorId + "->" + usuarioId + ":" + String.join(",", campos));
+        }
+    }
+
+    private static EditarPerfilPropio conEfectos(DoblesPerfil d, EfectosGrabados efectos) {
+        ConsultarPerfil consulta = new ConsultarPerfil(d, d, d, d, d, new ProyectorDocumento(documento -> "x"));
+        return new EditarPerfilPropio(d, consulta, efectos);
+    }
+
+    @Test
+    void publicaSoloLosCamposQueRealmenteCambiaron() {
+        DoblesPerfil d = dobles();
+        EfectosGrabados efectos = new EfectosGrabados();
+
+        conEfectos(d, efectos).actualizarPropio(actor(A), cambio(pr("Eva"), pr("Perez"), pr("+51900000000")));
+
+        assertThat(efectos.llamadas).containsExactly(A + "->" + A + ":nombres,celular");
+    }
+
+    @Test
+    void unValorIgualAlActualNoGeneraEvento() {
+        DoblesPerfil d = dobles();
+        EfectosGrabados efectos = new EfectosGrabados();
+
+        conEfectos(d, efectos).actualizarPropio(actor(A), cambio(pr("Ana"), om(), om()));
+
+        assertThat(efectos.llamadas).isEmpty();
+    }
+
+    @Test
+    void unInvalidoNoGeneraEventoNiEscribe() {
+        DoblesPerfil d = dobles();
+        EfectosGrabados efectos = new EfectosGrabados();
+
+        assertThatThrownBy(() -> conEfectos(d, efectos).actualizarPropio(actor(A), cambio(pr("Eva"), om(), pr("1"))))
+                .isInstanceOf(AtributoInvalidoException.class);
+
+        assertThat(efectos.llamadas).isEmpty();
+        assertThat(d.escrituras).isEmpty();
+    }
+
+    @Test
+    void sinCambiosNoGeneraEvento() {
+        DoblesPerfil d = dobles();
+        EfectosGrabados efectos = new EfectosGrabados();
+
+        conEfectos(d, efectos).actualizarPropio(actor(A), cambio(om(), om(), om()));
+
+        assertThat(efectos.llamadas).isEmpty();
     }
 }

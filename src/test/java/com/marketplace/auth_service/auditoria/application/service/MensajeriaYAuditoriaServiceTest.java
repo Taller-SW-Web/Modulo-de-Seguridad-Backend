@@ -207,6 +207,22 @@ class MensajeriaYAuditoriaServiceTest {
     }
 
     @Test
+    void atributosActualizadosPublicaCamposComoListaSinValores() {
+        var outbox = new Outbox();
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
+        UUID id = UUID.randomUUID();
+        servicio.guardarEvento(new EventoUsuario(id, "usuario.atributos_actualizados", Map.of(
+                "usuarioId", TITULAR.toString(), "campos", "nombres,celular", "fecha", AHORA.toString())));
+        List<Map<String, Object>> publicados = new ArrayList<>();
+
+        servicio.procesarEventos((tipo, sobre) -> publicados.add(sobre));
+
+        assertThat(publicados.get(0)).containsEntry("tipo", "usuario.atributos_actualizados")
+                .containsEntry("usuarioId", TITULAR.toString());
+        assertThat(datos(publicados.get(0))).containsEntry("campos", List.of("nombres", "celular"));
+    }
+
+    @Test
     void brokerSinConfirmarDejaElEventoPendienteParaReintentar() {
         var outbox = new Outbox();
         var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
