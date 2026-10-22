@@ -3,14 +3,17 @@ package com.marketplace.auth_service.identidad.application.dto;
 import java.util.List;
 
 /**
- * Metadatos del emisor (RF-17.2). En H3 solo se declara lo que existe:
- * issuer, JWKS y algoritmo de firma. {@code token_endpoint},
- * {@code introspection_endpoint} y los scopes se añadirán cuando se implementen
- * los tokens de servicio y la introspección (SPEC-17, incremento posterior).
+ * Metadatos del emisor (RF-17.2): issuer, JWKS, algoritmo de firma y, desde
+ * FEAT-05, los endpoints de token de servicio e introspección con los scopes
+ * de esta API.
  */
-public record Descubrimiento(String issuer, String jwksUri, List<String> algoritmosFirma) {
+public record Descubrimiento(String issuer, String jwksUri, List<String> algoritmosFirma,
+                             String tokenEndpoint, String introspectionEndpoint,
+                             List<String> grantTypes, List<String> scopes) {
 
     public Descubrimiento {
         algoritmosFirma = List.copyOf(algoritmosFirma);
+        grantTypes = List.copyOf(grantTypes);
+        scopes = List.copyOf(scopes);
     }
 }

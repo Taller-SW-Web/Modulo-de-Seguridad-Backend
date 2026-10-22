@@ -114,3 +114,16 @@ grants aplicados dos veces. 26/26 comprobaciones OK (incluidos el guard `FOR UPD
 y una tabla creada después por el migrador. Mutaciones detectadas: sin
 `ALTER DEFAULT PRIVILEGES` la tabla futura queda visible para `anon`; con
 UPDATE/DELETE en auditoría el runtime deja de ser solo-anexado.
+
+## 5. Ejecución real 15-oct-2026 (Christian, en solitario por instrucción expresa)
+
+- Prechequeos: 22 tablas = diseño, sin historial Flyway, token_refresco vacío.
+- Baseline explícito 100 + migrate V101→V106 + R__ catálogo: 7/7 SUCCESS (Flyway 11.7.2).
+- Grants aplicados salvo ALTER ROLE (el pooler lo prohíbe; defaults ya mínimos,
+  verificado: nosuperuser, nobypassrls, login).
+- Verificado como g7_runtime: INSERT ok; UPDATE/DELETE/TRUNCATE rechazados; SELECT ok.
+  Fila de prueba eliminada (auditoría en 0 filas).
+- Backup: plan free SIN backups (verificado en dashboard con captura).
+  Riesgo aceptado: tablas vacías + DDL solo aditivo + inventario/schema en repo.
+- Passwords solo en memoria; g7_runtime en custodia privada de Christian.
+- Estado: ventana EJECUTADA. Pendiente confirmación del equipo sobre el riesgo sin backup.

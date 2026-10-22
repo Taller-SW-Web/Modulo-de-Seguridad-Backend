@@ -16,7 +16,7 @@ import java.util.UUID;
 /**
  * Cambio de contraseña (EP-03-T005, SPEC-07). La comparación de la actual y el hash de la
  * nueva (Argon2id, costosos) van fuera de locks; en la transacción: cuenta → revisión de la
- * credencial → escritura + historial → auditoría crítica → revocación de las otras sesiones.
+ * credencial → familia actual y revocación de otras → escritura + historial → crítica y correo durable.
  */
 public final class CambioContrasenaService implements CambioContrasenaPort {
 
@@ -55,14 +55,14 @@ public final class CambioContrasenaService implements CambioContrasenaPort {
             if (!credenciales.confirmarRevision(revision)) {
                 return ResultadoCambioContrasena.Simple.ACTUAL_INCORRECTA; // cambió mientras tanto
             }
+            Optional<UUID> familia = jti == null ? Optional.empty() : efectos.familiaDe(usuarioId, jti);
+            if (familia.isEmpty()) {
+                return ResultadoCambioContrasena.Simple.SESION_INVALIDA;
+            }
+            efectos.revocarOtras(usuarioId, familia.get());
             escritura.reemplazar(usuarioId, hashNuevo, reloj.instant());
             efectos.auditarCambio(usuarioId, contexto);
-            Optional<UUID> familia = jti == null ? Optional.empty() : efectos.familiaDe(usuarioId, jti);
-            if (familia.isPresent()) {
-                efectos.revocarOtras(usuarioId, familia.get());
-            } else {
-                efectos.revocarTodas(usuarioId);
-            }
+            efectos.avisarCambio(usuarioId);
             return ResultadoCambioContrasena.Simple.CAMBIADA;
         });
     }

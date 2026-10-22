@@ -63,6 +63,7 @@ class CambioContrasenaServiceTest {
             @Override public void revocarOtras(UUID u, UUID f) { eventos.add("revocarOtras:" + f); }
             @Override public void revocarTodas(UUID u) { eventos.add("revocarTodas"); }
             @Override public void auditarCambio(UUID u, ContextoPeticion c) { eventos.add("auditoria"); }
+            @Override public void avisarCambio(UUID u) { eventos.add("aviso"); }
         };
         servicio = new CambioContrasenaService(credenciales, hasher, escritura, efectos,
                 Clock.fixed(Instant.parse("2026-10-17T15:00:00Z"), ZoneOffset.UTC));
@@ -76,7 +77,7 @@ class CambioContrasenaServiceTest {
     void cambiaEnOrdenYConservaLaSesionQueHizoElCambio() {
         assertThat(cambiar("Actual-2026!", "Nueva-Segura-2026!")).isEqualTo(ResultadoCambioContrasena.Simple.CAMBIADA);
         verify(escritura).reemplazar(ArgumentMatchers.eq(USUARIO), anyString(), any());
-        assertThat(eventos).containsExactly("tx", "cuenta", "auditoria", "revocarOtras:" + FAMILIA);
+        assertThat(eventos).containsExactly("tx", "cuenta", "revocarOtras:" + FAMILIA, "auditoria", "aviso");
     }
 
     @Test
@@ -104,9 +105,11 @@ class CambioContrasenaServiceTest {
     }
 
     @Test
-    void sinFamiliaVigenteRevocaTodas() {
+    void sinFamiliaVigenteNoCambiaNiRevoca() {
         familia = Optional.empty();
-        cambiar("Actual-2026!", "Nueva-Segura-2026!");
-        assertThat(eventos).contains("revocarTodas").doesNotContain("revocarOtras:" + FAMILIA);
+        assertThat(cambiar("Actual-2026!", "Nueva-Segura-2026!"))
+                .isEqualTo(ResultadoCambioContrasena.Simple.SESION_INVALIDA);
+        verify(escritura, never()).reemplazar(any(), any(), any());
+        assertThat(eventos).containsExactly("tx", "cuenta");
     }
 }

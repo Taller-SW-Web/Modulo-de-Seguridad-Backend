@@ -11,12 +11,13 @@ public final class TokenUnUso {
     private final PropositoTokenUnUso proposito;
     private final String hashToken;
     private final UUID contextoId;
+    private final String destino;
     private final Instant expiraEn;
     private final Instant creadoEn;
     private final boolean usado;
 
     public TokenUnUso(UUID id, UUID usuarioId, PropositoTokenUnUso proposito, String hashToken,
-                      UUID contextoId, Instant expiraEn, Instant creadoEn, boolean usado) {
+                      UUID contextoId, String destino, Instant expiraEn, Instant creadoEn, boolean usado) {
         this.id = Objects.requireNonNull(id, "id");
         this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
         this.proposito = Objects.requireNonNull(proposito, "proposito");
@@ -24,7 +25,12 @@ public final class TokenUnUso {
         if (hashToken.isBlank()) throw new IllegalArgumentException("El hash del token es obligatorio");
         if (proposito == PropositoTokenUnUso.DESBLOQUEO_AUTOMATICO && contextoId == null)
             throw new IllegalArgumentException("El desbloqueo automático requiere revisión de bloqueo");
+        if (proposito == PropositoTokenUnUso.CAMBIO_CORREO && (destino == null || destino.isBlank() || destino.length() > 254))
+            throw new IllegalArgumentException("CAMBIO_CORREO requiere un destino válido");
+        if (proposito != PropositoTokenUnUso.CAMBIO_CORREO && destino != null)
+            throw new IllegalArgumentException("El destino solo aplica a CAMBIO_CORREO");
         this.contextoId = contextoId;
+        this.destino = destino;
         this.expiraEn = Objects.requireNonNull(expiraEn, "expiraEn");
         this.creadoEn = Objects.requireNonNull(creadoEn, "creadoEn");
         if (!expiraEn.isAfter(creadoEn)) throw new IllegalArgumentException("El token debe expirar después de su creación");
@@ -36,12 +42,13 @@ public final class TokenUnUso {
     public PropositoTokenUnUso proposito() { return proposito; }
     public String hashToken() { return hashToken; }
     public UUID contextoId() { return contextoId; }
+    public String destino() { return destino; }
     public Instant expiraEn() { return expiraEn; }
     public Instant creadoEn() { return creadoEn; }
     public boolean usado() { return usado; }
     public boolean vigenteEn(Instant ahora) { return !usado && expiraEn.isAfter(ahora); }
     public TokenUnUso marcarUsado() {
-        return new TokenUnUso(id, usuarioId, proposito, hashToken, contextoId, expiraEn, creadoEn, true);
+        return new TokenUnUso(id, usuarioId, proposito, hashToken, contextoId, destino, expiraEn, creadoEn, true);
     }
 
     @Override public String toString() {

@@ -20,6 +20,7 @@ final class IdentidadWebMapper {
     }
 
     static DescubrimientoResponse aDescubrimiento(Descubrimiento d) {
-        return new DescubrimientoResponse(d.issuer(), d.jwksUri(), d.algoritmosFirma());
+        return new DescubrimientoResponse(d.issuer(), d.jwksUri(), d.tokenEndpoint(), d.introspectionEndpoint(),
+                d.algoritmosFirma(), d.grantTypes(), d.scopes());
     }
 }

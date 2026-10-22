@@ -10,11 +10,14 @@ import com.marketplace.auth_service.auditoria.application.dto.EventoUsuario;
 import com.marketplace.auth_service.auditoria.application.dto.RegistroSeguro;
 import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.OutboxPort;
+import com.marketplace.auth_service.auditoria.application.port.out.ReintentoAuditoriaPort;
 import com.marketplace.auth_service.auditoria.domain.exception.AccionNoCatalogadaException;
 import com.marketplace.auth_service.auditoria.domain.exception.DetalleInseguroException;
 import com.marketplace.auth_service.auditoria.domain.exception.MensajeriaNoDisponibleException;
+import com.marketplace.auth_service.auditoria.domain.exception.RegistroDiferidoNoDisponibleException;
 import com.marketplace.auth_service.auditoria.domain.model.RegistroAuditoria;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -24,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** EP-06-T002/T004 y TEC-INFRA-T003/T004 con dobles en memoria y AES-GCM real. */
 class MensajeriaYAuditoriaServiceTest {
@@ -78,6 +83,37 @@ class MensajeriaYAuditoriaServiceTest {
         assertThat(registros.filas).hasSize(1);
     }
 
+    private static final class SiempreFalla implements AuditoriaPersistenciaPort {
+        @Override public long guardar(RegistroAuditoria r) { throw new IllegalStateException("db"); }
+        @Override public boolean existeRegistro(UUID id) { return false; }
+        @Override public AuditoriaPersistenciaPort.Pagina listarDeObjetivo(UUID o, int p, int t) {
+            throw new IllegalStateException("db");
+        }
+    }
+
+    @Test
+    void falloTrasCommitDifiereALaColaDurableSinRevertirElHecho() {
+        var registros = new SiempreFalla();
+        List<RegistroSeguro> diferidos = new ArrayList<>();
+        var servicio = new AuditoriaService(registros, Runnable::run, diferidos::add);
+        var dto = registro(UUID.randomUUID(), "SESION_FALLIDA", TITULAR, Map.of());
+
+        servicio.registrarNoCriticaTrasCommit(dto);
+
+        assertThat(diferidos).containsExactly(dto);
+    }
+
+    @Test
+    void sinColaElFalloSeDeclaraSinAfirmarEscritura() {
+        var registros = new SiempreFalla();
+        ReintentoAuditoriaPort sinCola = registro -> { throw new IllegalStateException("broker"); };
+        var servicio = new AuditoriaService(registros, Runnable::run, sinCola);
+
+        assertThatThrownBy(() -> servicio.registrarNoCriticaTrasCommit(
+                registro(UUID.randomUUID(), "SESION_FALLIDA", TITULAR, Map.of())))
+                .isInstanceOf(RegistroDiferidoNoDisponibleException.class);
+    }
+
     @Test
     void actividadPropiaSoloDelTitularYConTamanoAcotado() {
         var registros = new Registros();
@@ -98,20 +134,26 @@ class MensajeriaYAuditoriaServiceTest {
     private static final class Outbox implements OutboxPort {
         final Map<UUID, Mensaje> filas = new LinkedHashMap<>();
         final Map<UUID, String> estado = new HashMap<>();
+        final Map<UUID, Instant> proximos = new HashMap<>();
         @Override public void guardar(Mensaje m) { filas.put(m.id(), m); estado.put(m.id(), "PENDIENTE"); }
         @Override public List<Mensaje> reclamarCorreos(int lote, Instant ahora, Instant hasta) {
             return filas.values().stream().filter(m -> m.topico().startsWith("correo.")
-                    && "PENDIENTE".equals(estado.get(m.id()))).limit(lote).toList();
+                    && elegible(m.id(), ahora)).limit(lote).toList();
         }
         @Override public List<Mensaje> reclamarEventos(int lote, Instant ahora, Instant hasta) {
             return filas.values().stream().filter(m -> !m.topico().startsWith("correo.")
-                    && "PENDIENTE".equals(estado.get(m.id()))).limit(lote).toList();
+                    && elegible(m.id(), ahora)).limit(lote).toList();
+        }
+        private boolean elegible(UUID id, Instant ahora) {
+            return "PENDIENTE".equals(estado.get(id))
+                    && (proximos.get(id) == null || !ahora.isBefore(proximos.get(id)));
         }
         @Override public void marcarEnviado(UUID id, Instant ahora) { estado.put(id, "ENVIADO"); filas.put(id,
                 new Mensaje(id, filas.get(id).topico(), Map.of(), filas.get(id).intentos())); }
         @Override public void marcarFallo(UUID id, String error, Instant proximo, boolean definitivo) {
             var m = filas.get(id);
             filas.put(id, new Mensaje(id, m.topico(), definitivo ? Map.of() : m.payload(), m.intentos() + 1));
+            proximos.put(id, proximo);
             if (definitivo) estado.put(id, "FALLIDO");
         }
     }
@@ -135,21 +177,74 @@ class MensajeriaYAuditoriaServiceTest {
         assertThat(servicio.procesarCorreos()).isZero();
     }
 
-    @Test
-    void smtpCaidoReintentaYAlQuintoFalloQuedaFallidoSinContenido() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void correoYBrokerRespetanTresReintentosYTerminanAlCuartoFallo(boolean correo) {
         var outbox = new Outbox();
-        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { throw new IllegalStateException("smtp"); },
-                Clock.fixed(AHORA, ZoneOffset.UTC));
+        var reloj = new Reloj();
+        int[] llamadas = {0};
+        Runnable transporteCaido = () -> { llamadas[0]++; throw new IllegalStateException("transporte"); };
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> transporteCaido.run(), reloj);
         UUID id = UUID.randomUUID();
-        servicio.guardarCorreo(new EntregaCorreo(id, "correo.otp", "ana@g7.test", "123456"));
-
-        for (int i = 0; i < 5; i++) {
-            servicio.procesarCorreos();
+        if (correo) servicio.guardarCorreo(new EntregaCorreo(id, "correo.otp", "ana@g7.test", "123456"));
+        else servicio.guardarEvento(new EventoUsuario(id, "usuario.bloqueado", Map.of("usuarioId", TITULAR.toString())));
+        Runnable ciclo = () -> {
+            if (correo) servicio.procesarCorreos();
+            else servicio.procesarEventos((tipo, sobre) -> transporteCaido.run());
+        };
+        var payloadOriginal = outbox.filas.get(id).payload();
+        for (int segundos : new int[]{10, 30, 60}) {
+            ciclo.run();
+            int intentos = llamadas[0];
+            Instant proximo = reloj.instant().plusSeconds(segundos);
+            assertThat(outbox.proximos.get(id)).isEqualTo(proximo);
+            assertThat(outbox.estado.get(id)).isEqualTo("PENDIENTE");
+            assertThat(outbox.filas.get(id).payload()).isEqualTo(payloadOriginal);
+            reloj.ahora = proximo.minusNanos(1);
+            ciclo.run();
+            assertThat(llamadas[0]).isEqualTo(intentos);
+            reloj.ahora = proximo;
         }
-
+        ciclo.run();
+        assertThat(llamadas[0]).isEqualTo(4);
         assertThat(outbox.estado.get(id)).isEqualTo("FALLIDO");
-        assertThat(outbox.filas.get(id).intentos()).isEqualTo(5);
+        assertThat(outbox.filas.get(id).intentos()).isEqualTo(4);
+        assertThat(outbox.proximos.get(id)).isNull();
         assertThat(outbox.filas.get(id).payload()).isEmpty();
+        reloj.ahora = reloj.ahora.plus(Duration.ofDays(1));
+        ciclo.run();
+        assertThat(llamadas[0]).isEqualTo(4);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void transporteRecuperadoConfirmaElMismoMensajeEnElUltimoIntento(boolean correo) {
+        var outbox = new Outbox();
+        var reloj = new Reloj();
+        int[] llamadas = {0};
+        Runnable transporte = () -> { if (++llamadas[0] <= 3) throw new IllegalStateException("transporte"); };
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> transporte.run(), reloj);
+        UUID id = UUID.randomUUID();
+        if (correo) servicio.guardarCorreo(new EntregaCorreo(id, "correo.otp", "ana@g7.test", "123456"));
+        else servicio.guardarEvento(new EventoUsuario(id, "usuario.bloqueado", Map.of("usuarioId", TITULAR.toString())));
+        for (int segundos : new int[]{10, 30, 60}) {
+            if (correo) assertThat(servicio.procesarCorreos()).isZero();
+            else assertThat(servicio.procesarEventos((tipo, sobre) -> transporte.run())).isZero();
+            reloj.ahora = reloj.ahora.plusSeconds(segundos);
+        }
+        if (correo) assertThat(servicio.procesarCorreos()).isEqualTo(1);
+        else assertThat(servicio.procesarEventos((tipo, sobre) -> transporte.run())).isEqualTo(1);
+        assertThat(outbox.filas).hasSize(1).containsKey(id);
+        assertThat(outbox.estado.get(id)).isEqualTo("ENVIADO");
+        assertThat(outbox.filas.get(id).payload()).isEmpty();
+        assertThat(llamadas[0]).isEqualTo(4);
+    }
+
+    private static final class Reloj extends Clock {
+        Instant ahora = AHORA;
+        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(java.time.ZoneId zona) { return Clock.fixed(ahora, zona); }
+        @Override public Instant instant() { return ahora; }
     }
 
     @Test

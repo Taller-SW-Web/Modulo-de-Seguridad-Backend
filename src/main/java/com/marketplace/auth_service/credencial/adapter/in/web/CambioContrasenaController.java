@@ -65,6 +65,8 @@ public class CambioContrasenaController {
                 case CAMBIADA -> ResponseEntity.noContent().build();
                 case ACTUAL_INCORRECTA -> Problemas.respuesta(HttpStatus.UNAUTHORIZED, "CREDENCIALES_INVALIDAS",
                         "Credenciales inválidas", "La contraseña actual no es correcta.");
+                case SESION_INVALIDA -> Problemas.respuesta(HttpStatus.UNAUTHORIZED, "TOKEN_INVALIDO",
+                        "Token inválido", null);
             };
             case ResultadoCambioContrasena.PoliticaIncumplida incumplida -> ResponseEntity.unprocessableEntity()
                     .contentType(Problemas.PROBLEM_JSON).body(PoliticaPasswordWebMapper.aProblema(incumplida.validacion()));

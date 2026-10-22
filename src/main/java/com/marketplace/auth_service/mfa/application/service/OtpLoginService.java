@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  * <p>Primero se valida el desafío sin locks ({@link ValidadorDesafioLogin}: vigente, cuenta
  * disponible y verificada, MFA aún efectivo y misma revisión de credencial); después, en
  * orden: cuenta → desafío → código. Solo se guarda el HMAC del código; el código en claro
- * va al adaptador de entrega, que lo envía después del commit.
+ * va al adaptador de entrega, que encola EMAIL cifrado en el mismo commit.
  */
 public final class OtpLoginService implements OtpLoginPort {
 
