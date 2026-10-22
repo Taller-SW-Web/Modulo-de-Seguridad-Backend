@@ -70,8 +70,9 @@ public class SeguridadConfig {
     static final String ROLES = "/api/v1/roles";
     static final String PERMISOS = "/api/v1/permisos";
 
-    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
+    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía) y registro (FEAT-01-T1). */
     static final String[] PUBLICAS_SESION_POST = {
+            "/api/v1/auth/registro",
             "/api/v1/auth/login",
             "/api/v1/auth/otp/solicitar",
             "/api/v1/auth/otp/verificar",
