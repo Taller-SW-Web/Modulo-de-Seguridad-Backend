@@ -11,7 +11,9 @@ import com.marketplace.auth_service.usuario.application.dto.RolesDeCuenta;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
 import com.marketplace.auth_service.usuario.application.port.in.ConsultaUsuariosPort;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
+import com.marketplace.auth_service.usuario.application.dto.BloqueoVista;
 import com.marketplace.auth_service.usuario.application.port.out.AutorizacionUsuariosPort;
+import com.marketplace.auth_service.usuario.application.port.out.BloqueosConsultaPort;
 import com.marketplace.auth_service.usuario.domain.exception.ConsultaInvalidaException;
 import com.marketplace.auth_service.usuario.domain.exception.CuentaNoEncontradaException;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
@@ -27,7 +29,8 @@ import java.util.UUID;
  *
  * <p>Orden fijo: <b>autorizar</b> con los permisos actuales, <b>validar</b> los
  * parámetros, <b>consultar</b> cuentas con los filtros aplicados antes de contar
- * y paginar, y <b>proyectar</b> los roles de toda la página en una sola consulta.
+ * y paginar, y <b>proyectar</b> los roles de toda la página en una sola consulta y el
+ * bloqueo vigente (RF-15.6) solo de las cuentas en estado BLOQUEADO.
  * Sin Spring, JPA ni HTTP.
  */
 public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
@@ -38,10 +41,13 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
 
     private final CuentasPort cuentas;
     private final AutorizacionUsuariosPort autorizacion;
+    private final BloqueosConsultaPort bloqueos;
 
-    public ConsultaUsuariosService(CuentasPort cuentas, AutorizacionUsuariosPort autorizacion) {
+    public ConsultaUsuariosService(CuentasPort cuentas, AutorizacionUsuariosPort autorizacion,
+                                   BloqueosConsultaPort bloqueos) {
         this.cuentas = Objects.requireNonNull(cuentas, "cuentas");
         this.autorizacion = Objects.requireNonNull(autorizacion, "autorizacion");
+        this.bloqueos = Objects.requireNonNull(bloqueos, "bloqueos");
     }
 
     @Override
@@ -59,8 +65,9 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
         Set<UUID> ids = new LinkedHashSet<>();
         pagina.elementos().forEach(c -> ids.add(c.id()));
         Map<UUID, RolesDeCuenta> roles = autorizacion.rolesDe(ids);
+        Map<UUID, BloqueoVista> bloqueados = bloqueosDe(pagina.elementos());
         List<UsuarioVista> usuarios = pagina.elementos().stream()
-                .map(c -> vista(c, roles.getOrDefault(c.id(), RolesDeCuenta.NINGUNO)))
+                .map(c -> vista(c, roles.getOrDefault(c.id(), RolesDeCuenta.NINGUNO), bloqueados.get(c.id())))
                 .toList();
         return new PaginaResultado<>(usuarios, pagina.pagina(), pagina.tamano(), pagina.total());
     }
@@ -72,15 +79,24 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
         UUID id = uuid(idTexto);
         CuentaSnapshot cuenta = cuentas.leer(id).orElseThrow(() -> new CuentaNoEncontradaException(id));
         RolesDeCuenta roles = autorizacion.rolesDe(Set.of(id)).getOrDefault(id, RolesDeCuenta.NINGUNO);
-        return vista(cuenta, roles);
+        return vista(cuenta, roles, bloqueosDe(List.of(cuenta)).get(id));
     }
 
-    private static UsuarioVista vista(CuentaSnapshot c, RolesDeCuenta roles) {
+    /** Solo se consulta protección por las cuentas cuyo estado efectivo es BLOQUEADO. */
+    private Map<UUID, BloqueoVista> bloqueosDe(List<CuentaSnapshot> cuentasPagina) {
+        Set<UUID> bloqueadas = new LinkedHashSet<>();
+        cuentasPagina.stream().filter(c -> EstadoCuenta.BLOQUEADO.name().equals(c.estadoEfectivo()))
+                .forEach(c -> bloqueadas.add(c.id()));
+        return bloqueadas.isEmpty() ? Map.of() : bloqueos.vigentes(bloqueadas);
+    }
+
+    private static UsuarioVista vista(CuentaSnapshot c, RolesDeCuenta roles, BloqueoVista bloqueo) {
         // MFA efectivo de RF-10.1: bandera voluntaria o cualquier rol de gestión.
         // Se reemplaza por MfaPort.esEfectivo cuando segundo factor lo exporte.
         boolean mfaEfectivo = c.mfaHabilitado() || roles.deGestion();
         return new UsuarioVista(c.id(), c.nombres(), c.apellidos(), c.nombreCompleto(), c.correo(), c.celular(),
-                c.estadoEfectivo(), c.correoVerificado(), c.celularVerificado(), mfaEfectivo, roles.roles());
+                c.estadoEfectivo(), c.correoVerificado(), c.celularVerificado(), mfaEfectivo, roles.roles(),
+                bloqueo);
     }
 
     private static String estado(String valor) {
