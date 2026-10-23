@@ -19,7 +19,10 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.nimbusds.jose.jwk.RSAKey;
+
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -41,13 +44,18 @@ public class IdentidadConfig {
             return denegar(problemaIssuer.get());
         }
         ClaveFirmaRsa clave;
+        List<RSAKey> anteriores;
         try {
             clave = cargarClave(propiedades);
+            anteriores = IdentidadProperties.vacio(propiedades.clavePublicaAnterior())
+                    ? List.of()
+                    : List.of(ClaveFirmaRsa.publicaDesdePem(propiedades.clavePublicaAnterior()));
         } catch (ClaveInvalidaException e) {
             return denegar(e.getMessage());
         }
-        log.info("identidad: firma RS256 habilitada; issuer={}, kid={}", propiedades.issuer(), clave.kid());
-        return new FirmarAccesoService(new NimbusFirmadorJws(clave), propiedades.issuer(),
+        log.info("identidad: firma RS256 habilitada; issuer={}, kid={}, anteriores publicadas={}",
+                propiedades.issuer(), clave.kid(), anteriores.stream().map(RSAKey::getKeyID).toList());
+        return new FirmarAccesoService(new NimbusFirmadorJws(clave, anteriores), propiedades.issuer(),
                 clock.getIfAvailable(Clock::systemUTC));
     }
 

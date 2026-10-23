@@ -11,6 +11,7 @@ import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
@@ -88,6 +89,51 @@ public final class ClaveFirmaRsa {
             return new ClaveFirmaRsa(jwk);
         } catch (JOSEException e) {
             throw new ClaveInvalidaException("no se pudo calcular el kid de la clave");
+        }
+    }
+
+    /**
+     * Carga la parte <b>pública</b> de una clave retirada para seguir publicándola
+     * y aceptándola durante una rotación (RF-17.3). PEM X.509
+     * ({@code BEGIN PUBLIC KEY}) de al menos 3072 bits; su {@code kid} es la misma
+     * huella RFC 7638 que tenía cuando firmaba.
+     *
+     * @throws ClaveInvalidaException si no es una pública RSA válida
+     */
+    public static RSAKey publicaDesdePem(String pem) {
+        if (pem == null || pem.isBlank()) {
+            throw new ClaveInvalidaException("la clave pública anterior está vacía");
+        }
+        String texto = pem.strip();
+        String inicio = "-----BEGIN PUBLIC KEY-----";
+        String fin = "-----END PUBLIC KEY-----";
+        if (!texto.startsWith(inicio) || !texto.endsWith(fin)) {
+            throw new ClaveInvalidaException("la clave pública anterior debe estar en PEM X.509 (BEGIN PUBLIC KEY)");
+        }
+        RSAPublicKey publica;
+        try {
+            byte[] der = Base64.getMimeDecoder().decode(texto.substring(inicio.length(), texto.length() - fin.length()));
+            if (!(KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(der)) instanceof RSAPublicKey rsa)) {
+                throw new ClaveInvalidaException("la clave pública anterior no es RSA");
+            }
+            publica = rsa;
+        } catch (IllegalArgumentException | GeneralSecurityException e) {
+            throw new ClaveInvalidaException("la clave pública anterior no es una clave RSA X.509 válida");
+        }
+        int bits = publica.getModulus().bitLength();
+        if (bits < BITS_MINIMOS) {
+            throw new ClaveInvalidaException(
+                    "la clave pública anterior tiene " + bits + " bits; se exigen al menos " + BITS_MINIMOS);
+        }
+        try {
+            RSAKey sinKid = new RSAKey.Builder(publica).build();
+            return new RSAKey.Builder(publica)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .algorithm(JWSAlgorithm.RS256)
+                    .keyID(sinKid.computeThumbprint("SHA-256").toString())
+                    .build();
+        } catch (JOSEException e) {
+            throw new ClaveInvalidaException("no se pudo calcular el kid de la clave pública anterior");
         }
     }
 

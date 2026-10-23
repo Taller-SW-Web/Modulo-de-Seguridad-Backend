@@ -191,8 +191,42 @@ real, «ahora» siempre queda unos milisegundos por delante.
 Estas pruebas son locales: la verificación con el validador de Ventas (G5)
 contra el entorno desplegado es TEC-IDENTIDAD-T005.
 
-## Fuera de alcance en H3
+## Integración con módulos consumidores (FEAT-05, H4)
 
-Rotación de claves (clave nueva y anterior a la vez), emisión de tokens de
-servicio, introspección y consultas SPEC-18. La auditoría `ACCESO_DENEGADO`
-se conectará cuando exista `AuditoriaPort` (Christian).
+| Ruta | Quién entra | Resultado |
+|---|---|---|
+| `POST /api/v1/auth/token` | Pública; `client_id` + `client_secret` en formulario | 200 `TokenServicio`; 401 `CLIENTE_INVALIDO` igual para inexistente, inactivo o secreto malo; 400 `VALIDACION` si `grant_type` no es `client_credentials` |
+| `POST /api/v1/auth/introspeccion` | Token de servicio con `tokens:introspeccion` | Siempre 200: `activo:true` con roles/permisos **de hoy**, o `activo:false` + motivo |
+| `GET /api/v1/roles`, `GET /api/v1/permisos` | Token de servicio con `roles:leer` | Catálogo leído de la base (capacidad `autorizacion`) |
+
+- **Token de servicio:** RS256, 3600 s, `tipo=servicio`, `sub`=client_id, `aud` = APIs
+  dueñas de los scopes concedidos (sin repetir), `scope` separado por espacios. Se
+  conceden **exactamente** los scopes del cliente, pida los que pida (RF-17.5).
+- **Clientes:** se leen de `cliente_servicio`/`cliente_servicio_scope`/`scope` con una
+  consulta JDBC de solo lectura. El secreto se guarda como SHA-256 hex (secretos de
+  ≥256 bits generados por operaciones) y se compara en tiempo constante, también
+  contra un hash señuelo si el cliente no existe. Aprovisionamiento:
+  [runbook](../runbooks/clientes-servicio.md); catálogo de scopes en
+  `db/identidad/R__catalogo_scopes.sql`; concesiones en
+  `docs/migraciones-propuestas/concesiones-servicio.sql`.
+- **Filtro:** las rutas de integración usan `IntegracionAuthenticationManager`
+  (persona **o** servicio) y `ReglasIntegracion` exige el scope; sin él, 403
+  `SCOPE_INSUFICIENTE` sin decir cuál, y se audita como `ACCESO_DENEGADO` no
+  crítico (ESC-17.8: actor `MODULO` o `USUARIO`, método, ruta y `jti`; si la
+  auditoría falla, el 403 sale igual). Cualquier otra ruta sigue rechazando el
+  token de servicio con 403 `TOKEN_NO_APLICABLE` (ESC-17.4), y ese intento
+  también se audita como `ACCESO_DENEGADO` (actor `MODULO`, `client_id` y `jti`). Un token de servicio
+  sin `aud: api-seguridad` es 401.
+- **Introspección:** firma → `FIRMA_INVALIDA`/`TOKEN_VENCIDO`; sesión del `jti`
+  (DAT-01) → `TOKEN_REVOCADO`; cuenta → `USUARIO_INACTIVO`/`USUARIO_BLOQUEADO`;
+  roles distintos de los del token → `TOKEN_REVOCADO`. Sin transacción envolvente:
+  cada consulta abre la suya. Sesiones exige una existente (MANDATORY), así que
+  `EstadoIdentidadAdapter` la abre (REQUIRES_NEW) y un rechazo solo revierte esa.
+- **Rotación (RF-17.3):** `AUTH_CLAVE_PUBLICA_ANTERIOR` (PEM X.509) publica y acepta
+  la clave retirada junto a la actual; la emisión usa siempre la actual. Se quita
+  pasadas al menos 24 h. El descubrimiento anuncia `token_endpoint`,
+  `introspection_endpoint`, `grant_types_supported` y `scopes_supported`.
+
+## Pendiente
+
+Consultas SPEC-18 de usuarios y direcciones (FEAT-06).

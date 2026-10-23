@@ -131,10 +131,13 @@ class DescubrimientoHttpTest {
         assertThat(documento.get("issuer").asText()).isEqualTo(ISSUER);
         assertThat(documento.get("jwks_uri").asText()).isEqualTo(ISSUER + "/.well-known/jwks.json");
         assertThat(documento.get("id_token_signing_alg_values_supported")).hasSize(1);
-        // H3 no declara endpoints que todavía no existen.
-        assertThat(documento.has("token_endpoint")).isFalse();
-        assertThat(documento.has("introspection_endpoint")).isFalse();
-        assertThat(documento.has("scopes_supported")).isFalse();
+        // FEAT-05: token de servicio e introspección ya existen y se anuncian (RF-17.2).
+        assertThat(documento.get("token_endpoint").asText()).isEqualTo(ISSUER + "/token");
+        assertThat(documento.get("introspection_endpoint").asText()).isEqualTo(ISSUER + "/introspeccion");
+        assertThat(documento.get("grant_types_supported")).extracting(JsonNode::asText)
+                .containsExactly("client_credentials");
+        assertThat(documento.get("scopes_supported")).extracting(JsonNode::asText).containsExactly(
+                "tokens:introspeccion", "usuarios:leer", "usuarios:leer:documento", "direcciones:leer", "roles:leer");
     }
 
     @Test
