@@ -1,0 +1,276 @@
+{
+  "fecha": "2026-10-14",
+  "fuente": "Catálogos PostgreSQL, Supabase sghqhbakbnaapxdapmbc; solo lectura; sin filas de negocio",
+  "columnas": [
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "credencial",
+      "column_name": "usuario_id",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "credencial",
+      "column_name": "hash_contrasena",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": 255
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "credencial",
+      "column_name": "ultimo_cambio",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "credencial",
+      "column_name": "requiere_cambio",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "desafio_mfa",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "desafio_mfa",
+      "column_name": "usuario_id",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "desafio_mfa",
+      "column_name": "hash_token",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": 255
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "desafio_mfa",
+      "column_name": "expiracion",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "desafio_mfa",
+      "column_name": "consumido",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "desafio_mfa",
+      "column_name": "creado_en",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "otp",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "otp",
+      "column_name": "usuario_id",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "otp",
+      "column_name": "desafio_id",
+      "is_nullable": "YES",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "varchar",
+      "data_type": "character varying",
+      "table_name": "otp",
+      "column_name": "hash_codigo",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": 255
+    },
+    {
+      "udt_name": "canal_otp",
+      "data_type": "USER-DEFINED",
+      "table_name": "otp",
+      "column_name": "canal",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "otp",
+      "column_name": "intentos",
+      "is_nullable": "NO",
+      "column_default": "0",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "otp",
+      "column_name": "expiracion",
+      "is_nullable": "NO",
+      "column_default": null,
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "otp",
+      "column_name": "usado",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "character_maximum_length": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "otp",
+      "column_name": "creado_en",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "character_maximum_length": null
+    }
+  ],
+  "constraints": [
+    {
+      "tabla": "credencial",
+      "nombre": "credencial_pkey",
+      "validada": true,
+      "definicion": "PRIMARY KEY (usuario_id)"
+    },
+    {
+      "tabla": "credencial",
+      "nombre": "credencial_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "ck_desafio_mfa_expiracion",
+      "validada": true,
+      "definicion": "CHECK ((expiracion > creado_en))"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "desafio_mfa_pkey",
+      "validada": true,
+      "definicion": "PRIMARY KEY (id)"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "desafio_mfa_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "ck_otp_expiracion",
+      "validada": true,
+      "definicion": "CHECK ((expiracion > creado_en))"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "ck_otp_intentos",
+      "validada": true,
+      "definicion": "CHECK (((intentos >= 0) AND (intentos <= 3)))"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "otp_desafio_id_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (desafio_id, usuario_id) REFERENCES desafio_mfa(id, usuario_id) ON DELETE CASCADE"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "otp_pkey",
+      "validada": true,
+      "definicion": "PRIMARY KEY (id)"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "otp_usuario_id_fkey",
+      "validada": true,
+      "definicion": "FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE"
+    }
+  ],
+  "indices": [
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "desafio_mfa_pkey",
+      "definicion": "CREATE UNIQUE INDEX desafio_mfa_pkey ON public.desafio_mfa USING btree (id)"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "uq_desafio_id_usuario",
+      "definicion": "CREATE UNIQUE INDEX uq_desafio_id_usuario ON public.desafio_mfa USING btree (id, usuario_id)"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "uq_desafio_mfa_hash",
+      "definicion": "CREATE UNIQUE INDEX uq_desafio_mfa_hash ON public.desafio_mfa USING btree (hash_token)"
+    },
+    {
+      "tabla": "desafio_mfa",
+      "nombre": "idx_desafio_mfa_usuario",
+      "definicion": "CREATE INDEX idx_desafio_mfa_usuario ON public.desafio_mfa USING btree (usuario_id)"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "otp_pkey",
+      "definicion": "CREATE UNIQUE INDEX otp_pkey ON public.otp USING btree (id)"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "idx_otp_usuario_fecha",
+      "definicion": "CREATE INDEX idx_otp_usuario_fecha ON public.otp USING btree (usuario_id, creado_en)"
+    },
+    {
+      "tabla": "otp",
+      "nombre": "idx_otp_desafio",
+      "definicion": "CREATE INDEX idx_otp_desafio ON public.otp USING btree (desafio_id)"
+    }
+  ]
+}
