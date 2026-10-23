@@ -12,12 +12,13 @@ public final class TokenUnUsoPersistenceMapper {
     public static TokenUnUsoJpaEntity aEntidad(TokenUnUso t) {
         Objects.requireNonNull(t);
         return new TokenUnUsoJpaEntity(t.id(), aPersistido(t.proposito()), t.usuarioId(), t.hashToken(),
-                t.expiraEn().atOffset(ZoneOffset.UTC), t.usado(), t.creadoEn().atOffset(ZoneOffset.UTC), t.contextoId());
+                t.destino(), t.expiraEn().atOffset(ZoneOffset.UTC), t.usado(),
+                t.creadoEn().atOffset(ZoneOffset.UTC), t.contextoId());
     }
     public static TokenUnUso aDominio(TokenUnUsoJpaEntity e) {
         Objects.requireNonNull(e);
         return new TokenUnUso(e.getId(), e.getUsuarioId(), desdePersistido(e.getProposito()), e.getHashToken(),
-                e.getContextoId(), e.getExpiraEn().toInstant(), e.getCreadoEn().toInstant(), e.isUsado());
+                e.getContextoId(), e.getDestino(), e.getExpiraEn().toInstant(), e.getCreadoEn().toInstant(), e.isUsado());
     }
     public static PropositoTokenPersistido aPersistido(PropositoTokenUnUso p) {
         return p == PropositoTokenUnUso.DESBLOQUEO_AUTOMATICO ? PropositoTokenPersistido.DESBLOQUEO

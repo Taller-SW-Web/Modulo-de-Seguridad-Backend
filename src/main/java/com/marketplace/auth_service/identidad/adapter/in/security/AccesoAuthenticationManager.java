@@ -51,7 +51,7 @@ public class AccesoAuthenticationManager implements AuthenticationManager {
             log.debug("acceso rechazado: {}", e.getMessage());
             throw new InvalidBearerTokenException("Token ausente o inválido");
         } catch (TokenNoAplicableException e) {
-            throw new TokenNoAplicableAuthenticationException();
+            throw new TokenNoAplicableAuthenticationException(e.clientId(), e.jti());
         } catch (FirmaNoDisponibleException e) {
             throw new AuthenticationServiceException("validación de accesos no disponible");
         }

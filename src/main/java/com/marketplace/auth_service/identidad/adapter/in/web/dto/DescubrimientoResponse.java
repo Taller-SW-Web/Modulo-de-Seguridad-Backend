@@ -11,5 +11,9 @@ import java.util.List;
 public record DescubrimientoResponse(
         String issuer,
         @JsonProperty("jwks_uri") String jwksUri,
-        @JsonProperty("id_token_signing_alg_values_supported") List<String> idTokenSigningAlgValuesSupported) {
+        @JsonProperty("token_endpoint") String tokenEndpoint,
+        @JsonProperty("introspection_endpoint") String introspectionEndpoint,
+        @JsonProperty("id_token_signing_alg_values_supported") List<String> idTokenSigningAlgValuesSupported,
+        @JsonProperty("grant_types_supported") List<String> grantTypesSupported,
+        @JsonProperty("scopes_supported") List<String> scopesSupported) {
 }
