@@ -10,11 +10,19 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
- * Base desechable para las pruebas de EP-08-T007: esquema observado + V106 (registro_id de auditoría y
+ * Base desechable para las pruebas de EP-08-T007: esquema observado + V101-V106 (registro_id de auditoría y
  * columnas de reclamo del outbox, ya aprobadas) + semilla real del catálogo de autorización.
  * Usa {@code PRUEBAS_POSTGRES_URL} (nunca Supabase) o Docker; sin ninguno devuelve {@code false}.
  */
 final class BasePerfilPostgres {
+    private static final java.util.List<String> MIGRACIONES = java.util.List.of(
+            "V101__credencial_version.sql",
+            "V102__sesion_familia_acceso.sql",
+            "V103__mfa_desafio_otp.sql",
+            "V104__proteccion_racha_huella_revision.sql",
+            "V105__token_un_uso_contexto_id.sql",
+            "V106__auditoria_registro_id_y_outbox_reintento.sql");
+
     private static PostgreSQLContainer<?> contenedor;
 
     private BasePerfilPostgres() { }
@@ -47,7 +55,11 @@ final class BasePerfilPostgres {
         String propia = url.replaceFirst("/[^/?]+(\\?|$)", "/" + nombre + "$1");
         try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
             s.execute(leer("mfa/base-observada/schema.sql"));
-            s.execute(leer("db/migration/V106__auditoria_registro_id_y_outbox_reintento.sql"));
+            // La aplicacion completa valida TODAS las entidades (credencial, sesion, MFA, proteccion, token),
+            // asi que el esquema observado necesita tambien V101-V105 antes de V106 (mismo orden que Flyway).
+            for (String migracion : MIGRACIONES) {
+                s.execute(leer("db/migration/" + migracion));
+            }
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
         }
         registro.add("spring.datasource.url", () -> propia);
