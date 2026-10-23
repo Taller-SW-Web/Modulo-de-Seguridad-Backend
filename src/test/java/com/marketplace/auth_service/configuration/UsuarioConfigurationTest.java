@@ -25,8 +25,9 @@ class UsuarioConfigurationTest {
             .withBean(UsuarioJpaRepository.class,()->mock(UsuarioJpaRepository.class))
             .withBean(UsuarioEstadoEfectivoRepository.class,()->mock(UsuarioEstadoEfectivoRepository.class))
             .withBean(AutorizacionPort.class,()->mock(AutorizacionPort.class))
-            // El registro se cablea en RegistroClienteConfig; aquí solo lo necesita su controlador escaneado.
-            .withBean(RegistroClientePort.class,()->mock(RegistroClientePort.class));
+            // Registro y verificación se cablean en sus propias Config; aquí solo los piden sus controladores.
+            .withBean(RegistroClientePort.class,()->mock(RegistroClientePort.class))
+            .withBean(VerificacionCorreoPort.class,()->mock(VerificacionCorreoPort.class));
     @Test void unSoloBeanPorPuertoYUnicoCuentasPortDecoradoConEscaneoReal() {
         runner.run(c->{
             assertThat(c).hasNotFailed().hasSingleBean(CuentasPort.class)

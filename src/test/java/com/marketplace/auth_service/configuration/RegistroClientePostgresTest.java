@@ -22,9 +22,12 @@ import com.marketplace.auth_service.credencial.application.dto.SecretoEfimero;
 import com.marketplace.auth_service.credencial.application.port.in.CredencialesPort;
 import com.marketplace.auth_service.credencial.application.service.TokenUnUsoHashing;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoReenvio;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoRegistro;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoVerificacion;
 import com.marketplace.auth_service.usuario.application.dto.SolicitudRegistro;
 import com.marketplace.auth_service.usuario.application.port.in.RegistroClientePort;
+import com.marketplace.auth_service.usuario.application.port.in.VerificacionCorreoPort;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -63,9 +66,9 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
- * FEAT-01-T1/T2 con los proveedores reales de cuentas, credenciales (hasher y política),
- * autorización, tokens de un uso y outbox cifrado sobre el esquema observado; la auditoría
- * se registra en memoria. Cada clase crea su propia base desechable; nunca Supabase.
+ * FEAT-01-T1/T2/T3 con los proveedores reales de cuentas, credenciales (hasher y política),
+ * autorización, tokens de un uso, cuota de reenvíos y outbox cifrado sobre el esquema observado;
+ * la auditoría se registra en memoria. Cada clase crea su propia base desechable; nunca Supabase.
  */
 @DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC", "g7.registro.version-terminos=2026-10",
@@ -74,7 +77,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = AuthServiceApplication.class)
 @Import({UsuarioConfiguration.class, AutorizacionConfig.class, CredencialesConfig.class, CredencialesJpaAdapter.class,
-        TokensUnUsoConfig.class, RegistroClienteConfig.class, RegistroClientePostgresTest.Persistencia.class})
+        TokensUnUsoConfig.class, RegistroClienteConfig.class, VerificacionCorreoConfig.class,
+        RegistroClientePostgresTest.Persistencia.class})
 @RequierePostgres
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RegistroClientePostgresTest {
@@ -151,6 +155,9 @@ class RegistroClientePostgresTest {
         registro.add("spring.datasource.username", () -> usuario);
         registro.add("spring.datasource.password", () -> contrasena);
         registro.add("g7.password.comunes.archivo", comunes::toString);
+        byte[] claveCuota = new byte[32];
+        java.util.Arrays.fill(claveCuota, (byte) 7);
+        registro.add("AUTH_SOLICITUD_LIMITADA_HMAC_KEY", () -> java.util.Base64.getEncoder().encodeToString(claveCuota));
     }
 
     private static String leer(String recurso) throws Exception {
@@ -162,6 +169,7 @@ class RegistroClientePostgresTest {
     @Autowired RegistroClientePort registro;
     @Autowired CredencialesPort credenciales;
     @Autowired AutorizacionPort autorizacion;
+    @Autowired VerificacionCorreoPort verificacion;
     @Autowired AuditoriaEnMemoria auditoria;
     @Autowired CifradoMensajesPort cifrado;
     @Autowired JdbcTemplate jdbc;
@@ -170,7 +178,29 @@ class RegistroClientePostgresTest {
     void vaciar() {
         jdbc.execute("truncate usuario cascade");
         jdbc.execute("truncate outbox");
+        jdbc.execute("truncate solicitud_limitada");
         auditoria.registros.clear();
+    }
+
+    private UUID registrar(String correo) {
+        return ((ResultadoRegistro.Creada) registro.registrar(solicitud(correo, CLAVE), CONTEXTO)).id();
+    }
+
+    /** Token claro del último correo de verificación, leído descifrando el outbox como lo haría el buzón. */
+    private String tokenDelUltimoCorreo() throws Exception {
+        String carga = jdbc.queryForObject("select payload::text from outbox where topico = 'correo.verificacion_correo' "
+                + "order by creado_en desc limit 1", String.class);
+        var enlace = ENLACE.matcher(descifrar(carga, "contenido"));
+        assertThat(enlace.find()).isTrue();
+        return URLDecoder.decode(enlace.group(1), StandardCharsets.UTF_8);
+    }
+
+    private String estado(UUID id) {
+        return jdbc.queryForObject("select estado::text from usuario where id = ?", String.class, id);
+    }
+
+    private int eventosCreado() {
+        return contar("outbox where topico = 'usuario.creado'");
     }
 
     @AfterEach
@@ -214,6 +244,80 @@ class RegistroClientePostgresTest {
         assertThat(TokenUnUsoHashing.sha256Hex(claro)).isEqualTo(token.get("hash_token"));
         assertThat(token.get("hash_token")).isNotEqualTo(claro);
         assertThat(auditoria.registros).allSatisfy(r -> assertThat(r.detalle().values()).doesNotContain(claro));
+    }
+
+    @Test
+    void elTokenDelCorreoActivaLaCuentaUnaSolaVezYPublicaUsuarioCreado() throws Exception {
+        UUID id = registrar("maria@ejemplo.com");
+        String token = tokenDelUltimoCorreo();
+
+        assertThat(verificacion.verificar(token, CONTEXTO)).isEqualTo(ResultadoVerificacion.VERIFICADA);
+        assertThat(estado(id)).isEqualTo("ACTIVO");
+        assertThat(jdbc.queryForObject("select correo_verificado from usuario where id = ?", Boolean.class, id)).isTrue();
+        assertThat(jdbc.queryForObject("select usado from token_un_uso where usuario_id = ?", Boolean.class, id)).isTrue();
+        String evento = jdbc.queryForObject("select payload::text from outbox where topico = 'usuario.creado'", String.class);
+        assertThat(new ObjectMapper().readTree(evento).path("usuarioId").asText()).isEqualTo(id.toString());
+        assertThat(evento).contains("CLIENTE").doesNotContain(token, "maria@ejemplo.com");
+
+        assertThat(verificacion.verificar(token, CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(verificacion.verificar("token-inventado", CONTEXTO)).isEqualTo(ResultadoVerificacion.INVALIDA);
+        assertThat(eventosCreado()).isEqualTo(1);
+        assertThat(auditoria.registros).filteredOn(r -> r.accion().equals("USUARIO_VERIFICADO"))
+                .extracting(RegistroSeguro::resultado).containsExactly("EXITO", "FALLO");
+    }
+
+    @Test
+    void tokenVencidoDejaLaCuentaPendienteSinEvento() throws Exception {
+        UUID id = registrar("maria@ejemplo.com");
+        String token = tokenDelUltimoCorreo();
+        // Emitido hace 25 h (ck_token_un_uso_expiracion exige que venza después de crearse).
+        jdbc.update("update token_un_uso set creado_en = now() - interval '25 hours', "
+                + "expiracion = now() - interval '1 hour' where usuario_id = ?", id);
+
+        assertThat(verificacion.verificar(token, CONTEXTO)).isEqualTo(ResultadoVerificacion.EXPIRADA);
+        assertThat(estado(id)).isEqualTo("PENDIENTE_VERIFICACION");
+        assertThat(jdbc.queryForObject("select usado from token_un_uso where usuario_id = ?", Boolean.class, id)).isFalse();
+        assertThat(eventosCreado()).isZero();
+    }
+
+    @Test
+    void reenvioInvalidaElEnlaceAnteriorYAdmiteTresPorHora() throws Exception {
+        UUID id = registrar("maria@ejemplo.com");
+        String primero = tokenDelUltimoCorreo();
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(verificacion.reenviar(" MARIA@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
+        }
+        assertThat(verificacion.reenviar("maria@ejemplo.com", CONTEXTO))
+                .isInstanceOfSatisfying(ResultadoReenvio.Limitado.class,
+                        l -> assertThat(l.reintentarEnSegundos()).isBetween(3500L, 3600L));
+        assertThat(correosDeVerificacion()).hasSize(4); // el del registro y los tres reenvíos
+        assertThat(contar("token_un_uso where not usado")).isEqualTo(1);
+        assertThat(jdbc.queryForList("select clave_hash from solicitud_limitada where tipo = 'REENVIO_VERIFICACION'",
+                String.class)).hasSize(3).allSatisfy(h -> assertThat(h).matches("[0-9a-f]{64}").doesNotContain("maria"));
+
+        assertThat(verificacion.verificar(primero, CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(verificacion.verificar(tokenDelUltimoCorreo(), CONTEXTO)).isEqualTo(ResultadoVerificacion.VERIFICADA);
+        assertThat(estado(id)).isEqualTo("ACTIVO");
+    }
+
+    @Test
+    void reenvioAUnCorreoSinCuentaRespondeIgualYTambienSeLimita() {
+        for (int i = 0; i < 3; i++) {
+            assertThat(verificacion.reenviar("nadie@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
+        }
+        assertThat(verificacion.reenviar("nadie@ejemplo.com", CONTEXTO)).isInstanceOf(ResultadoReenvio.Limitado.class);
+        assertThat(correosDeVerificacion()).isEmpty();
+        assertThat(contar("solicitud_limitada")).isEqualTo(3);
+    }
+
+    @Test
+    void reenvioAUnaCuentaYaVerificadaNoEnviaNada() throws Exception {
+        registrar("maria@ejemplo.com");
+        verificacion.verificar(tokenDelUltimoCorreo(), CONTEXTO);
+
+        assertThat(verificacion.reenviar("maria@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
+        assertThat(correosDeVerificacion()).hasSize(1);
     }
 
     @Test
