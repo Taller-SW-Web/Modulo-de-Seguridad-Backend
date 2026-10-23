@@ -29,6 +29,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -40,6 +43,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +63,7 @@ import org.springframework.transaction.support.TransactionTemplate;
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC"}, showSql = false)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = AuthServiceApplication.class)
+@ImportAutoConfiguration(JacksonAutoConfiguration.class)
 @Import({UsuarioConfiguration.class, AutorizacionConfig.class, PerfilConfig.class, AuditoriaConfig.class,
         AuditoriaJpaAdapter.class, PerfilEdicionPostgresTest.Persistencia.class})
 @RequierePostgres
@@ -82,6 +87,9 @@ class PerfilEdicionPostgresTest {
     }
 
     private static final String EVENTO = "usuario.atributos_actualizados";
+
+    /** AuditoriaConfig pide un RabbitTemplate para el reintento; la porcion JPA no autoconfigura RabbitMQ. */
+    @MockitoBean RabbitTemplate rabbit;
 
     @Autowired PerfilPort perfil;
     @Autowired JdbcTemplate jdbc;

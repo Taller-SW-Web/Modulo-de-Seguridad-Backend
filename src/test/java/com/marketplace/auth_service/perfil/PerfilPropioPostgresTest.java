@@ -23,6 +23,9 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -35,6 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.DockerClientFactory;
@@ -49,6 +53,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
         showSql = false)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = AuthServiceApplication.class)
+@ImportAutoConfiguration(JacksonAutoConfiguration.class)
 @Import({UsuarioConfiguration.class, AutorizacionConfig.class, PerfilConfig.class, AuditoriaConfig.class,
         AuditoriaJpaAdapter.class, PerfilPropioPostgresTest.Persistencia.class})
 @RequierePostgres
@@ -105,6 +110,9 @@ class PerfilPropioPostgresTest {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
+
+    /** AuditoriaConfig pide un RabbitTemplate para el reintento; la porcion JPA no autoconfigura RabbitMQ. */
+    @MockitoBean RabbitTemplate rabbit;
 
     @Autowired PerfilPort perfil;
     @Autowired JdbcTemplate jdbc;

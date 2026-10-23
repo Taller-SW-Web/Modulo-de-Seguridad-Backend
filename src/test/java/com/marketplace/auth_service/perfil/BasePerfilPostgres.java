@@ -2,6 +2,8 @@ package com.marketplace.auth_service.perfil;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.core.io.ClassPathResource;
@@ -15,7 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * Usa {@code PRUEBAS_POSTGRES_URL} (nunca Supabase) o Docker; sin ninguno devuelve {@code false}.
  */
 final class BasePerfilPostgres {
-    private static final java.util.List<String> MIGRACIONES = java.util.List.of(
+    private static final List<String> MIGRACIONES = List.of(
             "V101__credencial_version.sql",
             "V102__sesion_familia_acceso.sql",
             "V103__mfa_desafio_otp.sql",
@@ -53,19 +55,32 @@ final class BasePerfilPostgres {
             s.execute("CREATE DATABASE " + nombre);
         }
         String propia = url.replaceFirst("/[^/?]+(\\?|$)", "/" + nombre + "$1");
-        try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
-            s.execute(leer("mfa/base-observada/schema.sql"));
+        try (var c = DriverManager.getConnection(propia, usuario, contrasena)) {
+            // Cada script va en su propia transacción, como hace Flyway: V102 empieza con LOCK TABLE,
+            // que PostgreSQL solo admite dentro de una transacción (en autocommit falla con 25P01).
+            c.setAutoCommit(false);
+            aplicar(c, "mfa/base-observada/schema.sql");
             // La aplicacion completa valida TODAS las entidades (credencial, sesion, MFA, proteccion, token),
             // asi que el esquema observado necesita tambien V101-V105 antes de V106 (mismo orden que Flyway).
             for (String migracion : MIGRACIONES) {
-                s.execute(leer("db/migration/" + migracion));
+                aplicar(c, "db/migration/" + migracion);
             }
-            s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
+            aplicar(c, "db/autorizacion/R__catalogo_autorizacion.sql");
         }
         registro.add("spring.datasource.url", () -> propia);
         registro.add("spring.datasource.username", () -> usuario);
         registro.add("spring.datasource.password", () -> contrasena);
         return true;
+    }
+
+    private static void aplicar(java.sql.Connection c, String recurso) throws Exception {
+        try (var s = c.createStatement()) {
+            s.execute(leer(recurso));
+            c.commit();
+        } catch (SQLException e) {
+            c.rollback();
+            throw new IllegalStateException("Falló el script de prueba " + recurso + ": " + e.getMessage(), e);
+        }
     }
 
     private static String leer(String recurso) throws Exception {
