@@ -13,6 +13,7 @@ import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.Permiso;
+import com.marketplace.auth_service.usuario.application.dto.BloqueoVista;
 import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
@@ -21,12 +22,14 @@ import com.marketplace.auth_service.usuario.application.dto.RolesDeCuenta;
 import com.marketplace.auth_service.usuario.application.port.in.ConsultaUsuariosPort;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.usuario.application.port.out.AutorizacionUsuariosPort;
+import com.marketplace.auth_service.usuario.application.port.out.BloqueosConsultaPort;
 import com.marketplace.auth_service.usuario.application.service.ConsultaUsuariosService;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +69,8 @@ class UsuariosHttpTest {
     static final AtomicReference<Paginacion> PAGINACION = new AtomicReference<>();
 
     static final Map<UUID, CuentaSnapshot> CUENTAS = new HashMap<>();
+    static final Instant HASTA = Instant.parse("2026-10-17T15:30:00Z");
+    static final AtomicReference<Set<UUID>> CONSULTADOS = new AtomicReference<>();
 
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
@@ -75,7 +80,15 @@ class UsuariosHttpTest {
     static class Aplicacion {
         @Bean
         ConsultaUsuariosPort consultaUsuariosPort() {
-            return new ConsultaUsuariosService(cuentas(), autorizacion());
+            return new ConsultaUsuariosService(cuentas(), autorizacion(), bloqueos());
+        }
+
+        /** Solo ADMIN tiene un bloqueo vigente; registra por qué cuentas se preguntó. */
+        private static BloqueosConsultaPort bloqueos() {
+            return ids -> {
+                CONSULTADOS.set(Set.copyOf(ids));
+                return ids.contains(ADMIN) ? Map.of(ADMIN, new BloqueoVista("AUTOMATICO", HASTA, null)) : Map.of();
+            };
         }
 
         private static AutorizacionUsuariosPort autorizacion() {
@@ -151,6 +164,7 @@ class UsuariosHttpTest {
     void cuentas() {
         FILTRO.set(null);
         PAGINACION.set(null);
+        CONSULTADOS.set(null);
         CUENTAS.put(ANA, new CuentaSnapshot(ANA, "Ana", "Pérez", "ana@clientes.test", null, "ACTIVO", "ACTIVO",
                 true, false, false, 3, 2));
         CUENTAS.put(ADMIN, new CuentaSnapshot(ADMIN, "Adm", "Sistema", "admin@g7.test", "+51987654321",
@@ -198,6 +212,12 @@ class UsuariosHttpTest {
         JsonNode admin = pagina.get("usuarios").get(1);
         assertThat(admin.get("estado").asText()).isEqualTo("BLOQUEADO");
         assertThat(admin.get("mfaHabilitado").asBoolean()).isTrue();
+        // RF-15.6: bloqueo solo en la cuenta BLOQUEADO, y protección solo se consulta por ella.
+        assertThat(admin.get("bloqueo").get("tipo").asText()).isEqualTo("AUTOMATICO");
+        assertThat(admin.get("bloqueo").get("hasta").asText()).isEqualTo("2026-10-17T15:30:00Z");
+        assertThat(admin.get("bloqueo").has("motivo")).isFalse();
+        assertThat(ana.has("bloqueo")).as("sin bloqueo se omite").isFalse();
+        assertThat(CONSULTADOS.get()).containsExactly(ADMIN);
         assertThat(respuesta.body()).doesNotContain("intentos", "bloqueosSeguidos", "estadoBase", "password",
                 "hash", "documento");
 
@@ -222,6 +242,16 @@ class UsuariosHttpTest {
         assertThat(usuario.get("celular").asText()).isEqualTo("+51987654321");
         assertThat(usuario.get("celularVerificado").asBoolean()).isTrue();
         assertThat(usuario.get("roles")).extracting(JsonNode::asText).containsExactly("ADMIN_SISTEMA");
+        assertThat(usuario.get("bloqueo").get("tipo").asText()).isEqualTo("AUTOMATICO");
+    }
+
+    @Test
+    void detalleDeUnaCuentaActivaNoConsultaBloqueos() throws Exception {
+        HttpResponse<String> respuesta = get("/api/v1/usuarios/" + ANA, ADMIN);
+
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(respuesta.body()).has("bloqueo")).isFalse();
+        assertThat(CONSULTADOS.get()).as("no se pregunta a protección").isNull();
     }
 
     // ── 401 / 403 ─────────────────────────────────────────────
@@ -244,6 +274,7 @@ class UsuariosHttpTest {
             assertThat(problema(respuesta).get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
         }
         assertThat(FILTRO.get()).as("no se consultó").isNull();
+        assertThat(CONSULTADOS.get()).as("sin permiso no se lee el bloqueo ni su motivo").isNull();
     }
 
     // ── 400 / 404 ─────────────────────────────────────────────
