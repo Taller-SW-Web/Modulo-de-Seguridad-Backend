@@ -95,7 +95,7 @@ public final class CriptografiaMfaJca implements CriptografiaMfaPort {
             mac.init(clave);
             // Versión y campos UTF-8 con longitud de 32 bits: concatenación inequívoca.
             agregarCampo(mac, "G7-OTP-v1");
-            agregarCampo(mac, ContextoOtp.PROPOSITO);
+            agregarCampo(mac, contexto.proposito());
             agregarCampo(mac, contexto.usuarioId().toString());
             agregarCampo(mac, contexto.desafioId().toString());
             agregarCampo(mac, contexto.otpId().toString());

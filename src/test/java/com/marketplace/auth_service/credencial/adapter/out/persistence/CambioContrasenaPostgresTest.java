@@ -229,7 +229,8 @@ class CambioContrasenaPostgresTest {
                 Long.class,usuario)).isEqualTo(1);
     }
     @Test void familiaActualRevocadaNoCambiaNiRevocaLaOtra(){
-        jdbc.update("update sesion_familia set revocada=true,revocada_en=now() where id=?",familiaActual);
+        // La sesión usa el reloj Java: el fixture no debe depender de su desfase con PostgreSQL.
+        jdbc.update("update sesion_familia set revocada=true,revocada_en=greatest(creado_en,clock_timestamp()) where id=?",familiaActual);
         assertThat(cambiar(ACTUAL,NUEVA)).isEqualTo(ResultadoCambioContrasena.Simple.SESION_INVALIDA);sinEfectos();
     }
     @Test void falloPosteriorDeSmtpDejaAvisoDurableYNoRevierteCambio(){

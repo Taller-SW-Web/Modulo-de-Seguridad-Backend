@@ -252,11 +252,14 @@ class UsuarioJpaPostgresTest {
         assertThat(s.intentosFallidosConsecutivos()).isEqualTo(2);
     }
 
-    @Test void vistaNoExponeEscriturasYMfaSigueReservado() {
+    @Test void vistaNoExponeEscriturasYMfaVoluntarioSeGuardaPorPuertoPropietario() {
         assertThat(Arrays.stream(UsuarioEstadoEfectivoRepository.class.getMethods()).map(java.lang.reflect.Method::getName))
                 .noneMatch(n->n.startsWith("save")||n.startsWith("delete"));
         UUID id=usuario("mfa@ejemplo.test","ACTIVO",1);
-        assertThatThrownBy(()->tx().executeWithoutResult(s->escritura.guardarMfaVoluntario(id,true)))
-                .isInstanceOf(UnsupportedOperationException.class);
+        tx().executeWithoutResult(s->{cuentas.bloquear(id);escritura.guardarMfaVoluntario(id,true);});
+        assertThat(cuentas.leer(id).orElseThrow().mfaHabilitado()).isTrue();
+        tx().executeWithoutResult(s->{cuentas.bloquear(id);escritura.guardarMfaVoluntario(id,false);});
+        assertThat(cuentas.leer(id).orElseThrow().mfaHabilitado()).isFalse();
+        assertThat(cuentas.leer(id).orElseThrow().bloqueosSeguidos()).isZero();
     }
 }
