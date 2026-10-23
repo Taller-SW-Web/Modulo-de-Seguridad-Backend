@@ -5,14 +5,12 @@ import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort
 import com.marketplace.auth_service.mfa.adapter.in.transaction.OtpLoginTransaccional;
 import com.marketplace.auth_service.mfa.adapter.out.capacidad.HechosMfaAdapter;
 import com.marketplace.auth_service.mfa.adapter.out.entrega.EntregaOtpNoDisponible;
-import com.marketplace.auth_service.mfa.adapter.out.entrega.EntregaOtpSmtp;
+import com.marketplace.auth_service.mfa.adapter.out.entrega.ReceptorSmsPruebas;
 import com.marketplace.auth_service.mfa.adapter.out.capacidad.EntregaOtpOutbox;
 import com.marketplace.auth_service.mfa.application.port.in.OtpLoginPort;
 import com.marketplace.auth_service.mfa.application.port.out.EntregaOtpPort;
 import com.marketplace.auth_service.mfa.application.service.OtpLoginService;
 import com.marketplace.auth_service.mfa.application.service.ValidadorDesafioLogin;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.credencial.application.port.in.CredencialesPort;
 import com.marketplace.auth_service.mfa.adapter.in.transaction.MfaTransaccional;
@@ -42,13 +40,16 @@ public class MfaConfig {
                 reloj.getIfAvailable(Clock::systemUTC), UUID::randomUUID));
     }
 
-    /** EMAIL durable sin exigir SMTP activo al solicitar. SMS conserva el adaptador previo. */
-    @Bean EntregaOtpPort entregaOtpPort(ObjectProvider<MensajeriaPort> mensajeria, ObjectProvider<JavaMailSender> correo,
-            @Value("${g7.correo.remitente:${spring.mail.username:}}") String remitente) {
+    /** EMAIL durable; SMS únicamente mediante receptor del perfil explícito de pruebas. */
+    @Bean EntregaOtpPort entregaOtpPort(ObjectProvider<MensajeriaPort> mensajeria, ObjectProvider<ReceptorSmsPruebas> receptor) {
         MensajeriaPort durable = mensajeria.getIfAvailable();
         if (durable == null) return new EntregaOtpNoDisponible();
-        JavaMailSender real = correo.getIfAvailable();
-        EntregaOtpPort sms = real == null || remitente.isBlank() ? new EntregaOtpNoDisponible() : new EntregaOtpSmtp(real, remitente);
+        ReceptorSmsPruebas simulado = receptor.getIfAvailable();
+        EntregaOtpPort sms = simulado == null ? new EntregaOtpNoDisponible() : (canal, destino, codigo) -> {
+            if (canal != com.marketplace.auth_service.mfa.domain.model.CanalOtp.SMS)
+                throw new com.marketplace.auth_service.mfa.domain.exception.EntregaOtpNoDisponibleException();
+            simulado.recibir(destino, codigo);
+        };
         return new EntregaOtpOutbox(durable, sms);
     }
 
