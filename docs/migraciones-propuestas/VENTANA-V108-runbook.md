@@ -47,12 +47,47 @@ El script canónico `grants-g7-runtime.sql` ya se actualizó para incluir:
 - `ALTER TABLE cambio_mfa ENABLE ROW LEVEL SECURITY`.
 - Política `g7_runtime_total` para `cambio_mfa`.
 
-Ejecutar el script completo como identidad administradora (es repetible):
+El script completo **no contiene `ALTER ROLE`**: esa sentencia se dejó comentada
+porque el pooler de Supabase la rechaza con `permission denied to alter role` y,
+con `ON_ERROR_STOP on`, aborta toda la transacción. `CREATE ROLE ... WITH LOGIN`
+ya crea el rol con los atributos mínimos por defecto; los del entorno actual se
+verificaron como `rolsuper=false`, `rolbypassrls=false`, `rolcanlogin=true`,
+`rolcreatedb=false`, `rolcreaterole=false`.
+
+Procedimiento exacto, como identidad administradora (el script es repetible):
 
 ```text
 psql "$DB_ADMIN_PSQL_URL" -v migrador=<dueño de las tablas> ^
   -f docs/migraciones-propuestas/grants-g7-runtime.sql
 ```
+
+Si se usa una copia anterior que todavía incluye `ALTER ROLE g7_runtime ...`, no
+ejecutarla tal cual: generar una copia filtrada y ejecutar esa. En PowerShell:
+
+```powershell
+$origen = "docs/migraciones-propuestas/grants-g7-runtime.sql"
+$destino = Join-Path $env:TEMP "grants-g7-runtime-v108.sql"
+$migrador = "postgres"   # dueño de las tablas verificado en esta ventana
+Get-Content $origen |
+  Where-Object { $_ -notmatch '^\s*ALTER\s+ROLE\s+g7_runtime\b' } |
+  Set-Content $destino -Encoding utf8
+psql "$env:DB_ADMIN_PSQL_URL" -v migrador=$migrador -f $destino
+Remove-Item $destino
+```
+
+En Bash:
+
+```bash
+sed '/^[[:space:]]*ALTER[[:space:]]\+ROLE[[:space:]]\+g7_runtime\b/d' \
+  docs/migraciones-propuestas/grants-g7-runtime.sql > /tmp/grants-g7-runtime-v108.sql
+MIGRADOR=postgres
+psql "$DB_ADMIN_PSQL_URL" -v migrador="$MIGRADOR" -f /tmp/grants-g7-runtime-v108.sql
+rm /tmp/grants-g7-runtime-v108.sql
+```
+
+No ejecutar `ALTER ROLE` por separado: el pooler no lo permite. Si hace falta
+corregir atributos del rol, hacerlo con una conexión directa y una identidad
+superusuario, no desde el pooler.
 
 Sin este paso, #57 puede arrancar pero el endpoint de cambio MFA falla por permisos.
 
@@ -70,13 +105,18 @@ SELECT privilege_type FROM information_schema.role_table_grants
  WHERE table_schema='public' AND table_name='cambio_mfa' AND grantee='g7_runtime';
 ```
 
-Con `g7_runtime`, dentro de `BEGIN; ... ROLLBACK;`:
+**Pendiente:** la prueba funcional con `g7_runtime` no se ejecutó en esta
+ventana. La identidad administradora del pooler no puede `SET ROLE g7_runtime`;
+`has_table_privilege` y las políticas confirman los permisos, pero no sustituyen
+la prueba real. Ejecutarla con la contraseña de `g7_runtime` al arrancar #57 en
+Render, dentro de `BEGIN; ... ROLLBACK;`:
 
 1. `SELECT count(*) FROM cambio_mfa;` → OK.
 2. `INSERT`/`UPDATE`/`DELETE` de una fila de prueba con UUID y `familia_id` existentes → OK.
 3. Confirmar que no puede escribir en `auditoria_seguridad`.
 
 No dejar filas de prueba: usar `ROLLBACK` o borrar solo la fila creada por la prueba.
+Esta prueba sigue pendiente y no se acredita con la verificación de privilegios.
 
 ## 5. Ejecución real 22-oct-2026 (Christian)
 
@@ -88,14 +128,15 @@ No dejar filas de prueba: usar `ROLLBACK` o borrar solo la fila creada por la pr
   - Política `g7_runtime_total` (`ALL`) en `cambio_mfa`.
   - Políticas para `g7_runtime`: **29**.
   - `auditoria_seguridad`: `UPDATE` sigue denegado para `g7_runtime`.
-- `ALTER ROLE g7_runtime ...` se omitió: el pooler de Supabase lo rechaza
-  (`permission denied to alter role`), igual que en T002. Verificado después:
+- `ALTER ROLE g7_runtime ...` no se ejecutó: el pooler de Supabase lo rechaza
+  (`permission denied to alter role`), igual que en T002. El script canónico ya
+  deja la sentencia comentada; el procedimiento exacto está en §3. Verificado después:
   `rolsuper=false`, `rolbypassrls=false`, `rolcanlogin=true`,
   `rolcreatedb=false`, `rolcreaterole=false`.
 - `SET ROLE g7_runtime` no se pudo usar desde la identidad administradora del
   pooler para una prueba de escritura; la verificación se hizo con
-  `has_table_privilege` y las políticas. La prueba real con la contraseña de
-  `g7_runtime` queda para el arranque de #57 en Render.
+  `has_table_privilege` y las políticas. La prueba funcional con la contraseña
+  de `g7_runtime` **sigue pendiente** para el arranque de #57 en Render.
 - `cambio_mfa` quedó con 0 filas.
 
 ## 6. Cierre
@@ -103,5 +144,6 @@ No dejar filas de prueba: usar `ROLLBACK` o borrar solo la fila creada por la pr
 - Anotar hora, versión de Flyway, resultado y conteo de políticas.
 - Avisar al grupo y a David: V108 + grants aplicados; #57 puede fusionarse.
 - Después de fusionar #57, comprobar arranque en Render y el recorrido de cambio MFA.
+  La prueba funcional con `g7_runtime` sigue pendiente hasta ese arranque.
 - Si algo falla, detenerse: no usar `repair` ni borrar tablas. Registrar el error y
   restaurar según el procedimiento acordado con el equipo.

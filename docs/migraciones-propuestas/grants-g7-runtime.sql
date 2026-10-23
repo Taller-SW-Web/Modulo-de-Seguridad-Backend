@@ -1,6 +1,6 @@
 -- Grants de g7_runtime — BORRADOR pendiente de ventana (TEC-INFRA-T002).
 -- Ejecutar con psql como identidad administradora, nunca como g7_runtime, y
--- DESPUÉS de migrar V101–V106 + R__catalogo (las tablas deben existir):
+-- DESPUÉS de migrar V101–V108 + R__catalogo (las tablas deben existir):
 --
 --   psql "$DB_ADMIN_PSQL_URL" -v migrador=<rol que ejecuta Flyway> \
 --        -f docs/migraciones-propuestas/grants-g7-runtime.sql
@@ -22,7 +22,12 @@ BEGIN
     END IF;
 END
 $$;
-ALTER ROLE g7_runtime WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- No se incluye ALTER ROLE g7_runtime: el pooler de Supabase lo rechaza con
+-- "permission denied to alter role" y, con ON_ERROR_STOP, aborta la transacción.
+-- CREATE ROLE ... WITH LOGIN ya crea el rol con los atributos mínimos por defecto
+-- (NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS). Si se
+-- ejecuta contra un PostgreSQL directo y el rol ya existía con atributos
+-- incorrectos, corregirlo aparte con una identidad superusuario, no desde el pooler.
 
 GRANT CONNECT ON DATABASE postgres TO g7_runtime;
 GRANT USAGE ON SCHEMA public TO g7_runtime;
