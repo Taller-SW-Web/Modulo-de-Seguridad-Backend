@@ -1,0 +1,388 @@
+diff --git a/docs/evidencia/h4/FEAT-04-T2-implementacion.md b/docs/evidencia/h4/FEAT-04-T2-implementacion.md
+new file mode 100644
+index 0000000..e22c60b
+--- /dev/null
++++ b/docs/evidencia/h4/FEAT-04-T2-implementacion.md
+@@ -0,0 +1,33 @@
++# FEAT-04-T2 — Puerto `ConsultaDireccionesPort` exportado
++
++## Implementación
++
++- `ConsultaDireccionesPort.consultar(UUID)` en `direccion/application/port/in`; DTO `DireccionDatos`, sin entidades JPA.
++- `ConsultaDireccionesService` (sin Spring) delega en `DireccionesPersistidasPort`, devuelve copia inmutable y rechaza `usuarioId` nulo.
++- Bean `ConsultaDireccionesPort` en `DireccionesConfig`, conectado al adaptador real de PostgreSQL.
++- Contrato y ejemplo de adaptador puente para FEAT-06: [`docs/integracion/FEAT-04-T2-ConsultaDireccionesPort.md`](../../integracion/FEAT-04-T2-ConsultaDireccionesPort.md).
++- No se añade endpoint ni migración: el consumo HTTP de FEAT-06 (`direcciones:leer`) es de Sergio; el `GET` del titular es el de T1.
++
++## Pruebas
++
++| Prueba | Qué cubre |
++|---|---|
++| `ConsultaDireccionesServiceTest` | delegación, lista vacía, orden respetado, lista inmutable y aislada de la fuente, `null` rechazado sin tocar persistencia |
++| `ConsultaDireccionesPostgresTest` (PostgreSQL, esquema real) | el puerto real lee de la base: solo las del usuario, predeterminada primero, vacío si no hay o la cuenta no existe, lista inmutable, el DTO no trae documento ni fecha de nacimiento |
++| `ArquitecturaHexagonalTest` / `ContratosExportados` | el puerto y el DTO no exponen tipos internos; `application` sin Spring |
++
++## Validación pendiente
++
++```bash
++./gradlew test        # requiere Docker para Testcontainers
++```
++
++Anotar resultado, fecha y SHA. T2 va en su propio PR, apilado sobre T1 (necesita `DireccionesPersistidasPort`, `DireccionDatos` y `DireccionesConfig` de T1). Después: fusionar, comprobar el despliegue con T1 y avisar al grupo.
++
++## Aviso al grupo (borrador)
++
++> **FEAT-04-T2 listo para consumir** (rama `<pegar rama>`, SHA `<pegar>`).
++> `com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort`
++> `List<DireccionDatos> consultar(UUID usuarioId)` — solo lectura, predeterminada primero, `[]` si no hay, sin documento ni fecha de nacimiento.
++> No autoriza ni comprueba que la cuenta exista: validen `direcciones:leer` y existencia (`CuentasPort.leer`) en su adaptador puente (`<capacidad>.adapter.out.capacidad`). Detalle y ejemplo: `docs/integracion/FEAT-04-T2-ConsultaDireccionesPort.md`.
++> @Sergio — FEAT-06-T3.
+diff --git a/docs/integracion/FEAT-04-T2-ConsultaDireccionesPort.md b/docs/integracion/FEAT-04-T2-ConsultaDireccionesPort.md
+new file mode 100644
+index 0000000..74e6404
+--- /dev/null
++++ b/docs/integracion/FEAT-04-T2-ConsultaDireccionesPort.md
+@@ -0,0 +1,48 @@
++# FEAT-04-T2 — Contrato exportado de consulta de direcciones
++
++**Puerto:** `com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort`
++**DTO:** `com.marketplace.auth_service.direccion.application.dto.DireccionDatos`
++
++```java
++public interface ConsultaDireccionesPort {
++    List<DireccionDatos> consultar(UUID usuarioId);
++}
++
++public record DireccionDatos(UUID id, String etiqueta, String departamento, String provincia,
++        String distrito, String direccion, String referencia, boolean esPredeterminada) {}
++```
++
++## Garantías
++
++- Solo lectura. La implementación es `ConsultaDireccionesService`, registrada como bean en `DireccionesConfig`, y lee de la base real a través de `DireccionesPersistidasAdapter`.
++- Orden: la predeterminada primero y luego por identificador.
++- Usuario sin direcciones: lista vacía. `usuarioId` nulo: `NullPointerException`.
++- La lista devuelta **no es modificable** y no cambia aunque la fuente cambie después.
++- `DireccionDatos` es un DTO de aplicación: no expone entidades ni repositorios JPA, y **no incluye documento ni fecha de nacimiento** (ESC-18.4).
++
++## Lo que NO hace (responsabilidad del consumidor)
++
++- **No autoriza.** Verificar antes el scope `direcciones:leer` (token de servicio) o la titularidad / permiso `usuario.ver` (token de persona).
++- **No distingue cuenta inexistente de cuenta sin direcciones**: ambas devuelven `[]`. Si el endpoint debe responder `404` para un id desconocido (OpenAPI), comprobar la existencia con el puerto de cuentas (`CuentasPort.leer`) antes de llamar a este puerto.
++- No audita el acceso. Si FEAT-06 lo exige, se registra en su adaptador.
++
++## Cómo consumirlo (ArchUnit)
++
++La regla `otraCapacidadSoloSeConsumeDesdeUnPuenteYPorExports` solo permite usar este puerto desde `<tu-capacidad>.adapter.out.capacidad`, por ejemplo:
++
++```java
++package com.marketplace.auth_service.<tu_capacidad>.adapter.out.capacidad;
++
++public final class DireccionesClienteAdapter implements <TuPuertoDeSalida> {
++    private final ConsultaDireccionesPort direcciones;   // port.in exportado de direccion
++    public DireccionesClienteAdapter(ConsultaDireccionesPort direcciones) { this.direcciones = direcciones; }
++
++    @Override public List<DireccionDatos> de(UUID usuarioId) { return direcciones.consultar(usuarioId); }
++}
++```
++
++Y se inyecta desde `configuration/`. No importar `DireccionJpaEntity`, `DireccionJpaRepository` ni nada de `direccion.adapter.out.persistence`.
++
++## Transacciones
++
++El puerto no abre transacción propia: la lectura corre en la transacción de solo lectura del adaptador de persistencia, así que es segura tanto dentro como fuera de una transacción del consumidor.
+diff --git a/src/main/java/com/marketplace/auth_service/configuration/DireccionesConfig.java b/src/main/java/com/marketplace/auth_service/configuration/DireccionesConfig.java
+index 343587f..d728f2d 100644
+--- a/src/main/java/com/marketplace/auth_service/configuration/DireccionesConfig.java
++++ b/src/main/java/com/marketplace/auth_service/configuration/DireccionesConfig.java
+@@ -4,16 +4,25 @@ import com.marketplace.auth_service.auditoria.application.port.out.OutboxPort;
+ import com.marketplace.auth_service.direccion.adapter.in.transaction.DireccionesPortTransaccional;
+ import com.marketplace.auth_service.direccion.adapter.out.capacidad.CuentaDireccionesAdapter;
+ import com.marketplace.auth_service.direccion.adapter.out.capacidad.OutboxDireccionesAdapter;
++import com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort;
+ import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort;
+ import com.marketplace.auth_service.direccion.application.port.out.DireccionesPersistidasPort;
++import com.marketplace.auth_service.direccion.application.service.ConsultaDireccionesService;
+ import com.marketplace.auth_service.direccion.application.service.DireccionesService;
+ import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
+ 
+-/** Wiring de {@code DireccionesPort} (FEAT-04-T1): núcleo + puentes, decorado con su transacción. */
++/**
++ * Wiring de direcciones: {@code DireccionesPort} (FEAT-04-T1, núcleo + puentes, decorado con su transacción) y
++ * {@code ConsultaDireccionesPort} (FEAT-04-T2, lectura exportada).
++ */
+ @Configuration(proxyBeanMethods = false)
+ public class DireccionesConfig {
++    @Bean ConsultaDireccionesPort consultaDireccionesPort(DireccionesPersistidasPort persistencia) {
++        return new ConsultaDireccionesService(persistencia);
++    }
++
+     @Bean DireccionesPort direccionesPort(DireccionesPersistidasPort persistencia, CuentasPort cuentas, OutboxPort outbox) {
+         return new DireccionesPortTransaccional(new DireccionesService(persistencia,
+                 new CuentaDireccionesAdapter(cuentas), new OutboxDireccionesAdapter(outbox)));
+diff --git a/src/main/java/com/marketplace/auth_service/direccion/application/port/in/ConsultaDireccionesPort.java b/src/main/java/com/marketplace/auth_service/direccion/application/port/in/ConsultaDireccionesPort.java
+new file mode 100644
+index 0000000..d4198a0
+--- /dev/null
++++ b/src/main/java/com/marketplace/auth_service/direccion/application/port/in/ConsultaDireccionesPort.java
+@@ -0,0 +1,22 @@
++package com.marketplace.auth_service.direccion.application.port.in;
++
++import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
++import java.util.List;
++import java.util.UUID;
++
++/**
++ * Contrato exportado de solo lectura para que otras capacidades consulten direcciones
++ * sin conocer repositorios ni entidades JPA (FEAT-04-T2; lo consume FEAT-06, {@code direcciones:leer}).
++ *
++ * <p>No autoriza: el consumidor valida antes el scope {@code direcciones:leer} o la titularidad
++ * y decide si la cuenta existe (aquí una cuenta sin direcciones y una inexistente dan lo mismo).
++ */
++public interface ConsultaDireccionesPort {
++    /**
++     * Direcciones del usuario, con la predeterminada primero. Lista vacía si no tiene; la lista
++     * devuelta no es modificable.
++     *
++     * @throws NullPointerException si {@code usuarioId} es nulo
++     */
++    List<DireccionDatos> consultar(UUID usuarioId);
++}
+diff --git a/src/main/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesService.java b/src/main/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesService.java
+new file mode 100644
+index 0000000..104d4b8
+--- /dev/null
++++ b/src/main/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesService.java
+@@ -0,0 +1,26 @@
++package com.marketplace.auth_service.direccion.application.service;
++
++import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
++import com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort;
++import com.marketplace.auth_service.direccion.application.port.out.DireccionesPersistidasPort;
++import java.util.List;
++import java.util.Objects;
++import java.util.UUID;
++
++/**
++ * Implementación real del puerto exportado, sobre el puerto de persistencia de direcciones. No conoce
++ * Spring: la lectura corre en la transacción de solo lectura de {@code DireccionesPersistidasAdapter}.
++ */
++public final class ConsultaDireccionesService implements ConsultaDireccionesPort {
++    private final DireccionesPersistidasPort persistencia;
++
++    public ConsultaDireccionesService(DireccionesPersistidasPort persistencia) {
++        this.persistencia = Objects.requireNonNull(persistencia);
++    }
++
++    @Override
++    public List<DireccionDatos> consultar(UUID usuarioId) {
++        Objects.requireNonNull(usuarioId, "usuarioId es obligatorio");
++        return List.copyOf(persistencia.listar(usuarioId));
++    }
++}
+diff --git a/src/test/java/com/marketplace/auth_service/direccion/adapter/out/persistence/ConsultaDireccionesPostgresTest.java b/src/test/java/com/marketplace/auth_service/direccion/adapter/out/persistence/ConsultaDireccionesPostgresTest.java
+new file mode 100644
+index 0000000..d8cfaae
+--- /dev/null
++++ b/src/test/java/com/marketplace/auth_service/direccion/adapter/out/persistence/ConsultaDireccionesPostgresTest.java
+@@ -0,0 +1,126 @@
++package com.marketplace.auth_service.direccion.adapter.out.persistence;
++
++import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
++
++import com.marketplace.auth_service.AuthServiceApplication;
++import com.marketplace.auth_service.direccion.adapter.out.persistence.adapter.DireccionesPersistidasAdapter;
++import com.marketplace.auth_service.direccion.adapter.out.persistence.repository.DireccionJpaRepository;
++import com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort;
++import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort.DatosNuevaDireccion;
++import com.marketplace.auth_service.direccion.application.port.out.DireccionesPersistidasPort;
++import com.marketplace.auth_service.direccion.application.service.ConsultaDireccionesService;
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
++import java.sql.DriverManager;
++import java.time.OffsetDateTime;
++import java.util.UUID;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.autoconfigure.domain.EntityScan;
++import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
++import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
++import org.springframework.boot.test.context.TestConfiguration;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Import;
++import org.springframework.core.io.ClassPathResource;
++import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
++import org.springframework.jdbc.core.JdbcTemplate;
++import org.springframework.test.context.ContextConfiguration;
++import org.springframework.test.context.DynamicPropertyRegistry;
++import org.springframework.test.context.DynamicPropertySource;
++import org.springframework.transaction.annotation.Propagation;
++import org.springframework.transaction.annotation.Transactional;
++import org.testcontainers.containers.PostgreSQLContainer;
++import org.testcontainers.junit.jupiter.Container;
++import org.testcontainers.junit.jupiter.Testcontainers;
++
++/**
++ * FEAT-04-T2: el puerto exportado {@code ConsultaDireccionesPort} leyendo de PostgreSQL con el esquema real
++ * (incluido el índice único de predeterminada), a través del adaptador real de persistencia.
++ */
++@DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=validate"})
++@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
++@ContextConfiguration(classes = AuthServiceApplication.class)
++@Import(ConsultaDireccionesPostgresTest.Propia.class)
++@Testcontainers(disabledWithoutDocker = true)
++@Transactional(propagation = Propagation.NOT_SUPPORTED)
++class ConsultaDireccionesPostgresTest {
++    @TestConfiguration(proxyBeanMethods = false)
++    @EntityScan("com.marketplace.auth_service.direccion.adapter.out.persistence.entity")
++    @EnableJpaRepositories("com.marketplace.auth_service.direccion.adapter.out.persistence.repository")
++    static class Propia {
++        @Bean DireccionesPersistidasAdapter adapter(DireccionJpaRepository repo) { return new DireccionesPersistidasAdapter(repo); }
++        @Bean ConsultaDireccionesPort consulta(DireccionesPersistidasPort persistencia) { return new ConsultaDireccionesService(persistencia); }
++    }
++
++    @Container static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:17.6");
++    @DynamicPropertySource static void base(DynamicPropertyRegistry r) {
++        PG.start();
++        try (var c = DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword());
++             InputStream in = new ClassPathResource("mfa/base-observada/schema.sql").getInputStream();
++             var s = c.createStatement()) {
++            s.execute(new String(in.readAllBytes(), StandardCharsets.UTF_8));
++        } catch (Exception e) { throw new IllegalStateException(e); }
++        r.add("spring.datasource.url", PG::getJdbcUrl); r.add("spring.datasource.username", PG::getUsername);
++        r.add("spring.datasource.password", PG::getPassword);
++    }
++
++    @Autowired ConsultaDireccionesPort consulta;
++    @Autowired DireccionesPersistidasPort direcciones;
++    @Autowired JdbcTemplate jdbc;
++
++    @BeforeEach void limpiar() { jdbc.execute("truncate usuario cascade"); }
++
++    private UUID cuenta() {
++        UUID usuarioId = UUID.randomUUID();
++        jdbc.update("insert into usuario(id,correo,nombres,apellidos,estado,creado_en) values (?,?,?,?,?::estado_cuenta,?)",
++                usuarioId, "consulta-" + usuarioId + "@test.invalid", "Nombre", "Apellido", "ACTIVO",
++                OffsetDateTime.parse("2026-01-01T00:00:00Z"));
++        return usuarioId;
++    }
++
++    private static DatosNuevaDireccion datos(String etiqueta, Boolean predeterminada) {
++        return new DatosNuevaDireccion(etiqueta, "Lima", "Lima", "Miraflores", "Av. Larco 123", null, predeterminada);
++    }
++
++    @Test void devuelveSoloLasDelUsuarioConLaPredeterminadaPrimero() {
++        UUID ana = cuenta();
++        UUID luis = cuenta();
++        direcciones.crear(ana, datos("Trabajo", null));
++        direcciones.crear(ana, datos("Casa", true));
++        direcciones.crear(luis, datos("Otra", null));
++
++        var resultado = consulta.consultar(ana);
++
++        assertThat(resultado).extracting(d -> d.etiqueta()).containsExactly("Casa", "Trabajo");
++        assertThat(resultado.get(0).esPredeterminada()).isTrue();
++        assertThat(resultado.get(1).esPredeterminada()).isFalse();
++    }
++
++    @Test void sinDireccionesOCuentaInexistenteDevuelveListaVacia() {
++        assertThat(consulta.consultar(cuenta())).isEmpty();
++        assertThat(consulta.consultar(UUID.randomUUID())).isEmpty();
++    }
++
++    @Test void laListaDevueltaNoSePuedeModificar() {
++        UUID ana = cuenta();
++        direcciones.crear(ana, datos("Casa", null));
++
++        var resultado = consulta.consultar(ana);
++
++        assertThatThrownBy(resultado::clear).isInstanceOf(UnsupportedOperationException.class);
++    }
++
++    @Test void noExponeDocumentoNiFechaDeNacimiento() {
++        UUID ana = cuenta();
++        direcciones.crear(ana, datos("Casa", null));
++
++        var campos = java.util.Arrays.stream(consulta.consultar(ana).get(0).getClass().getRecordComponents())
++                .map(c -> c.getName()).toList();
++
++        assertThat(campos).containsExactlyInAnyOrder("id", "etiqueta", "departamento", "provincia", "distrito",
++                "direccion", "referencia", "esPredeterminada");
++    }
++}
+diff --git a/src/test/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesServiceTest.java b/src/test/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesServiceTest.java
+new file mode 100644
+index 0000000..51178d6
+--- /dev/null
++++ b/src/test/java/com/marketplace/auth_service/direccion/application/service/ConsultaDireccionesServiceTest.java
+@@ -0,0 +1,66 @@
++package com.marketplace.auth_service.direccion.application.service;
++
++import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.verifyNoInteractions;
++import static org.mockito.Mockito.when;
++
++import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
++import com.marketplace.auth_service.direccion.application.port.out.DireccionesPersistidasPort;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import org.junit.jupiter.api.Test;
++
++class ConsultaDireccionesServiceTest {
++    private final DireccionesPersistidasPort persistencia = mock(DireccionesPersistidasPort.class);
++    private final ConsultaDireccionesService servicio = new ConsultaDireccionesService(persistencia);
++
++    private static DireccionDatos direccion(String etiqueta, boolean predeterminada) {
++        return new DireccionDatos(UUID.randomUUID(), etiqueta, "Lima", "Lima", "Miraflores", "Av. Larco 123", null,
++                predeterminada);
++    }
++
++    @Test void consultaPorUsuarioDelegaEnPersistenciaYNoExponeEntidades() {
++        UUID usuario = UUID.randomUUID();
++        DireccionDatos casa = direccion("Casa", true);
++        when(persistencia.listar(usuario)).thenReturn(List.of(casa));
++
++        assertThat(servicio.consultar(usuario)).containsExactly(casa);
++        verify(persistencia).listar(usuario);
++    }
++
++    @Test void consultaSinDireccionesDevuelveListaVacia() {
++        UUID usuario = UUID.randomUUID();
++        when(persistencia.listar(usuario)).thenReturn(List.of());
++        assertThat(servicio.consultar(usuario)).isEmpty();
++    }
++
++    @Test void respetaElOrdenQueDevuelveLaPersistencia() {
++        UUID usuario = UUID.randomUUID();
++        DireccionDatos casa = direccion("Casa", true);
++        DireccionDatos trabajo = direccion("Trabajo", false);
++        when(persistencia.listar(usuario)).thenReturn(List.of(casa, trabajo));
++
++        assertThat(servicio.consultar(usuario)).containsExactly(casa, trabajo);
++    }
++
++    @Test void laListaDevueltaNoSePuedeModificarNiAfectaALaFuente() {
++        UUID usuario = UUID.randomUUID();
++        List<DireccionDatos> fuente = new ArrayList<>(List.of(direccion("Casa", true)));
++        when(persistencia.listar(usuario)).thenReturn(fuente);
++
++        List<DireccionDatos> resultado = servicio.consultar(usuario);
++        fuente.clear();
++
++        assertThat(resultado).hasSize(1);
++        assertThatThrownBy(resultado::clear).isInstanceOf(UnsupportedOperationException.class);
++    }
++
++    @Test void rechazaIdentificadorNulo() {
++        assertThatThrownBy(() -> servicio.consultar(null)).isInstanceOf(NullPointerException.class);
++        verifyNoInteractions(persistencia);
++    }
++}
