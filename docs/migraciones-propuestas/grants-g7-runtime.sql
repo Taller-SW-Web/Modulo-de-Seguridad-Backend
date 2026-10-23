@@ -9,6 +9,7 @@
 --   \password g7_runtime
 -- (psql la envía ya cifrada; no queda en el historial ni en el log de sentencias).
 -- Repetible: crea el rol solo si falta y recrea las políticas.
+-- V108 (FEAT-07): incluye cambio_mfa y su política RLS para g7_runtime.
 
 \set ON_ERROR_STOP on
 BEGIN;
@@ -54,7 +55,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
     credencial, password_historial, otp, token_un_uso, solicitud_limitada,
     token_refresco, desafio_mfa, intento_login, bloqueo,
     sesion_familia, acceso_sesion, racha_fallo, huella_fallo,
-    usuario_rol, cliente_servicio, scope, cliente_servicio_scope, outbox
+    usuario_rol, cliente_servicio, scope, cliente_servicio_scope, outbox,
+    cambio_mfa
     TO g7_runtime;
 
 -- 5b. Vista de estado efectivo (V3): se evalúa con los privilegios de quien consulta
@@ -67,11 +69,12 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO g7_runtime;
 
 -- 7. Políticas RLS solo para el runtime; anon/authenticated sin política = sin
 --    acceso. RLS ya está ENABLED en las 22 tablas (DAT-01); se asegura también
---    en las 4 nuevas de V102/V104. Cada política coincide con su grant.
+--    en las nuevas de V102/V104/V108. Cada política coincide con su grant.
 ALTER TABLE sesion_familia ENABLE ROW LEVEL SECURITY;
 ALTER TABLE acceso_sesion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE racha_fallo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE huella_fallo ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cambio_mfa ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
@@ -83,7 +86,8 @@ BEGIN
         'credencial', 'password_historial', 'otp', 'token_un_uso', 'solicitud_limitada',
         'token_refresco', 'desafio_mfa', 'intento_login', 'bloqueo',
         'sesion_familia', 'acceso_sesion', 'racha_fallo', 'huella_fallo',
-        'usuario_rol', 'cliente_servicio', 'scope', 'cliente_servicio_scope', 'outbox']
+        'usuario_rol', 'cliente_servicio', 'scope', 'cliente_servicio_scope', 'outbox',
+        'cambio_mfa']
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS g7_runtime_total ON %I', tabla);
         EXECUTE format('CREATE POLICY g7_runtime_total ON %I FOR ALL TO g7_runtime '
