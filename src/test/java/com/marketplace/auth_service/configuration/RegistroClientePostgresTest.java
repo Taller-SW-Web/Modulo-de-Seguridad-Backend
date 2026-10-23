@@ -140,6 +140,9 @@ class RegistroClientePostgresTest {
             ScriptUtils.executeSqlScript(c, new FileSystemResource("docs/migraciones-propuestas/V101__credencial_version.sql"));
             ScriptUtils.executeSqlScript(c,
                     new FileSystemResource("docs/migraciones-propuestas/V105__token_un_uso_contexto_id.sql"));
+            // Columnas de reintento del outbox y registro_id de auditoría que validan sus entidades.
+            ScriptUtils.executeSqlScript(c,
+                    new FileSystemResource("docs/migraciones-propuestas/V106__auditoria_registro_id_y_outbox_reintento.sql"));
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
         }
         Path comunes = Files.createTempFile("feat01-t1-comunes-", ".txt");
@@ -222,10 +225,9 @@ class RegistroClientePostgresTest {
         assertThat(contar("usuario")).isZero();
         assertThat(contar("credencial")).isZero();
         assertThat(contar("token_un_uso")).isZero();
-        assertThat(auditoria.registros).singleElement().satisfies(r -> {
-            assertThat(r.resultado()).isEqualTo("FALLO");
-            assertThat(r.detalle()).containsEntry("motivo", "NO_DISPONIBLE");
-        });
+        // La auditoría en memoria no participa del rollback: la crítica de EXITO real se revertiría con la cuenta.
+        assertThat(auditoria.registros).filteredOn(r -> r.resultado().equals("FALLO")).singleElement()
+                .satisfies(r -> assertThat(r.detalle()).containsEntry("motivo", "NO_DISPONIBLE"));
     }
 
     @Test
