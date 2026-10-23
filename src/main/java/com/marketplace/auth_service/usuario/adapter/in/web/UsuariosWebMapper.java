@@ -13,7 +13,9 @@ final class UsuariosWebMapper {
 
     static UsuarioResponse aRespuesta(UsuarioVista u) {
         return new UsuarioResponse(u.id(), u.nombres(), u.apellidos(), u.nombreCompleto(), u.correo(), u.celular(),
-                u.estado(), u.correoVerificado(), u.celularVerificado(), u.mfaHabilitado(), u.roles());
+                u.estado(), u.correoVerificado(), u.celularVerificado(), u.mfaHabilitado(), u.roles(),
+                u.bloqueo() == null ? null
+                        : new UsuarioResponse.BloqueoResponse(u.bloqueo().tipo(), u.bloqueo().hasta(), u.bloqueo().motivo()));
     }
 
     static PaginaUsuariosResponse aRespuesta(PaginaResultado<UsuarioVista> pagina) {
