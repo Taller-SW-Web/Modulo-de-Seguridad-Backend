@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Puente de la verificación de correo hacia tokens de un uso (Juan José) y el outbox (Christian).
@@ -20,6 +22,8 @@ import java.util.UUID;
  * la pantalla propia de CHATBOT de RF-02.8 queda pendiente.
  */
 public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
+
+    private static final Logger log = LoggerFactory.getLogger(CorreoVerificacionAdapter.class);
 
     /** RF-02.1: 24 horas. Los tokens rechazan otra vigencia para VERIFICAR_CORREO. */
     static final Duration VIGENCIA = Duration.ofHours(24);
@@ -45,6 +49,8 @@ public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
                             + "(vence en 24 horas):\n" + enlace
                             + "\n\nSi no creaste esta cuenta, ignora este mensaje.\n"));
         } catch (RuntimeException colaCaida) {
+            // Único registro del fallo cuando el reenvío lo absorbe con 202 para no delatar la cuenta.
+            log.warn("No se pudo encolar el correo de verificación de la cuenta {}", usuarioId, colaCaida);
             throw new VerificacionNoDisponibleException(colaCaida);
         }
     }

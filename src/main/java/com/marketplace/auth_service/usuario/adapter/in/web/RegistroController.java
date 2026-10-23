@@ -14,6 +14,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -44,6 +46,7 @@ public class RegistroController {
 
     public record RegistroResponse(String id, String estado) { }
 
+    private static final Logger log = LoggerFactory.getLogger(RegistroController.class);
     private static final Pattern CORREO = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final Pattern CELULAR = Pattern.compile("^\\+51[0-9]{9}$");
 
@@ -84,7 +87,9 @@ public class RegistroController {
 
     /** La cola de correo no está disponible: el registro se revirtió y puede reintentarse (catálogo, NO_DISPONIBLE). */
     @ExceptionHandler(VerificacionNoDisponibleException.class)
-    public ResponseEntity<ProblemDetail> verificacionNoDisponible() {
+    public ResponseEntity<ProblemDetail> verificacionNoDisponible(VerificacionNoDisponibleException e) {
+        // Con la causa real (outbox o cifrado); nunca datos de la petición: correo y contraseña no viajan en ella.
+        log.warn("Registro rechazado con 503: no se pudo encolar el correo de verificación", e);
         return Problemas.respuesta(HttpStatus.SERVICE_UNAVAILABLE, "NO_DISPONIBLE", "Servicio no disponible",
                 "No pudimos completar el registro. Inténtalo de nuevo en unos minutos.");
     }

@@ -9,6 +9,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -46,6 +48,7 @@ public class VerificacionCorreoController {
         }
     }
 
+    private static final Logger log = LoggerFactory.getLogger(VerificacionCorreoController.class);
     private static final Pattern CORREO = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private final VerificacionCorreoPort verificacion;
@@ -91,7 +94,8 @@ public class VerificacionCorreoController {
 
     /** Sin la clave de la cuota el reenvío falla igual para cualquier correo (catálogo, NO_DISPONIBLE). */
     @ExceptionHandler(CuotaNoDisponibleException.class)
-    public ResponseEntity<ProblemDetail> cuotaNoDisponible() {
+    public ResponseEntity<ProblemDetail> cuotaNoDisponible(CuotaNoDisponibleException e) {
+        log.warn("Reenvío de verificación rechazado con 503: falta o es inválida AUTH_SOLICITUD_LIMITADA_HMAC_KEY", e);
         return Problemas.respuesta(HttpStatus.SERVICE_UNAVAILABLE, "NO_DISPONIBLE", "Servicio no disponible",
                 "Inténtalo de nuevo en unos minutos.");
     }
