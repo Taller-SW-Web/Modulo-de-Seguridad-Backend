@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface TokensUnUsoPort {
     Optional<TokenUnUsoSnapshot> localizar(String hash, PropositoToken proposito);
     TokenEmitido emitir(UUID usuarioId, PropositoToken proposito, Duration ttl);
+    /** Emite la confirmación del nuevo correo; el destino solo se comparte entre productores internos. */
+    TokenEmitido emitirCambioCorreo(UUID usuarioId, String destino);
     /** El desbloqueo necesita ligar el token a la revisión UUID del bloqueo de Luis. */
     TokenEmitido emitir(UUID usuarioId, PropositoToken proposito, UUID contextoId, Duration ttl);
     boolean consumir(UUID id, UUID usuarioId, PropositoToken proposito, Instant ahora);

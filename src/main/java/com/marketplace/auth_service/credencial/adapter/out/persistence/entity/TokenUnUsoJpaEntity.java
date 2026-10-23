@@ -28,14 +28,17 @@ public class TokenUnUsoJpaEntity {
 
     protected TokenUnUsoJpaEntity() { }
     public TokenUnUsoJpaEntity(UUID id, PropositoTokenPersistido proposito, UUID usuarioId, String hashToken,
-                               OffsetDateTime expiraEn, boolean usado, OffsetDateTime creadoEn, UUID contextoId) {
+                               String destino, OffsetDateTime expiraEn, boolean usado,
+                               OffsetDateTime creadoEn, UUID contextoId) {
         this.id = id; this.proposito = proposito; this.usuarioId = usuarioId; this.hashToken = hashToken;
-        this.expiraEn = expiraEn; this.usado = usado; this.creadoEn = creadoEn; this.contextoId = contextoId;
+        this.destino = destino; this.expiraEn = expiraEn; this.usado = usado;
+        this.creadoEn = creadoEn; this.contextoId = contextoId;
     }
     public UUID getId() { return id; }
     public PropositoTokenPersistido getProposito() { return proposito; }
     public UUID getUsuarioId() { return usuarioId; }
     public String getHashToken() { return hashToken; }
+    public String getDestino() { return destino; }
     public OffsetDateTime getExpiraEn() { return expiraEn; }
     public boolean isUsado() { return usado; }
     public OffsetDateTime getCreadoEn() { return creadoEn; }

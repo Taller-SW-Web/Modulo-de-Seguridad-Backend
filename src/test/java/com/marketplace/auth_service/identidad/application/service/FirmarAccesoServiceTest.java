@@ -6,6 +6,7 @@ import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.dto.ClaimsVerificados;
 import com.marketplace.auth_service.identidad.application.dto.ClavePublica;
 import com.marketplace.auth_service.identidad.application.dto.ContenidoAcceso;
+import com.marketplace.auth_service.identidad.application.dto.ContenidoServicio;
 import com.marketplace.auth_service.identidad.application.dto.Descubrimiento;
 import com.marketplace.auth_service.identidad.application.port.out.FirmadorJws;
 import com.marketplace.auth_service.identidad.domain.exception.FirmaNoDisponibleException;
@@ -34,6 +35,7 @@ class FirmarAccesoServiceTest {
     private static final Instant AHORA = Instant.parse("2026-10-12T20:00:00.750Z");
 
     private final List<ContenidoAcceso> firmados = new ArrayList<>();
+    private final List<ContenidoServicio> firmadosServicio = new ArrayList<>();
     /** Lo que devolverá el doble al verificar; cada prueba de validación lo ajusta. */
     private ClaimsVerificados verificados;
     private final Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
@@ -45,6 +47,12 @@ class FirmarAccesoServiceTest {
         public String firmar(ContenidoAcceso contenido) {
             firmados.add(contenido);
             return "jws";
+        }
+
+        @Override
+        public String firmarServicio(ContenidoServicio contenido) {
+            firmadosServicio.add(contenido);
+            return "jws-servicio";
         }
 
         @Override
