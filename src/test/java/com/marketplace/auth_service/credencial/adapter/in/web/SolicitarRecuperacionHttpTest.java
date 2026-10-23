@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
+import com.marketplace.auth_service.credencial.application.dto.ResultadoRestablecimiento;
+import com.marketplace.auth_service.credencial.application.port.in.RestablecerContrasenaPort;
 import com.marketplace.auth_service.credencial.application.port.in.SolicitarRecuperacionPort;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
@@ -38,18 +40,24 @@ class SolicitarRecuperacionHttpTest {
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             FlywayAutoConfiguration.class, RabbitAutoConfiguration.class})
-    @Import({IdentidadConfig.class, SeguridadConfig.class, SolicitarRecuperacionController.class})
+    @Import({IdentidadConfig.class, SeguridadConfig.class, SolicitarRecuperacionController.class,
+            RestablecerContrasenaController.class})
     static class Aplicacion {
         @Bean ResultadoPrueba resultadoPrueba() { return new ResultadoPrueba(); }
-        @Bean SolicitarRecuperacionPort solicitudes(ResultadoPrueba prueba) { return prueba; }
+        @Bean SolicitarRecuperacionPort solicitudes(@Qualifier("resultadoPrueba") ResultadoPrueba prueba) { return prueba; }
+        @Bean RestablecerContrasenaPort restablecimiento(@Qualifier("resultadoPrueba") ResultadoPrueba prueba) { return prueba; }
     }
 
-    static final class ResultadoPrueba implements SolicitarRecuperacionPort {
+    static final class ResultadoPrueba implements SolicitarRecuperacionPort, RestablecerContrasenaPort {
         final AtomicReference<ResultadoSolicitudRecuperacion> resultado = new AtomicReference<>(
                 new ResultadoSolicitudRecuperacion.Aceptada());
         @Override public ResultadoSolicitudRecuperacion solicitar(String correo, ContextoPeticion contexto) {
             return resultado.get();
         }
+        @Override public ResultadoRestablecimiento restablecer(
+                com.marketplace.auth_service.credencial.application.dto.SecretoEfimero token,
+                com.marketplace.auth_service.credencial.application.dto.SecretoEfimero nueva,
+                ContextoPeticion contexto) { return ResultadoRestablecimiento.Simple.RESTABLECIDA; }
     }
 
     @DynamicPropertySource
@@ -86,6 +94,17 @@ class SolicitarRecuperacionHttpTest {
         assertThat(respuesta.statusCode()).isEqualTo(429);
         assertThat(respuesta.headers().firstValue("Retry-After")).contains("42");
         assertThat(json.readTree(respuesta.body()).path("code").asText()).isEqualTo("DEMASIADAS_SOLICITUDES");
+    }
+
+    @Test
+    void restablecimientoEsPublicoYDevuelve204VacioAunqueBearerSeaInvalido() throws Exception {
+        HttpResponse<String> respuesta=cliente.send(HttpRequest.newBuilder(URI.create(
+                        "http://localhost:"+puerto+"/api/v1/password/restablecer"))
+                .header("Content-Type","application/json").header("Authorization","Bearer invalido")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"token\":\"secreto\",\"nuevaContrasena\":\"Nueva-Segura-2026!\"}"))
+                .build(),HttpResponse.BodyHandlers.ofString());
+        assertThat(respuesta.statusCode()).isEqualTo(204);
+        assertThat(respuesta.body()).isEmpty();
     }
 
     private HttpResponse<String> solicitar(String correo, String bearer) throws Exception {
