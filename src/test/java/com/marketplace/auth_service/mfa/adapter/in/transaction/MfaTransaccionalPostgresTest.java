@@ -71,8 +71,10 @@ class MfaTransaccionalPostgresTest {
         try(var c=DriverManager.getConnection(POSTGRES.getJdbcUrl(),POSTGRES.getUsername(),POSTGRES.getPassword());
             var entrada=new ClassPathResource("mfa/base-observada/schema.sql").getInputStream();var s=c.createStatement()) {
             s.execute(new String(entrada.readAllBytes(),StandardCharsets.UTF_8));
-            for(String sql:List.of("V101__credencial_version.sql","V103__mfa_desafio_otp.sql","V105__token_un_uso_contexto_id.sql"))
-                ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migraciones-propuestas/"+sql));
+            c.setAutoCommit(false);
+            for(String sql:List.of("V101__credencial_version.sql","V102__sesion_familia_acceso.sql", "V103__mfa_desafio_otp.sql","V105__token_un_uso_contexto_id.sql","V108__cambio_mfa.sql"))
+                s.execute(java.nio.file.Files.readString(java.nio.file.Path.of("docs/migraciones-propuestas/"+sql)));
+            c.commit();
         } catch(Exception e) { throw new IllegalStateException("Fixture observada MFA no disponible",e); }
         r.add("spring.datasource.url",POSTGRES::getJdbcUrl);
         r.add("spring.datasource.username",POSTGRES::getUsername);
