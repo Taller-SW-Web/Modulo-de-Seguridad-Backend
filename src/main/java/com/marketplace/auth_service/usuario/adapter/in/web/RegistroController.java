@@ -5,6 +5,7 @@ import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoRegistro;
 import com.marketplace.auth_service.usuario.application.dto.SolicitudRegistro;
 import com.marketplace.auth_service.usuario.application.port.in.RegistroClientePort;
+import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
 import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,7 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
  * POST {@code /api/v1/auth/registro} (SPEC-01, FEAT-01-T1). Público. 201 con la cuenta
  * {@code PENDIENTE_VERIFICACION} y sin tokens; 400 {@code VALIDACION} por campo; 422
  * {@code POLITICA_INCUMPLIDA} con cada regla (longitud incluida, por eso aquí no se mide);
- * 409 {@code CORREO_NO_DISPONIBLE} con el texto neutro del contrato.
+ * 409 {@code CORREO_NO_DISPONIBLE} con el texto neutro del contrato; 503 {@code NO_DISPONIBLE}
+ * si no se pudo encolar el correo de verificación.
  */
 @RestController
 public class RegistroController {
@@ -77,6 +80,13 @@ public class RegistroController {
             case ResultadoRegistro.PoliticaIncumplida incumplida -> ResponseEntity.unprocessableEntity()
                     .contentType(Problemas.PROBLEM_JSON).body(politicaIncumplida(incumplida));
         };
+    }
+
+    /** La cola de correo no está disponible: el registro se revirtió y puede reintentarse (catálogo, NO_DISPONIBLE). */
+    @ExceptionHandler(VerificacionNoDisponibleException.class)
+    public ResponseEntity<ProblemDetail> verificacionNoDisponible() {
+        return Problemas.respuesta(HttpStatus.SERVICE_UNAVAILABLE, "NO_DISPONIBLE", "Servicio no disponible",
+                "No pudimos completar el registro. Inténtalo de nuevo en unos minutos.");
     }
 
     private static List<Map<String, String>> validar(RegistroRequest c) {

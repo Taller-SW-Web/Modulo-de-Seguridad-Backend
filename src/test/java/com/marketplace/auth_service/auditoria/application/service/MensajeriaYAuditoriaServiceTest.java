@@ -302,6 +302,11 @@ class MensajeriaYAuditoriaServiceTest {
     }
 
     @Test
+    void elCorreoDeVerificacionTieneAsuntoPropio() {
+        assertThat(MensajeriaService.asunto("correo.verificacion_correo")).isEqualTo("Confirma tu correo");
+    }
+
+    @Test
     void brokerSinConfirmarDejaElEventoPendienteParaReintentar() {
         var outbox = new Outbox();
         var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));

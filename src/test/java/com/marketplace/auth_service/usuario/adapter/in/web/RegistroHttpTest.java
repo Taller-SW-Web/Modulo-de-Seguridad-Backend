@@ -11,6 +11,7 @@ import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoRegistro;
 import com.marketplace.auth_service.usuario.application.dto.SolicitudRegistro;
 import com.marketplace.auth_service.usuario.application.port.in.RegistroClientePort;
+import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -59,6 +60,7 @@ class RegistroHttpTest {
                         new ResultadoRegistro.ReglaIncumplida("LONGITUD_MINIMA", 10)));
             }
             return switch (solicitud.correo()) {
+                case "caida@correo.com" -> throw new VerificacionNoDisponibleException(new IllegalStateException("outbox"));
                 case "existente@correo.com" -> ResultadoRegistro.Rechazo.CORREO_NO_DISPONIBLE;
                 case "debil@correo.com" -> new ResultadoRegistro.PoliticaIncumplida(List.of(
                         new ResultadoRegistro.ReglaIncumplida("LONGITUD_MINIMA", 10),
@@ -214,6 +216,18 @@ class RegistroHttpTest {
         assertThat(problema.path("errores").toString())
                 .isEqualTo("[{\"regla\":\"LONGITUD_MINIMA\",\"esperado\":10},{\"regla\":\"CARACTER_ESPECIAL\"}]");
         assertThat(respuesta.body()).doesNotContain("abc");
+    }
+
+    @Test void colaDeCorreoCaidaResponde503NoDisponible() throws Exception {
+        var cuerpo = valido();
+        cuerpo.put("correo", "caida@correo.com");
+        var respuesta = registrar(cuerpo, null);
+
+        assertThat(respuesta.statusCode()).isEqualTo(503);
+        var problema = json.readTree(respuesta.body());
+        assertThat(problema.path("code").asText()).isEqualTo("NO_DISPONIBLE");
+        assertThat(problema.path("title").asText()).isEqualTo("Servicio no disponible");
+        assertThat(respuesta.body()).doesNotContain("caida@correo.com", "outbox");
     }
 
     @Test void correoExistenteResponde409NeutroDelContrato() throws Exception {

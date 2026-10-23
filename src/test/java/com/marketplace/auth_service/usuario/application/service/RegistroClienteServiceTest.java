@@ -1,12 +1,15 @@
 package com.marketplace.auth_service.usuario.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoRegistro;
 import com.marketplace.auth_service.usuario.application.dto.SolicitudRegistro;
 import com.marketplace.auth_service.usuario.application.port.out.AltaCuentaPort;
+import com.marketplace.auth_service.usuario.application.port.out.CorreoVerificacionPort;
 import com.marketplace.auth_service.usuario.application.port.out.EfectosRegistroPort;
+import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
 import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import com.marketplace.auth_service.usuario.domain.model.CuentaNueva;
 import java.time.Clock;
@@ -19,7 +22,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** FEAT-01-T1 con dobles: orden de efectos, rechazos sin efectos dentro y auditoría de cada desenlace. */
+/** FEAT-01-T1/T2 con dobles: orden de efectos, rechazos sin efectos dentro y auditoría de cada desenlace. */
 class RegistroClienteServiceTest {
 
     private static final Instant AHORA = Instant.parse("2026-10-22T15:00:00Z");
@@ -30,6 +33,7 @@ class RegistroClienteServiceTest {
     private final List<CuentaNueva> creadas = new ArrayList<>();
     private boolean correoOcupado;
     private List<ResultadoRegistro.ReglaIncumplida> reglas = List.of();
+    private boolean colaCaida;
     private Boolean revertida;
     private RegistroClienteService servicio;
 
@@ -41,7 +45,12 @@ class RegistroClienteServiceTest {
             creadas.add(cuenta);
             return true;
         };
-        servicio = new RegistroClienteService(altas, new Efectos(), "1.0", Clock.fixed(AHORA, ZoneOffset.UTC));
+        CorreoVerificacionPort correo = (usuarioId, destino, nombres) -> {
+            assertThat(usuarioId).isEqualTo(creadas.getFirst().id());
+            pasos.add("correo:" + destino + ":" + nombres);
+            if (colaCaida) throw new VerificacionNoDisponibleException(new IllegalStateException("outbox"));
+        };
+        servicio = new RegistroClienteService(altas, new Efectos(), correo, "1.0", Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static SolicitudRegistro solicitud(String canal) {
@@ -61,8 +70,18 @@ class RegistroClienteServiceTest {
         assertThat(cuenta.versionTerminos()).isEqualTo("1.0");
         assertThat(cuenta.aceptadoEn()).isEqualTo(AHORA);
         assertThat(pasos).containsExactly("transaccion", "alta", "politica", "credencial", "rol",
-                "auditoria:EXITO:MARKETPLACE");
+                "auditoria:EXITO:MARKETPLACE", "correo:maria@ejemplo.com:María");
         assertThat(revertida).isFalse();
+    }
+
+    @Test
+    void colaDeCorreoCaidaRevierteLaCuentaAuditaYPropaga() {
+        colaCaida = true;
+
+        assertThatThrownBy(() -> servicio.registrar(solicitud("WEB"), CONTEXTO))
+                .isInstanceOf(VerificacionNoDisponibleException.class);
+        assertThat(revertida).isTrue();
+        assertThat(pasos).endsWith("correo:maria@ejemplo.com:María", "auditoria:FALLO:NO_DISPONIBLE");
     }
 
     @Test
@@ -105,9 +124,14 @@ class RegistroClienteServiceTest {
         @Override
         public ResultadoRegistro enTransaccion(Supplier<ResultadoRegistro> trabajo) {
             pasos.add("transaccion");
-            var resultado = trabajo.get();
-            revertida = !(resultado instanceof ResultadoRegistro.Creada);
-            return resultado;
+            try {
+                var resultado = trabajo.get();
+                revertida = !(resultado instanceof ResultadoRegistro.Creada);
+                return resultado;
+            } catch (RuntimeException fallo) {
+                revertida = true; // como TransactionTemplate: una excepción revierte
+                throw fallo;
+            }
         }
 
         @Override
