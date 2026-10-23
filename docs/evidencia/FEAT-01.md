@@ -1,6 +1,6 @@
 # FEAT-01 Registro y verificación de correo (G1 F-001)
 
-Corte: 23-oct-2026, America/Lima. Responsable: Eva Lucía Moreno Zevallos.
+Corte: 23-oct-2026, America/Lima (actualizado tras la revisión de Luis sobre `ff7f902`). Responsable: Eva Lucía Moreno Zevallos.
 Estado: **T1–T3 implementadas y probadas en local y en el CI del PR**; T4 (retorno por canal),
 T5 (pantallas FRONT-02/03) y T6 (recorrido desplegado) pendientes. **Sin fusión, despliegue
 ni aceptación en nube**: esta evidencia no acredita RF en el entorno de integración.
@@ -11,8 +11,8 @@ Documentación consumida: `Taller-SW-Web/Modulo-de-Seguridad` main
 `1b034d2b1db0a19bb5c12c1c5426c797f47864b5`. SPEC-01, SPEC-02, SPEC-07 (política), SPEC-12
 (auditoría), OpenAPI v1 (`/auth/registro`, `/auth/verificar-correo`, `/reenviar`), catálogos de
 errores y eventos, `BACKEND-HEXAGONAL.md` y el tablero `tareas/hito-4/eva-moreno/TAREAS.md`.
-Base backend: develop `813b8099a59974c172d95a0b45b23d125e58caa6`, con develop
-`ceee1aae971c44f665125a7d7ee4d0c33780a55c` fusionado después. Rama `feat/EP-01-registro-verificacion`.
+Base backend: develop `813b8099a59974c172d95a0b45b23d125e58caa6`; develop fusionado después hasta
+`4361142` (PR #55 y #56). Rama `feat/EP-01-registro-verificacion`.
 
 | Commit | Tarea |
 |---|---|
@@ -21,6 +21,8 @@ Base backend: develop `813b8099a59974c172d95a0b45b23d125e58caa6`, con develop
 | `c080d59` | T2: token `VERIFICAR_CORREO` y correo de verificación por el outbox |
 | `dd4fafc` | T2: prueba PostgreSQL con V106 (corrección del CI) |
 | `0c3b80c` | T3: `verificar-correo` y `reenviar` con cuota por correo |
+| `f8700fa` | Evidencia y causa registrada en los 503 (revisión de Sergio) |
+| (este corte) | Cuota de reenvío confirmada antes del envío (revisión de Luis) |
 
 ## Implementación
 
@@ -41,8 +43,10 @@ Base backend: develop `813b8099a59974c172d95a0b45b23d125e58caa6`, con develop
   para usado o desconocido. Todo rechazo revierte. Audita `USUARIO_VERIFICADO`.
 - **T3 reenvío.** 202 exista o no la cuenta; 3 por hora por correo en `solicitud_limitada`
   (`REENVIO_VERIFICACION`, HMAC con `AUTH_SOLICITUD_LIMITADA_HMAC_KEY`, mismo formato que la
-  recuperación) y 429 con `Retry-After`. Sin clave HMAC, 503 para cualquier correo. Si la cola de
-  correo falla con una cuenta pendiente, responde 202 (un 503 delataría la cuenta) y se registra.
+  recuperación) y 429 con `Retry-After`. La cuota se confirma en su propia transacción antes de
+  enviar: si después falla la cola de correo, la solicitud ya contó y el límite es el mismo para
+  correos registrados y no registrados; responde 202 (un 503 delataría la cuenta), se revierte solo
+  el enlace nuevo y se registra el fallo. Sin clave HMAC, 503 para cualquier correo.
 - **Puertos nuevos de otros dueños.** `CredencialInicialInterna` (credencial) y
   `RolClienteInicialInterna` (autorización, solo `CLIENTE`). Asunto «Confirma tu correo» en
   `MensajeriaService.asunto()`.
@@ -72,7 +76,8 @@ Gradle 8.14.3 con toolchain Java 21; PostgreSQL 17.6 en Testcontainers sobre Doc
 ./gradlew test
 ```
 
-Suite completa: **855/855**, 0 fallos, 0 errores, 0 omitidas. Selección de FEAT-01 (70 casos):
+Suite completa, con develop hasta `4361142` fusionado: **888/888**, 0 fallos, 0 errores,
+0 omitidas. Selección de FEAT-01 (71 casos):
 
 | Clase | Casos | Cubre |
 |---|---:|---|
@@ -83,7 +88,7 @@ Suite completa: **855/855**, 0 fallos, 0 errores, 0 omitidas. Selección de FEAT
 | `VerificacionCorreoServiceTest` | 9 | cuatro casos del token, cuota y reenvío neutro |
 | `VerificacionCorreoHttpTest` | 7 | 204/410/400/202/429/503 |
 | `HuellaCorreoHmacTest` | 2 | huella estable sin correo; sin clave falla cerrado |
-| `RegistroClientePostgresTest` | 10 | punta a punta sobre PostgreSQL real (abajo) |
+| `RegistroClientePostgresTest` | 11 | punta a punta sobre PostgreSQL real (abajo) |
 | `UsuarioConfigurationTest`, `ArquitecturaHexagonalTest`, `MensajeriaYAuditoriaServiceTest` | 22 | wiring, fronteras hexagonales y asunto |
 
 `RegistroClientePostgresTest` usa los proveedores reales de cuentas, credenciales (hasher y
@@ -92,19 +97,36 @@ Comprueba: cuenta con credencial, rol y términos; duplicado con otras mayúscul
 política que revierte; token guardado solo como hash y enlace del correo descifrado cuyo SHA-256
 coincide; outbox caído que revierte la cuenta; verificación única que publica un solo
 `usuario.creado`; enlace vencido que deja la cuenta pendiente; reenvío que invalida el enlace
-anterior y limita a 3; correo sin cuenta que responde igual y también se limita.
+anterior y limita a 3; correo sin cuenta que responde igual y también se limita; con la cola de
+correo caída (fallo inducido con un `CHECK` sobre `outbox`), la cuota se conserva y el límite es
+idéntico para un correo registrado y otro sin cuenta, y el enlace anterior sigue valiendo.
 
-El CI del PR («CI Backend - build y pruebas») quedó en verde tras `dd4fafc`.
+El CI del PR («CI Backend - build y pruebas») quedó en verde tras `dd4fafc` y en `ff7f902`.
 
 No se acredita: entrega SMTP real, despliegue, navegador contra la API ni datos de Supabase.
 No se conectó a Supabase ni se aplicó SQL remoto.
+
+## Configuración requerida para desplegar
+
+Sin migraciones nuevas. Variables de entorno del servicio en Render:
+
+| Variable | Valor | Si falta |
+|---|---|---|
+| `AUTH_OUTBOX_AES_KEY_ID` / `AUTH_OUTBOX_AES_KEY` | ya existentes (id y clave Base64 de 32 bytes del outbox) | registro 503 `NO_DISPONIBLE`: no hay correo de verificación |
+| `G7_SPA_URL` | ya existente; origen público de la SPA, p. ej. `https://g7-seguridad-spa.onrender.com` | el enlace apunta a `http://localhost:5173` |
+| `AUTH_SOLICITUD_LIMITADA_HMAC_KEY` | **nueva**, secreta: Base64 de al menos 32 bytes (`openssl rand -base64 32`); la misma que usará la recuperación | reenvío 503 `NO_DISPONIBLE` para cualquier correo |
+| `G7_REGISTRO_VERSION_TERMINOS` | versión vigente de los términos (máx. 20 caracteres), pendiente de confirmar con el PO | se guarda `1.0` |
+
+La SPA debe servir `/verificar-correo?token=…` (FRONT-03, T5). Nada de esto se configuró desde esta rama.
 
 ## Pendientes
 
 - Christian: `AUTH_SOLICITUD_LIMITADA_HMAC_KEY` en Render; confirmar el índice en Supabase;
   `usuario.creado` lleva `roles` como texto porque `MensajeriaService.sobre()` solo arma la lista
-  para `usuario.roles_cambiados`.
+  para `usuario.roles_cambiados`: lo corrige Christian en su módulo y luego se añade aquí la prueba
+  del mensaje final publicado (revisión de Luis).
 - Sergio (PO): versión real de los términos; token desconocido como `ENLACE_YA_USADO` en el
   contrato; pantalla propia de CHATBOT (RF-02.8) pendiente, hoy todos los canales usan la SPA.
 - Juan José: unificar el limitador de reenvíos con el de recuperación al fusionar FEAT-03.
-- T4–T6 de FEAT-01; evidencia del recorrido desplegado en T6.
+- T4 (depende de la URL de retorno de G1, FEAT-11-T1) y T5 (pantallas, repo frontend): se pide a
+  Sergio un corte parcial explícito para fusionar T1–T3. T6 se registra después del despliegue.

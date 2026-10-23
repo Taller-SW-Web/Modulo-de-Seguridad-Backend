@@ -23,8 +23,9 @@ import java.util.Objects;
  *   <li>Verificar, en una transacción: cuenta bloqueada y aún pendiente → token consumido →
  *       {@code ACTIVO} → {@code usuario.creado} por el outbox. Cualquier rechazo revierte, así la
  *       cuenta sigue pendiente y no se publica nada (ESC-02.2). Vencido y usado se auditan.</li>
- *   <li>Reenviar: la cuota se reserva por correo exista o no la cuenta (ESC-02.5); solo con cuota y
- *       una cuenta pendiente se emite un enlace nuevo, que invalida el anterior (RF-02.4).</li>
+ *   <li>Reenviar: la cuota se reserva y confirma por correo exista o no la cuenta (ESC-02.5); solo
+ *       con cuota y una cuenta pendiente se emite, en otra transacción, un enlace nuevo que
+ *       invalida el anterior (RF-02.4).</li>
  * </ul>
  */
 public final class VerificacionCorreoService implements VerificacionCorreoPort {
@@ -79,20 +80,23 @@ public final class VerificacionCorreoService implements VerificacionCorreoPort {
         Objects.requireNonNull(contexto);
         String normalizado = correo.strip().toLowerCase(Locale.ROOT);
         Instant ahora = reloj.instant();
+        // La cuota se confirma en su propia transacción antes de enviar: si después falla el outbox,
+        // la solicitud ya contó, y el límite es el mismo para correos registrados y no registrados.
+        Duration espera = efectos.enTransaccion(() -> cuota.reservar(normalizado, ahora), r -> true);
+        if (!espera.isZero()) {
+            return new ResultadoReenvio.Limitado(Math.max(1, (espera.toMillis() + 999) / 1000));
+        }
         try {
-            return efectos.enTransaccion(() -> {
-                Duration espera = cuota.reservar(normalizado, ahora);
-                if (!espera.isZero()) {
-                    return new ResultadoReenvio.Limitado(Math.max(1, (espera.toMillis() + 999) / 1000));
-                }
+            efectos.enTransaccion(() -> {
                 cuentas.buscarPendiente(normalizado).ifPresent(cuenta ->
                         correoVerificacion.enviar(cuenta.id(), cuenta.correo(), cuenta.nombres()));
-                return ResultadoReenvio.Aceptado.ACEPTADO;
+                return Boolean.TRUE;
             }, r -> true);
         } catch (VerificacionNoDisponibleException colaCaida) {
             // Solo puede fallar con una cuenta pendiente: un 503 delataría que el correo está registrado.
-            // Sin la clave de la cuota (CuotaNoDisponibleException) falla con cualquier correo y sí da 503.
-            return ResultadoReenvio.Aceptado.ACEPTADO;
+            // Se revierte el enlace nuevo, así el anterior sigue valiendo. Sin la clave de la cuota
+            // (CuotaNoDisponibleException) falla con cualquier correo y sí da 503.
         }
+        return ResultadoReenvio.Aceptado.ACEPTADO;
     }
 }

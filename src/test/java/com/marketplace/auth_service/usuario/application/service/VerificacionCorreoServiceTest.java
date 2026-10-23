@@ -121,14 +121,14 @@ class VerificacionCorreoServiceTest {
         cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María"));
 
         assertThat(servicio.reenviar("  Maria@Ejemplo.COM ", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
-        assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com", "buscar:maria@ejemplo.com",
-                "enviar:maria@ejemplo.com");
+        assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com", "transaccion",
+                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com");
     }
 
     @Test
     void reenvioSinCuentaRespondeIgualYConsumeCuota() {
         assertThat(servicio.reenviar("nadie@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
-        assertThat(pasos).containsExactly("transaccion", "cuota:nadie@ejemplo.com", "buscar:nadie@ejemplo.com");
+        assertThat(pasos).containsExactly("transaccion", "cuota:nadie@ejemplo.com", "transaccion", "buscar:nadie@ejemplo.com");
     }
 
     @Test
@@ -146,6 +146,9 @@ class VerificacionCorreoServiceTest {
         falloCorreo = new VerificacionNoDisponibleException(new IllegalStateException("outbox"));
 
         assertThat(servicio.reenviar("maria@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
+        // La cuota se confirmó antes, en su propia transacción; solo se revierte el envío.
+        assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com", "transaccion",
+                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com");
         assertThat(revertida).isTrue();
     }
 

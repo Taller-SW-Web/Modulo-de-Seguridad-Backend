@@ -312,6 +312,26 @@ class RegistroClientePostgresTest {
     }
 
     @Test
+    void conLaColaCaidaElReenvioConservaLaCuotaYRespondeIgualExistaONoLaCuenta() throws Exception {
+        UUID id = registrar("maria@ejemplo.com");
+        String vigente = tokenDelUltimoCorreo();
+        jdbc.execute("alter table outbox add constraint feat01_fallo check (topico <> 'correo.verificacion_correo') not valid");
+
+        for (String correo : List.of("maria@ejemplo.com", "nadie@ejemplo.com")) {
+            for (int i = 0; i < 3; i++) {
+                assertThat(verificacion.reenviar(correo, CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
+            }
+            assertThat(verificacion.reenviar(correo, CONTEXTO)).isInstanceOf(ResultadoReenvio.Limitado.class);
+        }
+        assertThat(contar("solicitud_limitada where tipo = 'REENVIO_VERIFICACION'")).isEqualTo(6);
+        // Los enlaces nuevos se revirtieron con su correo: el del registro sigue siendo el único vigente.
+        assertThat(contar("token_un_uso where not usado")).isEqualTo(1);
+        assertThat(correosDeVerificacion()).hasSize(1);
+        assertThat(verificacion.verificar(vigente, CONTEXTO)).isEqualTo(ResultadoVerificacion.VERIFICADA);
+        assertThat(estado(id)).isEqualTo("ACTIVO");
+    }
+
+    @Test
     void reenvioAUnaCuentaYaVerificadaNoEnviaNada() throws Exception {
         registrar("maria@ejemplo.com");
         verificacion.verificar(tokenDelUltimoCorreo(), CONTEXTO);
