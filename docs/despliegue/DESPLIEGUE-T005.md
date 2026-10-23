@@ -4,7 +4,42 @@ Imagen: `Dockerfile` de la raíz (JDK 21 para construir, JRE 21 para ejecutar,
 usuario `g7` sin privilegios, sin secretos). El CI construye la imagen en cada PR
 (job «Backend - imagen Docker»). Sirve en cualquier plataforma que ejecute un
 Dockerfile (Render, Railway, Fly.io, Koyeb, Cloud Run); abajo, los pasos para
-Render como propuesta por su nivel gratuito con Docker y archivos secretos.
+Render, la plataforma usada en H3. La [ficha del entorno real](#entorno-real-h3)
+recoge los valores públicos aplicados; las tablas de variables conservan
+ejemplos genéricos.
+
+## Entorno real H3
+
+Valores públicos informados por el equipo para la ronda del 16-oct-2026 y
+comprobados de forma independiente el 17-oct-2026 04:45–04:51 UTC (noche del
+16-oct en Lima). Detalle de cada comprobación en
+[TEC-INFRA-T005](../evidencia/TEC-INFRA-T005.md).
+
+| Componente | Alojamiento | URL / valor | Comprobado |
+|---|---|---|---|
+| SPA | Render Static Site | https://g7-seguridad-spa.onrender.com | 200, `/login` 200 |
+| Backend | Render Web Service (Docker) | https://g7-auth-service.onrender.com | 200 |
+| Salud | — | https://g7-auth-service.onrender.com/actuator/health | 200 `UP` (tras arranque en frío) |
+| Descubrimiento | — | https://g7-auth-service.onrender.com/api/v1/auth/.well-known/openid-configuration | 200, issuer exacto |
+| JWKS | — | https://g7-auth-service.onrender.com/api/v1/auth/.well-known/jwks.json | 200, una clave RS256 sin `d` |
+| Login | — | `POST https://g7-auth-service.onrender.com/api/v1/auth/login` | No ejecutado en la comprobación; usado en la ronda del 16-oct |
+| Base de datos | PostgreSQL en Supabase | privada | Indirecto: login y OTP de la ronda |
+| Correo | Brevo SMTP, puerto 2525 en el entorno probado | privado | Indirecto: avisos recibidos en la ronda |
+
+| Variable pública | Valor | Comprobado |
+|---|---|---|
+| `AUTH_ISSUER` | `https://g7-auth-service.onrender.com/api/v1/auth` | Igual al `issuer` publicado |
+| `G7_CORS_ORIGENES` | `https://g7-seguridad-spa.onrender.com` | Preflight: ese origen 200; otro 403 |
+| `G7_SPA_URL` | `https://g7-seguridad-spa.onrender.com` | Indirecto: el enlace de desbloqueo abrió la SPA (ronda) |
+| `VITE_API_BASE_URL` (build de la SPA) | `https://g7-auth-service.onrender.com/api/v1` | Bundle servido idéntico al build con ese valor. Se había informado sin `/api/v1`; el valor efectivo lo incluye |
+
+Revisiones: backend **reportado** `4bd7b61` en `develop` (sin registro de
+despliegue en GitHub); frontend sin SHA del panel, contenido igual al árbol de
+`82c9414`. La rama de Render es `develop`, no `main` como proponía el paso 1 de abajo.
+
+El plan gratuito duerme el servicio: la primera petición tardó más de 60 s.
+Secretos (contraseñas, claves de firma/HMAC/AES, cadena JDBC, credenciales SMTP)
+no se publican aquí.
 
 ## Precondiciones (bloquean el arranque)
 
@@ -26,11 +61,11 @@ Render como propuesta por su nivel gratuito con Docker y archivos secretos.
 | `AUTH_ISSUER` | `https://<servicio>/api/v1/auth` (URL pública exacta, sin `/` final) | no |
 | `AUTH_CLAVE_PRIVADA_ARCHIVO` | `/etc/secrets/firma-g7.pem` | (ruta) |
 | `G7_PASSWORD_COMUNES_ARCHIVO` | `/etc/secrets/password-comunes.txt` | (ruta) |
-| `G7_CORS_ORIGENES` | origen exacto de la SPA, p. ej. `https://<spa>.vercel.app` (varios: separados por coma; nunca `*`) | no |
+| `G7_CORS_ORIGENES` | origen exacto de la SPA, p. ej. `https://<spa>.onrender.com` (varios: separados por coma; nunca `*`); valor real en la ficha | no |
 | `PORT` | lo inyecta la plataforma (por defecto 8080) | no |
 | `AUTH_FALLOS_HMAC_KEY_ID` / `AUTH_FALLOS_HMAC_KEY` | id corto y clave Base64 ≥ 32 bytes para huellas de fallos (protección) | sí (la clave) |
 | `AUTH_OTP_HMAC_KEY_ID` / `AUTH_OTP_HMAC_KEY` | id corto y clave Base64 ≥ 32 bytes para desafíos y códigos OTP | sí (la clave) |
-| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | SMTP real, p. ej. `smtp.gmail.com` / `587` | no |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | SMTP real, p. ej. `smtp.gmail.com` / `587` (H3: Brevo, puerto `2525`) | no |
 | `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | cuenta y contraseña de aplicación del SMTP | sí |
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` / `…_STARTTLS_ENABLE` | `true` / `true` | no |
 | `G7_CORREO_REMITENTE` | remitente visible (por defecto el usuario SMTP) | no |
@@ -62,10 +97,12 @@ cuando existan broker y SMTP (TEC-INFRA-T004).
 Sin la lista común el servicio arranca, pero no permite fijar contraseñas
 (`NO_DISPONIBLE`), y la carga de cuentas de prueba falla.
 
-## Render (propuesta)
+## Render
 
 1. New → Web Service → repositorio `Modulo-de-Seguridad-Backend`, rama `main`
    (solo versiones probadas), runtime **Docker**, región la más cercana a Supabase.
+   En H3 el servicio se informó sobre `develop`; antes de fusionar en la rama
+   que sigue Render, revisar si tiene despliegue automático activo.
 2. Health check path: `/actuator/health`.
 3. Environment: las variables de la tabla; Secret Files: los tres archivos (Render
    los monta en `/etc/secrets/`).
