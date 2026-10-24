@@ -1,6 +1,14 @@
 package com.marketplace.auth_service.sesion.adapter.out.persistence;
 
 import com.fasterxml.jackson.databind.*;
+import com.marketplace.auth_service.auditoria.adapter.in.transaction.AuditoriaTransaccional;
+import com.marketplace.auth_service.auditoria.adapter.in.web.ActividadController;
+import com.marketplace.auth_service.auditoria.adapter.out.persistence.AuditoriaJpaAdapter;
+import com.marketplace.auth_service.auditoria.adapter.out.persistence.BaseAuditoriaPostgres;
+import com.marketplace.auth_service.auditoria.adapter.out.transaccion.TareasTrasCommitSpring;
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
+import com.marketplace.auth_service.auditoria.application.port.out.AuditoriaPersistenciaPort;
+import com.marketplace.auth_service.auditoria.application.service.AuditoriaService;
 import com.marketplace.auth_service.configuration.*;
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
@@ -41,8 +49,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
 import static org.assertj.core.api.Assertions.*;
 
-/** HTTP y PostgreSQL reales: sesiones, cuentas, roles y firma productivos.
- * Protección para distinguir bloqueos y auditoría NO están integradas. */
+/** HTTP y PostgreSQL reales: sesiones, cuentas, roles y firma productivos. Con
+ * FEAT-12-T2 se integra también auditoría (registro real y /me/actividad);
+ * la protección para distinguir bloqueos sigue sin integrarse. */
 @SpringBootTest(classes = SesionesIntegracionPostgresTest.Aplicacion.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=validate",
@@ -55,15 +64,23 @@ class SesionesIntegracionPostgresTest {
     @EnableAutoConfiguration(exclude = {FlywayAutoConfiguration.class, RabbitAutoConfiguration.class})
     @EntityScan(basePackages = {"com.marketplace.auth_service.sesion.adapter.out.persistence.entity",
             "com.marketplace.auth_service.usuario.adapter.out.persistence.entity",
-            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity"})
+            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity",
+            "com.marketplace.auth_service.auditoria.adapter.out.persistence.entity"})
     @EnableJpaRepositories(basePackages = {"com.marketplace.auth_service.sesion.adapter.out.persistence.repository",
             "com.marketplace.auth_service.usuario.adapter.out.persistence.repository",
-            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository"})
+            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository",
+            "com.marketplace.auth_service.auditoria.adapter.out.persistence.repository"})
     @Import({SesionConfig.class, SesionJpaAdapter.class, UsuarioConfiguration.class, AutorizacionConfig.class,
             IdentidadConfig.class, SeguridadConfig.class, RefrescoController.class, CierreController.class,
-            SesionErroresAdvice.class})
+            SesionErroresAdvice.class, AuditoriaJpaAdapter.class, ActividadController.class})
     static class Aplicacion {
         @Bean Clock reloj() { return Clock.fixed(AHORA, ZoneOffset.UTC); }
+        /** Puerto de auditoría real (FEAT-12-T2): igual que AuditoriaConfig, sin cola de reintentos. */
+        @Bean AuditoriaPort auditoriaPort(AuditoriaPersistenciaPort filas,
+                                          PlatformTransactionManager transacciones) {
+            return new AuditoriaTransaccional(new AuditoriaService(filas,
+                    new TareasTrasCommitSpring(transacciones)));
+        }
     }
     @Container static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:17.6");
     @DynamicPropertySource static void propiedades(DynamicPropertyRegistry r) {
@@ -71,6 +88,8 @@ class SesionesIntegracionPostgresTest {
         try (var conexion = DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword())) {
             BaseSesionPostgres.cargarEsquema(conexion);
             BaseSesionPostgres.migrar(conexion);
+            // FEAT-12-T2: V106 completa auditoría_seguridad (registro_id) sobre la base ya cargada.
+            BaseAuditoriaPostgres.migrar(conexion);
             conexion.createStatement().execute("insert into rol(codigo,nombre) values ('CLIENTE','Cliente'), ('VENDEDOR','Vendedor')");
         } catch (Exception error) { throw new IllegalStateException("Fixture local de sesión no disponible", error); }
         r.add("spring.datasource.url", PG::getJdbcUrl);
@@ -87,6 +106,7 @@ class SesionesIntegracionPostgresTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager em;
     @Autowired ApplicationContext contexto;
+    @Autowired AuditoriaPort auditoria;
     @LocalServerPort int puerto;
     final ObjectMapper json = new ObjectMapper();
     final HttpClient http = HttpClient.newHttpClient();
@@ -230,5 +250,57 @@ class SesionesIntegracionPostgresTest {
         assertThat(json.readTree(respuesta.body()).path("code").asText()).isEqualTo("VALIDACION");
         assertThat(respuesta.body()).doesNotContain(secreto);
         assertThat(salida.getAll()).doesNotContain(secreto);
+    }
+
+    /** FEAT-12-T2: el logout registra SESION_CERRADA y /me/actividad lo muestra una sola vez. */
+    @Test void logoutRegistraSesionCerradaEnActividadSinDuplicar() throws Exception {
+        var sesion = abrir();
+        UUID familia = familia(sesion.refreshToken());
+
+        assertThat(post("logout", sesion.refreshToken()).statusCode()).isEqualTo(204);
+
+        // El hecho no crítico se escribe tras el commit y en hilo aparte: se espera su llegada.
+        var cuerpo = esperarActividad(sesion.accessToken(), 1);
+        var registro = cuerpo.path("registros").get(0);
+        assertThat(registro.path("accion").asText()).isEqualTo("SESION_CERRADA");
+        assertThat(registro.path("resultado").asText()).isEqualTo("EXITO");
+        assertThat(registro.path("objetivoUsuarioId").asText()).isEqualTo(usuario.toString());
+        assertThat(registro.path("ip").asText()).isEqualTo("127.0.0.1");
+        assertThat(registro.path("detalle").path("familiaId").asText()).isEqualTo(familia.toString());
+        assertThat(registro.toString()).doesNotContain("refreshToken", sesion.refreshToken(), "Bearer");
+
+        // Logout repetido y refresco desconocido: 204 sin programar un hecho nuevo.
+        assertThat(post("logout", sesion.refreshToken()).statusCode()).isEqualTo(204);
+        assertThat(post("logout", "refresco-desconocido").statusCode()).isEqualTo(204);
+        assertThat(actividad(sesion.accessToken()).path("total").asLong()).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from auditoria_seguridad where objetivo_usuario_id=? and accion='SESION_CERRADA'",
+                Long.class, usuario)).isEqualTo(1);
+        assertThat(auditoria.actividadPropia(usuario, 1, 10).registros()).hasSize(1);
+    }
+
+    private JsonNode actividad(String accessToken) throws Exception {
+        var respuesta = http.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + puerto + "/api/v1/auth/me/actividad"))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        return json.readTree(respuesta.body());
+    }
+
+    /** Espera el registro asíncrono (hilo {@code auditoria-no-critica}) sin fijar una espera ciega. */
+    private JsonNode esperarActividad(String accessToken, long esperado) throws Exception {
+        JsonNode cuerpo = null;
+        long limite = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < limite) {
+            cuerpo = actividad(accessToken);
+            if (cuerpo.path("total").asLong() >= esperado) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+        assertThat(cuerpo).isNotNull();
+        assertThat(cuerpo.path("total").asLong()).isEqualTo(esperado);
+        return cuerpo;
     }
 }

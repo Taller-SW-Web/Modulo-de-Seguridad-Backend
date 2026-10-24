@@ -15,6 +15,7 @@ import com.marketplace.auth_service.sesion.application.dto.TokenAccesoFirmado;
 import com.marketplace.auth_service.sesion.application.dto.UsuarioAutenticado;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.CriptografiaSesionPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.port.out.FirmadorAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.out.PersistenciaSesionPort;
 import com.marketplace.auth_service.sesion.application.port.out.ProveedorIdentidadPort;
@@ -43,14 +44,17 @@ public class SesionService implements SesionesPort {
     private final CriptografiaSesionPort criptografia;
     private final FirmadorAccesoPort firmador;
     private final ProveedorIdentidadPort identidad;
+    private final EfectosCierrePort efectosCierre;
     private final Clock clock;
 
     public SesionService(PersistenciaSesionPort persistencia, CriptografiaSesionPort criptografia,
-                         FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad, Clock clock) {
+                         FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad,
+                         EfectosCierrePort efectosCierre, Clock clock) {
         this.persistencia = Objects.requireNonNull(persistencia, "persistencia");
         this.criptografia = Objects.requireNonNull(criptografia, "criptografia");
         this.firmador = Objects.requireNonNull(firmador, "firmador");
         this.identidad = Objects.requireNonNull(identidad, "identidad");
+        this.efectosCierre = Objects.requireNonNull(efectosCierre, "efectosCierre");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -152,8 +156,9 @@ public class SesionService implements SesionesPort {
     }
 
     @Override
-    public CierreResultado cerrar(SecretoRefresco secreto) {
+    public CierreResultado cerrar(SecretoRefresco secreto, ContextoPeticion contexto) {
         Objects.requireNonNull(secreto, "secreto");
+        Objects.requireNonNull(contexto, "contexto");
         Instant ahora = clock.instant();
         TokenRefresco presentado = persistencia.buscarTokenPorHash(criptografia.hash(secreto.valor()))
                 .orElse(null);
@@ -165,6 +170,9 @@ public class SesionService implements SesionesPort {
             return new CierreResultado.YaCerrada();
         }
         revocarFamilia(familia.id(), ahora);
+        // FEAT-12-T2: el hecho no crítico solo nace de una familia real recién
+        // cerrada; una segunda petición (YaCerrada) no lo duplica.
+        efectosCierre.auditarCierre(presentado.usuarioId(), familia.id(), contexto, ahora);
         return new CierreResultado.Cerrada(presentado.usuarioId(), familia.id());
     }
 
