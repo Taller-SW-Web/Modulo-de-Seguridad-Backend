@@ -7,6 +7,20 @@ import com.marketplace.auth_service.credencial.adapter.out.persistence.repositor
 import com.marketplace.auth_service.credencial.adapter.out.persistence.entity.TokenUnUsoJpaEntity;
 import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
+import com.marketplace.auth_service.credencial.application.port.out.AuditoriaRecuperacionPort;
+import com.marketplace.auth_service.credencial.application.port.out.CorreoRecuperacionPort;
+import com.marketplace.auth_service.credencial.application.port.out.CuentasRecuperacionPort;
+import com.marketplace.auth_service.credencial.application.port.out.CuotaRecuperacionPort;
+import com.marketplace.auth_service.credencial.application.port.out.HashCorreoSolicitudPort;
+import com.marketplace.auth_service.credencial.application.dto.CuentaRecuperacion;
+import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
+import com.marketplace.auth_service.credencial.application.service.SolicitudRecuperacionService;
+import com.marketplace.auth_service.credencial.adapter.in.transaction.CorreoRecuperacionTransaccional;
+import com.marketplace.auth_service.credencial.adapter.out.capacidad.CorreoRecuperacionAdapter;
+import com.marketplace.auth_service.credencial.adapter.out.crypto.HmacCorreoSolicitudJca;
+import com.marketplace.auth_service.credencial.adapter.out.persistence.SolicitudesRecuperacionPostgresAdapter;
+import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import com.marketplace.auth_service.configuration.TokensUnUsoConfig;
 import jakarta.persistence.EntityManager;
 import org.springframework.transaction.IllegalTransactionStateException;
@@ -18,6 +32,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CountDownLatch;
@@ -60,7 +75,15 @@ class TokenUnUsoJpaPostgresTest {
     @TestConfiguration(proxyBeanMethods = false)
     @EntityScan(basePackageClasses = TokenUnUsoJpaEntity.class)
     @EnableJpaRepositories(basePackageClasses = TokenUnUsoJpaRepository.class)
-    static class PersistenciaToken { }
+    static class PersistenciaToken {
+        @org.springframework.context.annotation.Bean HashCorreoSolicitudPort hashCorreoSolicitudPort() {
+            return new HmacCorreoSolicitudJca("clave-test-recuperacion-32-bytes-minimo".getBytes(StandardCharsets.UTF_8));
+        }
+        @org.springframework.context.annotation.Bean CuotaRecuperacionPort cuotaRecuperacionPort(
+                JdbcTemplate jdbc, HashCorreoSolicitudPort hash) {
+            return new SolicitudesRecuperacionPostgresAdapter(jdbc, hash);
+        }
+    }
 
     @Container static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16.6");
 
@@ -92,6 +115,7 @@ class TokenUnUsoJpaPostgresTest {
     @Autowired PlatformTransactionManager manager;
     private TransactionTemplate tx;
     @Autowired TokensUnUsoPort service;
+    @Autowired CuotaRecuperacionPort cuota;
     @Autowired EntityManager entityManager;
     private UUID usuarioId;
 
@@ -293,6 +317,52 @@ class TokenUnUsoJpaPostgresTest {
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> service.invalidarPrevios(usuarioId, PropositoToken.DESBLOQUEO_AUTOMATICO))
                 .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test void falloDeOutboxEsNeutroMantieneCuotaYRevierteTokenSinInvalidarElAnterior() {
+        jdbc.execute("truncate table solicitud_limitada restart identity");
+        var conCuenta = ejecutarSolicitudesTrasFallo("existente-" + UUID.randomUUID() + "@example.test", true);
+        var sinCuenta = ejecutarSolicitudesTrasFallo("inexistente-" + UUID.randomUUID() + "@example.test", false);
+
+        assertThat(conCuenta).containsExactly(new ResultadoSolicitudRecuperacion.Aceptada(),
+                new ResultadoSolicitudRecuperacion.Aceptada(), new ResultadoSolicitudRecuperacion.Aceptada(),
+                new ResultadoSolicitudRecuperacion.Limite(3600));
+        assertThat(sinCuenta).isEqualTo(conCuenta);
+    }
+
+    private java.util.List<ResultadoSolicitudRecuperacion> ejecutarSolicitudesTrasFallo(String correo, boolean existe) {
+        jdbc.execute("truncate table solicitud_limitada restart identity");
+        UUID idUsuario = UUID.randomUUID();
+        jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?, ?, 'Recuperacion', 'Test', 'ACTIVO')",
+                idUsuario, idUsuario + "@example.test");
+        var cuenta = new CuentaRecuperacion(idUsuario, correo, true);
+        var anterior = tx.execute(s -> service.emitir(idUsuario, PropositoToken.RECUPERACION, Duration.ofMinutes(30)));
+        MensajeriaPort mensajeria = new MensajeriaPort() {
+            @Override public UUID guardarEvento(com.marketplace.auth_service.auditoria.application.dto.EventoUsuario evento) {
+                throw new UnsupportedOperationException("No se esperaba un evento");
+            }
+            @Override public UUID guardarCorreo(com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo entrega) {
+                throw new IllegalStateException("Fallo de outbox inducido para la prueba");
+            }
+        };
+        CorreoRecuperacionPort correoPort = new CorreoRecuperacionTransaccional(
+                new CorreoRecuperacionAdapter(service, mensajeria, "https://spa.example.test"), manager);
+        CuentasRecuperacionPort cuentas = solicitado -> existe ? Optional.of(cuenta) : Optional.empty();
+        AuditoriaRecuperacionPort auditoria = (usuario, aceptada, contexto, ahora) -> { };
+        var solicitud = new SolicitudRecuperacionService(cuentas, cuota, correoPort, auditoria,
+                Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC));
+        var contexto = new ContextoPeticion("127.0.0.1", "test", UUID.randomUUID());
+        var resultados = new java.util.ArrayList<ResultadoSolicitudRecuperacion>();
+
+        for (int i = 0; i < 4; i++) resultados.add(solicitud.solicitar(correo, contexto));
+
+        if (existe) {
+            assertThat(repository.findById(anterior.id()).orElseThrow().isUsado()).isFalse();
+            assertThat(repository.findAll().stream().filter(token -> token.getUsuarioId().equals(idUsuario)).toList())
+                    .hasSize(1);
+        }
+        assertThat(jdbc.queryForObject("select count(*) from solicitud_limitada", Long.class)).isEqualTo(3L);
+        return resultados;
     }
 
     @Test void rechazoDeUsuarioPropositoRevisionYVencimientoNoConsume() {

@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.ConsultaUsuariosTransaccional;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.*;
@@ -25,6 +26,7 @@ class UsuarioConfigurationTest {
             .withBean(UsuarioJpaRepository.class,()->mock(UsuarioJpaRepository.class))
             .withBean(UsuarioEstadoEfectivoRepository.class,()->mock(UsuarioEstadoEfectivoRepository.class))
             .withBean(AutorizacionPort.class,()->mock(AutorizacionPort.class))
+            .withBean(ConsultaIdentidadPort.class,()->mock(ConsultaIdentidadPort.class))
             // Registro y verificación se cablean en sus propias Config; aquí solo los piden sus controladores.
             .withBean(RegistroClientePort.class,()->mock(RegistroClientePort.class))
             .withBean(VerificacionCorreoPort.class,()->mock(VerificacionCorreoPort.class));

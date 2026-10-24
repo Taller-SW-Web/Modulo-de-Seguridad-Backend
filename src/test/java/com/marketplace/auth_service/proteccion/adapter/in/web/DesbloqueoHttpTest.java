@@ -43,6 +43,8 @@ class DesbloqueoHttpTest {
                 public ResultadoFallo registrarFallo(CuentaSnapshot c,HuellaFallo h,ContextoPeticion p){throw new UnsupportedOperationException();}
                 public void completarLogin(UUID u){throw new UnsupportedOperationException();}
                 public ResultadoDesbloqueo desbloquear(PruebaEnlace p,ContextoPeticion c){return RESPUESTA.get().apply(p);}
+                public void prepararRestablecimiento(UUID u){throw new UnsupportedOperationException();}
+                public void restablecerPorRecuperacion(UUID u,ContextoPeticion c,Instant a){throw new UnsupportedOperationException();}
             };
         }
     }

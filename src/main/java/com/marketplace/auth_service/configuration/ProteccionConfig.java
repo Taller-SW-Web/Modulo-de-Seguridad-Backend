@@ -47,6 +47,9 @@ public class ProteccionConfig {
             public void desbloqueada(CuentaSnapshot c,UUID r,ContextoPeticion p,Instant a) {
                 exigir(efectos,"auditoría/evento Christian").desbloqueada(c,r,p,a);
             }
+            public void desbloqueadaPorRestablecimiento(CuentaSnapshot c,UUID r,ContextoPeticion p,Instant a) {
+                exigir(efectos,"auditoría/evento Christian").desbloqueadaPorRestablecimiento(c,r,p,a);
+            }
         };
         return new ProteccionTransaccional(new ProteccionService(persistencia,huellas,cuentas,requerido,criticos,
                 hash,reloj.getIfAvailable(Clock::systemUTC)));
