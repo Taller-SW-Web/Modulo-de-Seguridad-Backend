@@ -1,8 +1,10 @@
 package com.marketplace.auth_service.usuario.application.port.in;
 
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
+import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
 
 /**
@@ -23,4 +25,10 @@ public interface ConsultaUsuariosPort {
      * después de autorizar: sin permiso, la respuesta no revela si el objetivo existe.
      */
     UsuarioVista obtener(ActorUsuario actor, String idTexto);
+
+    /**
+     * El mismo detalle, para un módulo consumidor con token de servicio
+     * (SPEC-18 FEAT-06-T1): la regla de la ruta ya exigió {@code usuarios:leer}.
+     */
+    UsuarioServicioVista obtenerParaServicio(ActorServicio actor, String idTexto);
 }

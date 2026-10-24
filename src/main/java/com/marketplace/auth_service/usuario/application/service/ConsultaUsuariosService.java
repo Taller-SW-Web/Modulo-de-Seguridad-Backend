@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.usuario.application.service;
 
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.Rol;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
@@ -8,12 +9,14 @@ import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
 import com.marketplace.auth_service.usuario.application.dto.Paginacion;
 import com.marketplace.auth_service.usuario.application.dto.RolesDeCuenta;
+import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
 import com.marketplace.auth_service.usuario.application.port.in.ConsultaUsuariosPort;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.usuario.application.dto.BloqueoVista;
 import com.marketplace.auth_service.usuario.application.port.out.AutorizacionUsuariosPort;
 import com.marketplace.auth_service.usuario.application.port.out.BloqueosConsultaPort;
+import com.marketplace.auth_service.usuario.application.port.out.ConsultaIdentidadServicioPort;
 import com.marketplace.auth_service.usuario.domain.exception.ConsultaInvalidaException;
 import com.marketplace.auth_service.usuario.domain.exception.CuentaNoEncontradaException;
 import com.marketplace.auth_service.usuario.domain.model.EstadoCuenta;
@@ -42,12 +45,21 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
     private final CuentasPort cuentas;
     private final AutorizacionUsuariosPort autorizacion;
     private final BloqueosConsultaPort bloqueos;
+    private final ConsultaIdentidadServicioPort identidadServicio;
 
     public ConsultaUsuariosService(CuentasPort cuentas, AutorizacionUsuariosPort autorizacion,
                                    BloqueosConsultaPort bloqueos) {
+        this(cuentas, autorizacion, bloqueos, (actor, idTexto) -> {
+            throw new UnsupportedOperationException("ConsultaIdentidadServicioPort no configurado");
+        });
+    }
+
+    public ConsultaUsuariosService(CuentasPort cuentas, AutorizacionUsuariosPort autorizacion,
+                                   BloqueosConsultaPort bloqueos, ConsultaIdentidadServicioPort identidadServicio) {
         this.cuentas = Objects.requireNonNull(cuentas, "cuentas");
         this.autorizacion = Objects.requireNonNull(autorizacion, "autorizacion");
         this.bloqueos = Objects.requireNonNull(bloqueos, "bloqueos");
+        this.identidadServicio = Objects.requireNonNull(identidadServicio, "identidadServicio");
     }
 
     @Override
@@ -80,6 +92,12 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
         CuentaSnapshot cuenta = cuentas.leer(id).orElseThrow(() -> new CuentaNoEncontradaException(id));
         RolesDeCuenta roles = autorizacion.rolesDe(Set.of(id)).getOrDefault(id, RolesDeCuenta.NINGUNO);
         return vista(cuenta, roles, bloqueosDe(List.of(cuenta)).get(id));
+    }
+
+    @Override
+    public UsuarioServicioVista obtenerParaServicio(ActorServicio actor, String idTexto) {
+        Objects.requireNonNull(actor, "actor");
+        return identidadServicio.obtener(actor, idTexto);
     }
 
     /** Solo se consulta protección por las cuentas cuyo estado efectivo es BLOQUEADO. */
