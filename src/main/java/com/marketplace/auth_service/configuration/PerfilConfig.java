@@ -11,8 +11,10 @@ import com.marketplace.auth_service.perfil.adapter.out.crypto.ProtectorDocumento
 import com.marketplace.auth_service.perfil.adapter.out.persistence.adapter.PerfilesPersistidosAdapter;
 import com.marketplace.auth_service.perfil.adapter.out.persistence.repository.PerfilClienteJpaRepository;
 import com.marketplace.auth_service.perfil.adapter.out.persistence.repository.PerfilVendedorJpaRepository;
+import com.marketplace.auth_service.perfil.application.port.in.ConsultaDocumentoExportPort;
 import com.marketplace.auth_service.perfil.application.port.in.PerfilPort;
 import com.marketplace.auth_service.perfil.application.port.out.ProtectorDocumento;
+import com.marketplace.auth_service.perfil.application.service.ConsultaDocumentoExport;
 import com.marketplace.auth_service.perfil.application.service.ConsultarPerfil;
 import com.marketplace.auth_service.perfil.application.service.EditarPerfilPropio;
 import com.marketplace.auth_service.perfil.application.service.PerfilService;
@@ -48,5 +50,14 @@ public class PerfilConfig {
                 new ProyectorDocumento(protector.getIfAvailable(ProtectorDocumentoSinClave::new)));
         var edicion = new EditarPerfilPropio(new EscrituraCuentaPerfilAdapter(cuentas, escritura), consulta);
         return new PerfilPortTransaccional(new PerfilService(consulta, edicion));
+    }
+
+    /** Capacidad exportada para SPEC-18 (FEAT-06): documento enmascarado o en claro por scope. */
+    @Bean
+    ConsultaDocumentoExportPort consultaDocumentoExportPort(PerfilClienteJpaRepository clientes,
+                                                             PerfilVendedorJpaRepository vendedores,
+                                                             ObjectProvider<ProtectorDocumento> protector) {
+        return new ConsultaDocumentoExport(new PerfilesPersistidosAdapter(clientes, vendedores),
+                protector.getIfAvailable(ProtectorDocumentoSinClave::new));
     }
 }

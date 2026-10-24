@@ -1,11 +1,13 @@
 package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
 import com.marketplace.auth_service.proteccion.application.port.in.ConsultaBloqueosPort;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.ConsultaUsuariosTransaccional;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
 import com.marketplace.auth_service.usuario.adapter.out.capacidad.AutorizacionUsuariosAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.capacidad.BloqueosConsultaAdapter;
+import com.marketplace.auth_service.usuario.adapter.out.capacidad.ConsultaIdentidadServicioAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.capacidad.RolesConsultaAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.CuentaEscrituraAdapter;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.UsuarioRepositoryAdapter;
@@ -46,11 +48,13 @@ public class UsuarioConfiguration {
      */
     @Bean
     ConsultaUsuariosPort consultaUsuariosPort(CuentasPort cuentas, AutorizacionPort autorizacion,
-                                              ObjectProvider<ConsultaBloqueosPort> bloqueos) {
+                                              ObjectProvider<ConsultaBloqueosPort> bloqueos,
+                                              ConsultaIdentidadPort identidad) {
         // Se resuelve al consultar: los contextos parciales que no componen protección
         // arrancan igual, y si se lee un BLOQUEADO sin proveedor falla explícito (nunca omite).
         ConsultaBloqueosPort proteccion = ids -> bloqueos.getObject().vigentes(ids);
         return new ConsultaUsuariosTransaccional(new ConsultaUsuariosService(cuentas,
-                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(proteccion)));
+                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(proteccion),
+                new ConsultaIdentidadServicioAdapter(identidad)));
     }
 }

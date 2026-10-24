@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.ConsultaUsuariosTransaccional;
 import com.marketplace.auth_service.usuario.adapter.in.transaction.CuentasPortTransaccional;
 import com.marketplace.auth_service.usuario.adapter.out.persistence.adapter.*;
@@ -24,7 +25,8 @@ class UsuarioConfigurationTest {
             .withUserConfiguration(UsuarioConfiguration.class,EscaneoReal.class)
             .withBean(UsuarioJpaRepository.class,()->mock(UsuarioJpaRepository.class))
             .withBean(UsuarioEstadoEfectivoRepository.class,()->mock(UsuarioEstadoEfectivoRepository.class))
-            .withBean(AutorizacionPort.class,()->mock(AutorizacionPort.class));
+            .withBean(AutorizacionPort.class,()->mock(AutorizacionPort.class))
+            .withBean(ConsultaIdentidadPort.class,()->mock(ConsultaIdentidadPort.class));
     @Test void unSoloBeanPorPuertoYUnicoCuentasPortDecoradoConEscaneoReal() {
         runner.run(c->{
             assertThat(c).hasNotFailed().hasSingleBean(CuentasPort.class)
