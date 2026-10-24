@@ -65,4 +65,14 @@ public final class EfectosProteccionAdapter implements EfectosProteccionPort {
         mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "correo.cuenta_desbloqueada", cuenta.correo(),
                 "Tu cuenta fue desbloqueada y ya puedes iniciar sesión.\n\nSi no fuiste tú, cambia tu contraseña.\n"));
     }
+
+    @Override
+    public void desbloqueadaPorRestablecimiento(CuentaSnapshot cuenta, UUID revision,
+                                               ContextoPeticion contexto, Instant ahora) {
+        auditoria.registrarCritica(new RegistroSeguro(UUID.randomUUID(), "CUENTA_DESBLOQUEADA", "EXITO", "USUARIO",
+                cuenta.usuarioId().toString(), cuenta.usuarioId(), ahora, contexto.ip(), contexto.agente(),
+                Map.of("via", "RESTABLECIMIENTO")));
+        mensajeria.guardarEvento(new EventoUsuario(UUID.randomUUID(), "usuario.desbloqueado",
+                Map.of("usuarioId", cuenta.usuarioId().toString(), "via", "RESTABLECIMIENTO", "fecha", ahora.toString())));
+    }
 }

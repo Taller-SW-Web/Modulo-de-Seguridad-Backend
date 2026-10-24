@@ -11,6 +11,7 @@ import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.*;
 import com.marketplace.auth_service.auditoria.application.service.*;
 import com.marketplace.auth_service.configuration.*;
+import com.marketplace.auth_service.proteccion.adapter.out.persistence.ProteccionJpaAdapter;
 import com.marketplace.auth_service.credencial.application.dto.*;
 import com.marketplace.auth_service.credencial.application.port.in.*;
 import com.marketplace.auth_service.credencial.application.port.out.PasswordHasherPort;
@@ -53,7 +54,9 @@ import static org.assertj.core.api.Assertions.*;
 @AutoConfigureTestDatabase(replace=AutoConfigureTestDatabase.Replace.NONE)
 @Import({CambioContrasenaPostgresTest.Config.class, CambioContrasenaConfig.class,
         CredencialesConfig.class,CredencialesJpaAdapter.class,UsuarioConfiguration.class,
-        AutorizacionConfig.class,SesionConfig.class,SesionJpaAdapter.class,IdentidadConfig.class,AuditoriaJpaAdapter.class})
+        AutorizacionConfig.class,SesionConfig.class,SesionJpaAdapter.class,IdentidadConfig.class,AuditoriaJpaAdapter.class,
+        TokensUnUsoConfig.class,ProteccionConfig.class,ProteccionCriptografiaConfig.class,EfectosConfig.class,
+        ProteccionJpaAdapter.class,RestablecerContrasenaConfig.class})
 @Transactional(propagation=Propagation.NOT_SUPPORTED)
 @Testcontainers
 class CambioContrasenaPostgresTest {
@@ -62,11 +65,13 @@ class CambioContrasenaPostgresTest {
             "com.marketplace.auth_service.usuario.adapter.out.persistence.entity",
             "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity",
             "com.marketplace.auth_service.sesion.adapter.out.persistence.entity",
+            "com.marketplace.auth_service.proteccion.adapter.out.persistence.entity",
             "com.marketplace.auth_service.auditoria.adapter.out.persistence.entity"})
     @EnableJpaRepositories(basePackages={"com.marketplace.auth_service.credencial.adapter.out.persistence.repository",
             "com.marketplace.auth_service.usuario.adapter.out.persistence.repository",
             "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository",
             "com.marketplace.auth_service.sesion.adapter.out.persistence.repository",
+            "com.marketplace.auth_service.proteccion.adapter.out.persistence.repository",
             "com.marketplace.auth_service.auditoria.adapter.out.persistence.repository"})
     static class Config {
         @Bean Clock reloj(){return Clock.systemUTC();}
@@ -99,8 +104,12 @@ class CambioContrasenaPostgresTest {
         r.add("spring.datasource.password",PG::getPassword);r.add("g7.password.comunes.archivo",comunes::toString);
         r.add("identidad.issuer",()->"https://t008.example.test/auth");
         r.add("identidad.clave-privada",()->ClavesDePrueba.pemPkcs8(ClavesDePrueba.RSA_3072));
+        r.add("AUTH_FALLOS_HMAC_KEY_ID",()->"test-key");
+        r.add("AUTH_FALLOS_HMAC_KEY",()->Base64.getEncoder().encodeToString(new byte[32]));
     }
     @Autowired CambioContrasenaPort cambio;
+    @Autowired RestablecerContrasenaPort restablecer;
+    @Autowired TokensUnUsoPort tokens;
     @Autowired SesionesPort sesiones;
     @Autowired CuentasPort cuentas;
     @Autowired PasswordHasherPort hasher;
@@ -177,6 +186,47 @@ class CambioContrasenaPostgresTest {
     @Test void accesoSinFamiliaNoCambiaNiRevoca(){
         jti=UUID.randomUUID();assertThat(cambiar(ACTUAL,NUEVA)).isEqualTo(ResultadoCambioContrasena.Simple.SESION_INVALIDA);
         sinEfectos();assertThat(revocada(familiaActual)).isFalse();
+    }
+
+    @Test void restablecimientoConsumeTokenActualizaHistorialRevocaTodasLasFamiliasYNotifica() {
+        var emitido=new TransactionTemplate(manager).execute(s->tokens.emitir(usuario,PropositoToken.RECUPERACION,Duration.ofMinutes(30)));
+        assertThat(restablecer.restablecer(new SecretoEfimero(emitido.tokenClaro()),new SecretoEfimero(NUEVA),contexto()))
+                .isEqualTo(ResultadoRestablecimiento.Simple.RESTABLECIDA);
+        assertThat(hasher.verificar(NUEVA,new com.marketplace.auth_service.credencial.domain.model.HashContrasena(
+                jdbc.queryForObject("select hash_contrasena from credencial where usuario_id=?",String.class,usuario),
+                com.marketplace.auth_service.credencial.domain.model.AlgoritmoHash.ARGON2ID))).isTrue();
+        assertThat(jdbc.queryForObject("select version from credencial where usuario_id=?",Long.class,usuario)).isEqualTo(1);
+        assertThat(contar("password_historial")).isEqualTo(1);
+        assertThat(revocada(familiaActual)).isTrue();assertThat(revocada(otraFamilia)).isTrue();
+        assertThat(jdbc.queryForObject("select usado from token_un_uso where id=?",Boolean.class,emitido.id())).isTrue();
+        assertThat(jdbc.queryForObject("select count(*) from auditoria_seguridad where objetivo_usuario_id=? and accion='CONTRASENA_RESTABLECIDA'",
+                Long.class,usuario)).isEqualTo(1);
+        assertThat(correos()).hasSize(1);
+        assertThat(restablecer.restablecer(new SecretoEfimero(emitido.tokenClaro()),new SecretoEfimero("Otra-Mas-2026!"),contexto()))
+                .isEqualTo(ResultadoRestablecimiento.Simple.TOKEN_INVALIDO);
+    }
+
+    @Test void restablecimientoDejaBloqueoManualPeroLimpiaIntentos() {
+        jdbc.update("insert into bloqueo(usuario_id,tipo,bloqueado_hasta,motivo,creado_en) values(?,'MANUAL',null,'Revision administrativa',now())",usuario);
+        jdbc.update("update usuario set intentos_fallidos_consecutivos=4 where id=?",usuario);
+        var emitido=new TransactionTemplate(manager).execute(s->tokens.emitir(usuario,PropositoToken.RECUPERACION,Duration.ofMinutes(30)));
+        assertThat(restablecer.restablecer(new SecretoEfimero(emitido.tokenClaro()),new SecretoEfimero(NUEVA),contexto()))
+                .isEqualTo(ResultadoRestablecimiento.Simple.RESTABLECIDA);
+        assertThat(jdbc.queryForObject("select tipo from bloqueo where usuario_id=?",String.class,usuario)).isEqualTo("MANUAL");
+        assertThat(jdbc.queryForObject("select intentos_fallidos_consecutivos from usuario where id=?",Integer.class,usuario)).isZero();
+    }
+
+    @Test void restablecimientoLevantaSoloBloqueoAutomaticoYPublicaVia() {
+        jdbc.update("insert into bloqueo(usuario_id,tipo,bloqueado_hasta,motivo,creado_en) values(?,'AUTOMATICO',null,null,now())",usuario);
+        jdbc.update("update usuario set bloqueos_seguidos=3,intentos_fallidos_consecutivos=5 where id=?",usuario);
+        var emitido=new TransactionTemplate(manager).execute(s->tokens.emitir(usuario,PropositoToken.RECUPERACION,Duration.ofMinutes(30)));
+        assertThat(restablecer.restablecer(new SecretoEfimero(emitido.tokenClaro()),new SecretoEfimero(NUEVA),contexto()))
+                .isEqualTo(ResultadoRestablecimiento.Simple.RESTABLECIDA);
+        assertThat(jdbc.queryForObject("select count(*) from bloqueo where usuario_id=?",Long.class,usuario)).isZero();
+        assertThat(jdbc.queryForObject("select bloqueos_seguidos from usuario where id=?",Integer.class,usuario)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("select intentos_fallidos_consecutivos from usuario where id=?",Integer.class,usuario)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from auditoria_seguridad where objetivo_usuario_id=? and accion='CUENTA_DESBLOQUEADA' and detalle->>'via'='RESTABLECIMIENTO'",
+                Long.class,usuario)).isEqualTo(1);
     }
     @Test void familiaActualRevocadaNoCambiaNiRevocaLaOtra(){
         // La sesión usa el reloj Java: el fixture no debe depender de su desfase con PostgreSQL.
