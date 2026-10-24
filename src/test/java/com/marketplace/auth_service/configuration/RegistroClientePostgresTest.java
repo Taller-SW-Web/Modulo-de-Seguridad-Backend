@@ -85,7 +85,7 @@ class RegistroClientePostgresTest {
 
     private static final String CLAVE = "Zorzal-Andino-2026!";
     private static final ContextoPeticion CONTEXTO = new ContextoPeticion("203.0.113.7", "pruebas", UUID.randomUUID());
-    private static final Pattern ENLACE = Pattern.compile("https://spa\\.example\\.test/verificar-correo\\?token=(\\S+)");
+    private static final Pattern ENLACE = Pattern.compile("https://spa\\.example\\.test/verificar-correo\\?token=([^&\\s]+)(&canal=[A-Z]+)?");
 
     /** Entidades de los dueños que compone el registro, outbox real y una auditoría en memoria. */
     @TestConfiguration(proxyBeanMethods = false)
@@ -240,6 +240,7 @@ class RegistroClientePostgresTest {
 
         var enlace = ENLACE.matcher(descifrar(carga, "contenido"));
         assertThat(enlace.find()).isTrue();
+        assertThat(enlace.group(2)).isEqualTo("&canal=MARKETPLACE"); // FEAT-01-T4: se registró por MARKETPLACE
         String claro = URLDecoder.decode(enlace.group(1), StandardCharsets.UTF_8);
         assertThat(TokenUnUsoHashing.sha256Hex(claro)).isEqualTo(token.get("hash_token"));
         assertThat(token.get("hash_token")).isNotEqualTo(claro);

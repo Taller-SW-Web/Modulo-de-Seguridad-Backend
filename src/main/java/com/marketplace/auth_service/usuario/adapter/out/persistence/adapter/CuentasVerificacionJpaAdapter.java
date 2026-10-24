@@ -37,6 +37,7 @@ public class CuentasVerificacionJpaAdapter implements CuentasVerificacionPort {
     public Optional<CuentaPendiente> buscarPendiente(String correoNormalizado) {
         return usuarios.findByCorreo(correoNormalizado)
                 .filter(cuenta -> cuenta.getEstado() == EstadoCuenta.PENDIENTE_VERIFICACION)
-                .map(cuenta -> new CuentaPendiente(cuenta.getId(), cuenta.getCorreo(), cuenta.getNombres()));
+                .map(cuenta -> new CuentaPendiente(cuenta.getId(), cuenta.getCorreo(), cuenta.getNombres(),
+                        cuenta.getCanalOrigen()));
     }
 }

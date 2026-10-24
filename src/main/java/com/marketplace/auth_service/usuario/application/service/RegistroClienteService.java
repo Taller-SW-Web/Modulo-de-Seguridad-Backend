@@ -59,7 +59,7 @@ public final class RegistroClienteService implements RegistroClientePort {
                 efectos.crearCredencial(cuenta.id(), solicitud.contrasena());
                 efectos.asignarRolCliente(cuenta.id());
                 efectos.auditarCreacion(cuenta.id(), canal.name(), contexto);
-                correoVerificacion.enviar(cuenta.id(), cuenta.correo(), cuenta.nombres());
+                correoVerificacion.enviar(cuenta.id(), cuenta.correo(), cuenta.nombres(), canal);
                 return new ResultadoRegistro.Creada(cuenta.id());
             });
         } catch (VerificacionNoDisponibleException noDisponible) {

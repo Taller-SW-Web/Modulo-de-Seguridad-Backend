@@ -11,6 +11,7 @@ import com.marketplace.auth_service.usuario.application.port.out.EfectosVerifica
 import com.marketplace.auth_service.usuario.application.port.out.TokensVerificacionPort;
 import com.marketplace.auth_service.usuario.domain.exception.CuotaNoDisponibleException;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
+import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import com.marketplace.auth_service.usuario.domain.model.CuentaPendiente;
 import com.marketplace.auth_service.usuario.domain.model.TokenVerificacion;
 import java.time.Clock;
@@ -69,8 +70,8 @@ class VerificacionCorreoServiceTest {
         servicio = new VerificacionCorreoService(tokens, cuentas, (correo, ahora) -> {
             pasos.add("cuota:" + correo);
             return espera;
-        }, (usuarioId, correo, nombres) -> {
-            pasos.add("enviar:" + correo);
+        }, (usuarioId, correo, nombres, canal) -> {
+            pasos.add("enviar:" + correo + ":" + canal);
             if (falloCorreo != null) throw falloCorreo;
         }, new Efectos(), Clock.fixed(AHORA, ZoneOffset.UTC));
     }
@@ -118,11 +119,11 @@ class VerificacionCorreoServiceTest {
 
     @Test
     void reenvioConCuotaYCuentaPendienteEmiteUnEnlaceNuevo() {
-        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María"));
+        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.MARKETPLACE));
 
         assertThat(servicio.reenviar("  Maria@Ejemplo.COM ", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
         assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com", "transaccion",
-                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com");
+                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com:MARKETPLACE");
     }
 
     @Test
@@ -134,7 +135,7 @@ class VerificacionCorreoServiceTest {
     @Test
     void cuotaAgotadaNoBuscaNiEnviaYRedondeaLaEsperaHaciaArriba() {
         espera = Duration.ofMillis(1500);
-        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María"));
+        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.MARKETPLACE));
 
         assertThat(servicio.reenviar("maria@ejemplo.com", CONTEXTO)).isEqualTo(new ResultadoReenvio.Limitado(2));
         assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com");
@@ -142,13 +143,13 @@ class VerificacionCorreoServiceTest {
 
     @Test
     void colaCaidaEnElReenvioRespondeIgualParaNoDelatarLaCuenta() {
-        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María"));
+        cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.MARKETPLACE));
         falloCorreo = new VerificacionNoDisponibleException(new IllegalStateException("outbox"));
 
         assertThat(servicio.reenviar("maria@ejemplo.com", CONTEXTO)).isEqualTo(ResultadoReenvio.Aceptado.ACEPTADO);
         // La cuota se confirmó antes, en su propia transacción; solo se revierte el envío.
         assertThat(pasos).containsExactly("transaccion", "cuota:maria@ejemplo.com", "transaccion",
-                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com");
+                "buscar:maria@ejemplo.com", "enviar:maria@ejemplo.com:MARKETPLACE");
         assertThat(revertida).isTrue();
     }
 
@@ -161,7 +162,7 @@ class VerificacionCorreoServiceTest {
             @Override public boolean activarSiPendiente(UUID usuarioId, Instant ahora) { return false; }
             @Override public Optional<CuentaPendiente> buscarPendiente(String correo) { return Optional.empty(); }
         }, (correo, ahora) -> { throw new CuotaNoDisponibleException(); },
-                (usuarioId, correo, nombres) -> { }, new Efectos(), Clock.fixed(AHORA, ZoneOffset.UTC));
+                (usuarioId, correo, nombres, canal) -> { }, new Efectos(), Clock.fixed(AHORA, ZoneOffset.UTC));
 
         assertThatThrownBy(() -> servicio.reenviar("nadie@ejemplo.com", CONTEXTO))
                 .isInstanceOf(CuotaNoDisponibleException.class);

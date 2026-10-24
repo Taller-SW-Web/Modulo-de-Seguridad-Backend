@@ -14,8 +14,10 @@ import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.dto.TokenEmitido;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
+import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,9 +33,13 @@ class CorreoVerificacionAdapterTest {
     private final MensajeriaPort mensajeria = mock(MensajeriaPort.class);
 
     private EntregaCorreo enviar(String urlSpa) {
+        return enviar(urlSpa, CanalOrigen.WEB);
+    }
+
+    private EntregaCorreo enviar(String urlSpa, CanalOrigen canal) {
         when(tokens.emitir(USUARIO, PropositoToken.VERIFICAR_CORREO, Duration.ofHours(24)))
                 .thenReturn(new TokenEmitido(UUID.randomUUID(), TOKEN, Instant.parse("2026-10-24T15:00:00Z")));
-        new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa).enviar(USUARIO, "maria@ejemplo.com", "María");
+        new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa).enviar(USUARIO, "maria@ejemplo.com", "María", canal);
         var correo = ArgumentCaptor.forClass(EntregaCorreo.class);
         verify(mensajeria).guardarCorreo(correo.capture());
         return correo.getValue();
@@ -50,7 +56,17 @@ class CorreoVerificacionAdapterTest {
                 .contains("Hola, María")
                 .contains("https://g7-seguridad-spa.onrender.com/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f")
                 .contains("24 horas")
-                .doesNotContain("?token=" + TOKEN);
+                .doesNotContain("?token=" + TOKEN, "canal=");
+    }
+
+    @Test
+    void fueraDeWebElEnlaceLlevaElCanalYNuncaUnaUrl() {
+        for (CanalOrigen canal : List.of(CanalOrigen.MARKETPLACE, CanalOrigen.RETAIL, CanalOrigen.CHATBOT)) {
+            org.mockito.Mockito.clearInvocations(mensajeria);
+            assertThat(enviar("https://spa.example.test", canal).contenido())
+                    .contains("/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f&canal=" + canal.name() + "\n")
+                    .doesNotContain("retorno", "http://", "vercel");
+        }
     }
 
     @Test
@@ -66,7 +82,7 @@ class CorreoVerificacionAdapterTest {
         doThrow(new IllegalStateException("sin clave")).when(mensajeria).guardarCorreo(any());
         var adaptador = new CorreoVerificacionAdapter(tokens, mensajeria, "http://localhost:5173");
 
-        assertThatThrownBy(() -> adaptador.enviar(USUARIO, "maria@ejemplo.com", "María"))
+        assertThatThrownBy(() -> adaptador.enviar(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.WEB))
                 .isInstanceOf(VerificacionNoDisponibleException.class)
                 .hasMessageNotContaining(TOKEN);
     }

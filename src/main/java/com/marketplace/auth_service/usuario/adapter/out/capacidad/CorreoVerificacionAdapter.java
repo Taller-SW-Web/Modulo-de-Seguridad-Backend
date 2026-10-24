@@ -6,6 +6,7 @@ import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
 import com.marketplace.auth_service.usuario.application.port.out.CorreoVerificacionPort;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
+import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -19,7 +20,9 @@ import org.slf4j.LoggerFactory;
  * El enlace solo va dentro del correo cifrado, nunca en logs, auditoría ni eventos.
  *
  * <p>Todos los canales llevan por ahora a {@code /verificar-correo} de nuestra SPA (FEAT-01-T2);
- * la pantalla propia de CHATBOT de RF-02.8 queda pendiente.
+ * la pantalla propia de CHATBOT de RF-02.8 queda pendiente. Fuera de {@code WEB}, el enlace añade
+ * {@code &canal=} con el nombre del canal (lista cerrada, nunca una URL): la SPA lo traduce a su
+ * login de retorno permitido por entorno (FEAT-01-T4, FRONT-03).
  */
 public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
 
@@ -39,10 +42,11 @@ public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
     }
 
     @Override
-    public void enviar(UUID usuarioId, String correo, String nombres) {
+    public void enviar(UUID usuarioId, String correo, String nombres, CanalOrigen canalOrigen) {
         var token = tokens.emitir(usuarioId, PropositoToken.VERIFICAR_CORREO, VIGENCIA);
         String enlace = urlSpa + "/verificar-correo?token="
-                + URLEncoder.encode(token.tokenClaro(), StandardCharsets.UTF_8);
+                + URLEncoder.encode(token.tokenClaro(), StandardCharsets.UTF_8)
+                + (canalOrigen == CanalOrigen.WEB ? "" : "&canal=" + canalOrigen.name());
         try {
             mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "correo.verificacion_correo", correo,
                     "Hola, " + nombres + ":\n\nGracias por registrarte. Confirma tu correo con este enlace "

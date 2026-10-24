@@ -89,7 +89,8 @@ public final class VerificacionCorreoService implements VerificacionCorreoPort {
         try {
             efectos.enTransaccion(() -> {
                 cuentas.buscarPendiente(normalizado).ifPresent(cuenta ->
-                        correoVerificacion.enviar(cuenta.id(), cuenta.correo(), cuenta.nombres()));
+                        correoVerificacion.enviar(cuenta.id(), cuenta.correo(), cuenta.nombres(),
+                                cuenta.canalOrigen()));
                 return Boolean.TRUE;
             }, r -> true);
         } catch (VerificacionNoDisponibleException colaCaida) {

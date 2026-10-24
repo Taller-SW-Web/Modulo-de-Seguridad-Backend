@@ -34,6 +34,7 @@ class RegistroClienteServiceTest {
     private boolean correoOcupado;
     private List<ResultadoRegistro.ReglaIncumplida> reglas = List.of();
     private boolean colaCaida;
+    private CanalOrigen canalEnviado;
     private Boolean revertida;
     private RegistroClienteService servicio;
 
@@ -45,8 +46,9 @@ class RegistroClienteServiceTest {
             creadas.add(cuenta);
             return true;
         };
-        CorreoVerificacionPort correo = (usuarioId, destino, nombres) -> {
+        CorreoVerificacionPort correo = (usuarioId, destino, nombres, canal) -> {
             assertThat(usuarioId).isEqualTo(creadas.getFirst().id());
+            canalEnviado = canal;
             pasos.add("correo:" + destino + ":" + nombres);
             if (colaCaida) throw new VerificacionNoDisponibleException(new IllegalStateException("outbox"));
         };
@@ -71,6 +73,7 @@ class RegistroClienteServiceTest {
         assertThat(cuenta.aceptadoEn()).isEqualTo(AHORA);
         assertThat(pasos).containsExactly("transaccion", "alta", "politica", "credencial", "rol",
                 "auditoria:EXITO:MARKETPLACE", "correo:maria@ejemplo.com:María");
+        assertThat(canalEnviado).isEqualTo(CanalOrigen.MARKETPLACE); // FEAT-01-T4: va en el enlace
         assertThat(revertida).isFalse();
     }
 
