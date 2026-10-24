@@ -49,12 +49,19 @@ public class UsuarioConfiguration {
     @Bean
     ConsultaUsuariosPort consultaUsuariosPort(CuentasPort cuentas, AutorizacionPort autorizacion,
                                               ObjectProvider<ConsultaBloqueosPort> bloqueos,
-                                              ConsultaIdentidadPort identidad) {
+                                              ObjectProvider<ConsultaIdentidadPort> identidad) {
         // Se resuelve al consultar: los contextos parciales que no componen protección
         // arrancan igual, y si se lee un BLOQUEADO sin proveedor falla explícito (nunca omite).
         ConsultaBloqueosPort proteccion = ids -> bloqueos.getObject().vigentes(ids);
-        return new ConsultaUsuariosTransaccional(new ConsultaUsuariosService(cuentas,
-                new AutorizacionUsuariosAdapter(autorizacion), new BloqueosConsultaAdapter(proteccion),
-                new ConsultaIdentidadServicioAdapter(identidad)));
+        AutorizacionUsuariosAdapter autorizacionAdapter = new AutorizacionUsuariosAdapter(autorizacion);
+        BloqueosConsultaAdapter bloqueosAdapter = new BloqueosConsultaAdapter(proteccion);
+        // Igual que arriba: un contexto parcial sin IntegracionConfig (SPEC-18) sigue
+        // componiendo EP-01-T003/T004; obtenerParaServicio solo falla si de verdad se invoca.
+        ConsultaIdentidadPort identidadPort = identidad.getIfAvailable();
+        ConsultaUsuariosService servicio = identidadPort == null
+                ? new ConsultaUsuariosService(cuentas, autorizacionAdapter, bloqueosAdapter)
+                : new ConsultaUsuariosService(cuentas, autorizacionAdapter, bloqueosAdapter,
+                        new ConsultaIdentidadServicioAdapter(identidadPort));
+        return new ConsultaUsuariosTransaccional(servicio);
     }
 }
