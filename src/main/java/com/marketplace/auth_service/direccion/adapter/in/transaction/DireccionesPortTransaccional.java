@@ -3,6 +3,7 @@ package com.marketplace.auth_service.direccion.adapter.in.transaction;
 import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Isolation;
@@ -27,7 +28,8 @@ public class DireccionesPortTransaccional implements DireccionesPort {
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public DireccionDatos crear(ActorUsuario actor, UUID usuarioId, DatosNuevaDireccion datos) {
-        return delegado.crear(actor, usuarioId, datos);
+    public DireccionDatos crear(ActorUsuario actor, UUID usuarioId, DatosNuevaDireccion datos,
+            ContextoPeticion contexto) {
+        return delegado.crear(actor, usuarioId, datos, contexto);
     }
 }

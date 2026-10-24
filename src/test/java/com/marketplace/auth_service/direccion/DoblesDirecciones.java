@@ -2,9 +2,13 @@ package com.marketplace.auth_service.direccion;
 
 import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort.DatosNuevaDireccion;
+import com.marketplace.auth_service.direccion.application.port.out.AuditoriaDireccionesPort;
+import com.marketplace.auth_service.direccion.application.port.out.AutorizacionDireccionesPort;
 import com.marketplace.auth_service.direccion.application.port.out.CuentaDireccionesPort;
 import com.marketplace.auth_service.direccion.application.port.out.DireccionesPersistidasPort;
 import com.marketplace.auth_service.direccion.application.port.out.EventosDireccionesPort;
+import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -91,6 +95,33 @@ public final class DoblesDirecciones {
         @Override
         public void direccionesActualizadas(UUID usuarioId) {
             publicados.add(usuarioId);
+        }
+    }
+
+    /** Titular siempre; el resto solo si el doble lo habilita (ignora los claims del token, como el real). */
+    public static final class Autorizacion implements AutorizacionDireccionesPort {
+        public final Set<UUID> conUsuarioVer = new HashSet<>();
+        public final Set<UUID> adminsSistema = new HashSet<>();
+
+        @Override
+        public boolean puedeVer(ActorUsuario actor, UUID usuarioId) {
+            return actor.esTitularDe(usuarioId) || conUsuarioVer.contains(actor.sub());
+        }
+
+        @Override
+        public boolean puedeAgregar(ActorUsuario actor, UUID usuarioId) {
+            return actor.esTitularDe(usuarioId) || adminsSistema.contains(actor.sub());
+        }
+    }
+
+    public static final class Auditoria implements AuditoriaDireccionesPort {
+        public record Llamada(UUID actor, UUID objetivo, ContextoPeticion contexto) {}
+
+        public final List<Llamada> registradas = new ArrayList<>();
+
+        @Override
+        public void direccionAgregada(ActorUsuario actor, UUID usuarioId, ContextoPeticion contexto) {
+            registradas.add(new Llamada(actor.sub(), usuarioId, contexto));
         }
     }
 }

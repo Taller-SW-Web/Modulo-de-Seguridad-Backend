@@ -1,7 +1,11 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
+import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
 import com.marketplace.auth_service.direccion.adapter.in.transaction.DireccionesPortTransaccional;
+import com.marketplace.auth_service.direccion.adapter.out.capacidad.AuditoriaDireccionesAdapter;
+import com.marketplace.auth_service.direccion.adapter.out.capacidad.AutorizacionDireccionesAdapter;
 import com.marketplace.auth_service.direccion.adapter.out.capacidad.CuentaDireccionesAdapter;
 import com.marketplace.auth_service.direccion.adapter.out.capacidad.MensajeriaDireccionesAdapter;
 import com.marketplace.auth_service.direccion.application.port.in.ConsultaDireccionesPort;
@@ -23,8 +27,10 @@ public class DireccionesConfig {
         return new ConsultaDireccionesService(persistencia);
     }
 
-    @Bean DireccionesPort direccionesPort(DireccionesPersistidasPort persistencia, CuentasPort cuentas, MensajeriaPort mensajeria) {
+    @Bean DireccionesPort direccionesPort(DireccionesPersistidasPort persistencia, CuentasPort cuentas,
+            MensajeriaPort mensajeria, AutorizacionPort autorizacion, AuditoriaPort auditoria) {
         return new DireccionesPortTransaccional(new DireccionesService(persistencia,
-                new CuentaDireccionesAdapter(cuentas), new MensajeriaDireccionesAdapter(mensajeria)));
+                new CuentaDireccionesAdapter(cuentas), new MensajeriaDireccionesAdapter(mensajeria),
+                new AutorizacionDireccionesAdapter(autorizacion), new AuditoriaDireccionesAdapter(auditoria)));
     }
 }

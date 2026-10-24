@@ -46,3 +46,12 @@ Y se inyecta desde `configuration/`. No importar `DireccionJpaEntity`, `Direccio
 ## Transacciones
 
 El puerto no abre transacción propia: la lectura corre en la transacción de solo lectura del adaptador de persistencia, así que es segura tanto dentro como fuera de una transacción del consumidor.
+
+## Acceso HTTP del titular y administrativo
+
+| Ruta | Quién | Cómo se decide |
+|---|---|---|
+| `GET /api/v1/usuarios/{id}/direcciones` | titular, o quien tenga `usuario.ver` | permisos vigentes (`AutorizacionPort.resolver`), no los claims del token |
+| `POST /api/v1/usuarios/{id}/direcciones` | titular, o quien tenga el rol `ADMIN_SISTEMA` | ídem |
+
+Sin privilegio, `403 SCOPE_INSUFICIENTE` antes de consultar la cuenta. Cada alta registra `ATRIBUTOS_ACTUALIZADOS` (no crítica, solo `campos=direcciones`) y publica `usuario.atributos_actualizados`.

@@ -8,6 +8,7 @@ import com.marketplace.auth_service.direccion.application.port.in.DireccionesPor
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoEncontradaException;
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoPermitidaException;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +22,11 @@ class DireccionesServiceTest {
     private final DoblesDirecciones.Persistencia persistencia = new DoblesDirecciones.Persistencia(orden);
     private final DoblesDirecciones.Cuentas cuentas = new DoblesDirecciones.Cuentas(orden);
     private final DoblesDirecciones.Eventos eventos = new DoblesDirecciones.Eventos();
-    private final DireccionesService servicio = new DireccionesService(persistencia, cuentas, eventos);
+    private final DoblesDirecciones.Autorizacion autorizacion = new DoblesDirecciones.Autorizacion();
+    private final DoblesDirecciones.Auditoria auditoria = new DoblesDirecciones.Auditoria();
+    private final DireccionesService servicio =
+            new DireccionesService(persistencia, cuentas, eventos, autorizacion, auditoria);
+    private static final ContextoPeticion CTX = new ContextoPeticion("203.0.113.7", "JUnit", UUID.randomUUID());
     private final UUID titular = UUID.randomUUID();
     private ActorUsuario actor;
 
@@ -42,7 +47,7 @@ class DireccionesServiceTest {
 
     @Test
     void crearBloqueaLaCuentaAntesDeEscribirYPublicaUnSoloEvento() {
-        servicio.crear(actor, titular, datos("Casa", null));
+        servicio.crear(actor, titular, datos("Casa", null), CTX);
 
         assertThat(orden).containsExactly("bloquear", "crear");
         assertThat(eventos.publicados).containsExactly(titular);
@@ -50,13 +55,13 @@ class DireccionesServiceTest {
 
     @Test
     void laPrimeraDireccionEsPredeterminadaAunqueNoLoPida() {
-        assertThat(servicio.crear(actor, titular, datos("Casa", false)).esPredeterminada()).isTrue();
+        assertThat(servicio.crear(actor, titular, datos("Casa", false), CTX).esPredeterminada()).isTrue();
     }
 
     @Test
     void unaNuevaPredeterminadaDejaSinMarcaALaAnterior() {
-        servicio.crear(actor, titular, datos("Casa", true));
-        servicio.crear(actor, titular, datos("Trabajo", true));
+        servicio.crear(actor, titular, datos("Casa", true), CTX);
+        servicio.crear(actor, titular, datos("Trabajo", true), CTX);
 
         var lista = servicio.listar(actor, titular);
         assertThat(lista).hasSize(2);
@@ -67,8 +72,8 @@ class DireccionesServiceTest {
 
     @Test
     void unaSegundaSinPedirlaNoQuitaLaPredeterminada() {
-        servicio.crear(actor, titular, datos("Casa", null));
-        servicio.crear(actor, titular, datos("Trabajo", false));
+        servicio.crear(actor, titular, datos("Casa", null), CTX);
+        servicio.crear(actor, titular, datos("Trabajo", false), CTX);
 
         assertThat(servicio.listar(actor, titular).stream().filter(d -> d.esPredeterminada()))
                 .extracting(d -> d.etiqueta()).containsExactly("Casa");
@@ -80,7 +85,7 @@ class DireccionesServiceTest {
         cuentas.existentes.add(ajeno);
 
         assertThatThrownBy(() -> servicio.listar(actor, ajeno)).isInstanceOf(DireccionNoPermitidaException.class);
-        assertThatThrownBy(() -> servicio.crear(actor, ajeno, datos("Casa", null)))
+        assertThatThrownBy(() -> servicio.crear(actor, ajeno, datos("Casa", null), CTX))
                 .isInstanceOf(DireccionNoPermitidaException.class);
 
         assertThat(cuentas.consultas).as("no revela si la cuenta existe").isZero();
@@ -109,9 +114,105 @@ class DireccionesServiceTest {
         cuentas.existentes.clear();
 
         assertThatThrownBy(() -> servicio.listar(actor, titular)).isInstanceOf(DireccionNoEncontradaException.class);
-        assertThatThrownBy(() -> servicio.crear(actor, titular, datos("Casa", null)))
+        assertThatThrownBy(() -> servicio.crear(actor, titular, datos("Casa", null), CTX))
                 .isInstanceOf(DireccionNoEncontradaException.class);
         assertThat(persistencia.llamadas).isZero();
         assertThat(eventos.publicados).isEmpty();
+    }
+
+    // --- Auditoría no crítica (RF-16.10) ---
+
+    @Test
+    void crearRegistraUnaAuditoriaConActorYObjetivoYNadaMas() {
+        servicio.crear(actor, titular, datos("Casa", null), CTX);
+
+        assertThat(auditoria.registradas).hasSize(1);
+        var llamada = auditoria.registradas.get(0);
+        assertThat(llamada.actor()).isEqualTo(titular);
+        assertThat(llamada.objetivo()).isEqualTo(titular);
+        assertThat(llamada.contexto()).isSameAs(CTX);
+    }
+
+    @Test
+    void sinAltaNoHayAuditoriaDeExito() {
+        UUID ajeno = UUID.randomUUID();
+        cuentas.existentes.add(ajeno);
+        assertThatThrownBy(() -> servicio.crear(actor, ajeno, datos("Casa", null), CTX))
+                .isInstanceOf(DireccionNoPermitidaException.class);
+        cuentas.existentes.clear();
+        assertThatThrownBy(() -> servicio.crear(actor, titular, datos("Casa", null), CTX))
+                .isInstanceOf(DireccionNoEncontradaException.class);
+
+        assertThat(auditoria.registradas).isEmpty();
+    }
+
+    // --- Acceso administrativo del contrato, con permisos vigentes ---
+
+    @Test
+    void quienTieneUsuarioVerHoyPuedeListarLasDireccionesDeOtro() {
+        UUID soporte = UUID.randomUUID();
+        UUID cliente = UUID.randomUUID();
+        cuentas.existentes.add(cliente);
+        autorizacion.conUsuarioVer.add(soporte);
+
+        assertThat(servicio.listar(new ActorUsuario(soporte, UUID.randomUUID(), Set.of(), Set.of()), cliente)).isEmpty();
+    }
+
+    @Test
+    void unPermisoSoloEnElTokenNoAutorizaPorqueSeRevalidaContraLaBase() {
+        UUID soporte = UUID.randomUUID();
+        UUID cliente = UUID.randomUUID();
+        cuentas.existentes.add(cliente);
+        var conClaim = new ActorUsuario(soporte, UUID.randomUUID(), Set.of("ADMIN_SISTEMA"),
+                Set.of("usuario.ver"));
+
+        assertThatThrownBy(() -> servicio.listar(conClaim, cliente)).isInstanceOf(DireccionNoPermitidaException.class);
+        assertThatThrownBy(() -> servicio.crear(conClaim, cliente, datos("Casa", null), CTX))
+                .isInstanceOf(DireccionNoPermitidaException.class);
+        assertThat(persistencia.llamadas).isZero();
+        assertThat(eventos.publicados).isEmpty();
+        assertThat(auditoria.registradas).isEmpty();
+    }
+
+    @Test
+    void usuarioVerPermiteLeerPeroNoAnadir() {
+        UUID soporte = UUID.randomUUID();
+        UUID cliente = UUID.randomUUID();
+        cuentas.existentes.add(cliente);
+        autorizacion.conUsuarioVer.add(soporte);
+        var actorSoporte = new ActorUsuario(soporte, UUID.randomUUID(), Set.of(), Set.of());
+
+        assertThatThrownBy(() -> servicio.crear(actorSoporte, cliente, datos("Casa", null), CTX))
+                .isInstanceOf(DireccionNoPermitidaException.class);
+        assertThat(persistencia.llamadas).isZero();
+    }
+
+    @Test
+    void adminSistemaAnadeEnCuentaAjenaYElEventoYLaAuditoriaApuntanAlObjetivo() {
+        UUID admin = UUID.randomUUID();
+        UUID cliente = UUID.randomUUID();
+        cuentas.existentes.add(cliente);
+        autorizacion.adminsSistema.add(admin);
+
+        servicio.crear(new ActorUsuario(admin, UUID.randomUUID(), Set.of(), Set.of()), cliente,
+                datos("Casa", null), CTX);
+
+        assertThat(servicio.listar(actor, titular)).isEmpty();
+        assertThat(eventos.publicados).containsExactly(cliente);
+        assertThat(auditoria.registradas).singleElement().satisfies(l -> {
+            assertThat(l.actor()).isEqualTo(admin);
+            assertThat(l.objetivo()).isEqualTo(cliente);
+        });
+    }
+
+    @Test
+    void adminSistemaSobreCuentaInexistenteEsNoEncontradaSinEscribir() {
+        UUID admin = UUID.randomUUID();
+        autorizacion.adminsSistema.add(admin);
+
+        assertThatThrownBy(() -> servicio.crear(new ActorUsuario(admin, UUID.randomUUID(), Set.of(), Set.of()),
+                UUID.randomUUID(), datos("Casa", null), CTX)).isInstanceOf(DireccionNoEncontradaException.class);
+        assertThat(persistencia.llamadas).isZero();
+        assertThat(auditoria.registradas).isEmpty();
     }
 }

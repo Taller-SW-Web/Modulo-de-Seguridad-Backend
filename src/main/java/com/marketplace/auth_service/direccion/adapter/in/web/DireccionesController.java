@@ -3,7 +3,9 @@ package com.marketplace.auth_service.direccion.adapter.in.web;
 import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort.DatosNuevaDireccion;
+import com.marketplace.auth_service.shared.adapter.web.ContextoPeticiones;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +31,10 @@ public class DireccionesController {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<DireccionResponse> crear(@AuthenticationPrincipal ActorUsuario actor,
-            @PathVariable UUID id, @Valid @RequestBody DireccionRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody DireccionRequest request, HttpServletRequest peticion) {
         DireccionDatos creada = direcciones.crear(actor, id, new DatosNuevaDireccion(request.etiqueta(),
                 request.departamento(), request.provincia(), request.distrito(), request.direccion(),
-                request.referencia(), request.esPredeterminada()));
+                request.referencia(), request.esPredeterminada()), ContextoPeticiones.desde(peticion));
         return ResponseEntity.status(HttpStatus.CREATED).body(respuesta(creada));
     }
 

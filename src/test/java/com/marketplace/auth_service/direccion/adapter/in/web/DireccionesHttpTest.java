@@ -52,6 +52,8 @@ class DireccionesHttpTest {
     private static final DoblesDirecciones.Persistencia PERSISTENCIA = new DoblesDirecciones.Persistencia(ORDEN);
     private static final DoblesDirecciones.Cuentas CUENTAS = new DoblesDirecciones.Cuentas(ORDEN);
     private static final DoblesDirecciones.Eventos EVENTOS = new DoblesDirecciones.Eventos();
+    private static final DoblesDirecciones.Autorizacion AUTORIZACION = new DoblesDirecciones.Autorizacion();
+    private static final DoblesDirecciones.Auditoria AUDITORIA = new DoblesDirecciones.Auditoria();
 
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
@@ -61,7 +63,7 @@ class DireccionesHttpTest {
     static class Aplicacion {
         @Bean
         DireccionesPort direccionesPort() {
-            return new DireccionesService(PERSISTENCIA, CUENTAS, EVENTOS);
+            return new DireccionesService(PERSISTENCIA, CUENTAS, EVENTOS, AUTORIZACION, AUDITORIA);
         }
     }
 
@@ -93,6 +95,9 @@ class DireccionesHttpTest {
         CUENTAS.consultas = 0;
         CUENTAS.bloqueos = 0;
         EVENTOS.publicados.clear();
+        AUTORIZACION.conUsuarioVer.clear();
+        AUTORIZACION.adminsSistema.clear();
+        AUDITORIA.registradas.clear();
     }
 
     private HttpResponse<String> enviar(String metodo, String id, String cuerpo, String bearer)
@@ -118,6 +123,10 @@ class DireccionesHttpTest {
     private HttpResponse<String> crear(String id, String cuerpo, String bearer)
             throws IOException, InterruptedException {
         return enviar("POST", id, cuerpo, bearer);
+    }
+
+    private String tokenDe(UUID sub, List<String> roles, List<String> permisos) {
+        return firmaPort.firmar(new ClaimsAcceso(sub, "otra@ejemplo.test", roles, permisos)).token();
     }
 
     private String token() {
@@ -297,5 +306,68 @@ class DireccionesHttpTest {
         assertThat(respuesta.statusCode()).isEqualTo(403);
         assertThat(problema(respuesta).get("code").asText()).isEqualTo("TOKEN_NO_APLICABLE");
         assertThat(PERSISTENCIA.llamadas).isZero();
+    }
+
+    @Test
+    void crearRegistraUnaAuditoriaDelTitularConElContextoDeLaPeticion() throws Exception {
+        HttpResponse<String> respuesta = crear(titular.toString(), cuerpo("Casa", true), token());
+
+        assertThat(respuesta.statusCode()).isEqualTo(201);
+        assertThat(AUDITORIA.registradas).singleElement().satisfies(l -> {
+            assertThat(l.actor()).isEqualTo(titular);
+            assertThat(l.objetivo()).isEqualTo(titular);
+            assertThat(l.contexto().ip()).isNotBlank();
+        });
+    }
+
+    @Test
+    void unaAltaRechazadaNoDejaAuditoriaDeExito() throws Exception {
+        crear(titular.toString(), "{\"departamento\":\"Lima\"}", token());
+        crear(UUID.randomUUID().toString(), cuerpo("Casa", true), token());
+
+        assertThat(AUDITORIA.registradas).isEmpty();
+    }
+
+    @Test
+    void quienTieneUsuarioVerHoyLeeLasDireccionesDeUnClienteConToken() throws Exception {
+        UUID soporte = UUID.randomUUID();
+        AUTORIZACION.conUsuarioVer.add(soporte);
+
+        HttpResponse<String> respuesta = listar(titular.toString(), tokenDe(soporte, List.of("ADMIN_VENTAS"), List.of()));
+
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void elPermisoSoloEnElTokenNoAutorizaLaLecturaAjena() throws Exception {
+        UUID soporte = UUID.randomUUID();
+
+        HttpResponse<String> respuesta = listar(titular.toString(),
+                tokenDe(soporte, List.of("ADMIN_SISTEMA"), List.of("usuario.ver")));
+
+        assertThat(respuesta.statusCode()).isEqualTo(403);
+        assertThat(problema(respuesta).get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
+        assertThat(PERSISTENCIA.llamadas).isZero();
+    }
+
+    @Test
+    void adminSistemaVigenteAnadeEnCuentaAjenaYUsuarioVerNoAlcanza() throws Exception {
+        UUID admin = UUID.randomUUID();
+        UUID soporte = UUID.randomUUID();
+        AUTORIZACION.adminsSistema.add(admin);
+        AUTORIZACION.conUsuarioVer.add(soporte);
+
+        HttpResponse<String> deAdmin = crear(titular.toString(), cuerpo("Casa", true),
+                tokenDe(admin, List.of("ADMIN_SISTEMA"), List.of()));
+        HttpResponse<String> deSoporte = crear(titular.toString(), cuerpo("Otra", true),
+                tokenDe(soporte, List.of("ADMIN_VENTAS"), List.of()));
+
+        assertThat(deAdmin.statusCode()).isEqualTo(201);
+        assertThat(deSoporte.statusCode()).isEqualTo(403);
+        assertThat(EVENTOS.publicados).containsExactly(titular);
+        assertThat(AUDITORIA.registradas).singleElement().satisfies(l -> {
+            assertThat(l.actor()).isEqualTo(admin);
+            assertThat(l.objetivo()).isEqualTo(titular);
+        });
     }
 }
