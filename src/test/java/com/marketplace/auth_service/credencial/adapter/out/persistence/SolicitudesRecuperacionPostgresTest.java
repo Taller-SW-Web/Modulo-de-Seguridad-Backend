@@ -25,11 +25,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -70,14 +67,10 @@ class SolicitudesRecuperacionPostgresTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired CuotaRecuperacionPort cuota;
-    @Autowired PlatformTransactionManager transacciones;
-    private TransactionTemplate tx;
 
     @BeforeEach
     void limpiar() {
         jdbc.execute("truncate table solicitud_limitada restart identity");
-        tx = new TransactionTemplate(transacciones);
-        tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     @Test
@@ -127,6 +120,6 @@ class SolicitudesRecuperacionPostgresTest {
     }
 
     private Duration reservar(String correo, Instant ahora) {
-        return tx.execute(status -> cuota.reservar(correo, ahora));
+        return cuota.reservar(correo, ahora);
     }
 }

@@ -49,6 +49,17 @@ class SolicitudRecuperacionServiceTest {
     }
 
     @Test
+    void falloDeEnvioSeRespondeComoAceptadaYConservaLaReserva() {
+        var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "persona@example.test", true)),
+                Duration.ZERO, (cuenta, ahora) -> { throw new com.marketplace.auth_service.credencial.domain.exception
+                        .SolicitudRecuperacionNoDisponibleException(); });
+
+        assertThat(fixture.service.solicitar("persona@example.test", CONTEXTO))
+                .isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
+        assertThat(fixture.auditoria.aceptadas).containsExactly(true);
+    }
+
+    @Test
     void correoSinCuentaRecibeElMismoResultadoAceptadoYNoGeneraTokenNiCorreo() {
         var fixture = new Fixture(Optional.empty(), Duration.ZERO);
 
@@ -90,12 +101,17 @@ class SolicitudRecuperacionServiceTest {
         final SolicitudRecuperacionService service;
 
         Fixture(Optional<CuentaRecuperacion> cuenta, Duration espera) {
+            this(cuenta, espera, null);
+        }
+
+        Fixture(Optional<CuentaRecuperacion> cuenta, Duration espera, CorreoRecuperacionPort entregaForzado) {
             cuota = new Cuota(espera);
             CuentasRecuperacionPort cuentas = correo -> {
                 consultasCuenta.incrementAndGet();
                 return cuenta;
             };
-            CorreoRecuperacionPort entrega = (c, instante) -> correos.add(c.usuarioId());
+            CorreoRecuperacionPort entrega = entregaForzado == null
+                    ? (c, instante) -> correos.add(c.usuarioId()) : entregaForzado;
             service = new SolicitudRecuperacionService(cuentas, cuota, entrega, auditoria,
                     Clock.fixed(AHORA, ZoneOffset.UTC));
         }

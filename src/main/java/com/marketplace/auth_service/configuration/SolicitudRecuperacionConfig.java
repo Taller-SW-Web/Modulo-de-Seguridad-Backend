@@ -2,13 +2,13 @@ package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
-import com.marketplace.auth_service.credencial.adapter.in.transaction.SolicitarRecuperacionTransaccional;
 import com.marketplace.auth_service.credencial.adapter.out.capacidad.AuditoriaRecuperacionAdapter;
 import com.marketplace.auth_service.credencial.adapter.out.capacidad.CorreoRecuperacionAdapter;
 import com.marketplace.auth_service.credencial.adapter.out.capacidad.CuentasRecuperacionAdapter;
 import com.marketplace.auth_service.credencial.adapter.out.crypto.HmacCorreoSolicitudDenegado;
 import com.marketplace.auth_service.credencial.adapter.out.crypto.HmacCorreoSolicitudJca;
 import com.marketplace.auth_service.credencial.adapter.out.persistence.SolicitudesRecuperacionPostgresAdapter;
+import com.marketplace.auth_service.credencial.adapter.in.transaction.CorreoRecuperacionTransaccional;
 import com.marketplace.auth_service.credencial.application.port.in.SolicitarRecuperacionPort;
 import com.marketplace.auth_service.credencial.application.port.out.*;
 import com.marketplace.auth_service.credencial.application.service.SolicitudRecuperacionService;
@@ -25,6 +25,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /** Wiring de FEAT-03-T2; dependencias de cuentas, tokens, auditoría y mensajería por puertos. */
 @Configuration(proxyBeanMethods = false)
@@ -59,8 +60,10 @@ public class SolicitudRecuperacionConfig {
     }
 
     @Bean CorreoRecuperacionPort correoRecuperacionPort(TokensUnUsoPort tokens, MensajeriaPort mensajeria,
-            @Value("${g7.spa.url:http://localhost:5173}") String urlSpa) {
-        return new CorreoRecuperacionAdapter(tokens, mensajeria, urlSpa);
+            @Value("${g7.spa.url:http://localhost:5173}") String urlSpa,
+            PlatformTransactionManager gestorTransacciones) {
+        return new CorreoRecuperacionTransaccional(
+                new CorreoRecuperacionAdapter(tokens, mensajeria, urlSpa), gestorTransacciones);
     }
 
     @Bean AuditoriaRecuperacionPort auditoriaRecuperacionPort(AuditoriaPort auditoria) {
@@ -70,7 +73,7 @@ public class SolicitudRecuperacionConfig {
     @Bean SolicitarRecuperacionPort solicitarRecuperacionPort(CuentasRecuperacionPort cuentas,
             CuotaRecuperacionPort cuota, CorreoRecuperacionPort correo, AuditoriaRecuperacionPort auditoria,
             ObjectProvider<Clock> relojes) {
-        return new SolicitarRecuperacionTransaccional(new SolicitudRecuperacionService(cuentas, cuota,
-                correo, auditoria, relojes.getIfAvailable(Clock::systemUTC)));
+        return new SolicitudRecuperacionService(cuentas, cuota,
+                correo, auditoria, relojes.getIfAvailable(Clock::systemUTC));
     }
 }

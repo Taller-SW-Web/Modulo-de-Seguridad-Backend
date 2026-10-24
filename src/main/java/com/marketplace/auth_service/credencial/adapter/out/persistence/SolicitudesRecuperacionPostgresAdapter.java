@@ -26,7 +26,7 @@ public class SolicitudesRecuperacionPostgresAdapter implements CuotaRecuperacion
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Duration reservar(String correoNormalizado, Instant ahora) {
         Objects.requireNonNull(ahora, "ahora");
         String clave = hashCorreo.generar(Objects.requireNonNull(correoNormalizado, "correoNormalizado"));

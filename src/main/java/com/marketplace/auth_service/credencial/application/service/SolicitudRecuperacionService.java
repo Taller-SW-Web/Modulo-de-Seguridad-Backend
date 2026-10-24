@@ -7,6 +7,7 @@ import com.marketplace.auth_service.credencial.application.port.out.AuditoriaRec
 import com.marketplace.auth_service.credencial.application.port.out.CorreoRecuperacionPort;
 import com.marketplace.auth_service.credencial.application.port.out.CuentasRecuperacionPort;
 import com.marketplace.auth_service.credencial.application.port.out.CuotaRecuperacionPort;
+import com.marketplace.auth_service.credencial.domain.exception.SolicitudRecuperacionNoDisponibleException;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.time.Clock;
 import java.time.Duration;
@@ -44,7 +45,13 @@ public final class SolicitudRecuperacionService implements SolicitarRecuperacion
 
         CuentaRecuperacion cuenta = cuentas.buscar(normalizado).orElse(null);
         if (cuenta != null && cuenta.elegible()) {
-            correo.emitirYEnviar(cuenta, ahora);
+            try {
+                correo.emitirYEnviar(cuenta, ahora);
+            } catch (SolicitudRecuperacionNoDisponibleException indisponible) {
+                // La reserva ya quedó confirmada; no revelar si falló para una cuenta real.
+                auditoria.registrar(cuenta.usuarioId(), true, contexto, ahora);
+                return new ResultadoSolicitudRecuperacion.Aceptada();
+            }
         }
         // El mismo código y cuerpo se devuelve para cuenta elegible, no elegible o inexistente.
         auditoria.registrar(cuenta == null ? null : cuenta.usuarioId(), true, contexto, ahora);
