@@ -13,6 +13,7 @@ import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.port.out.FirmadorAccesoPort;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.sesion.domain.exception.AccesoDesconocidoException;
@@ -95,6 +96,8 @@ class AbrirSesionPostgresTest {
 
     private SesionesPort sesiones;
     private UUID usuario;
+    /** FEAT-12-T2: la auditoría del cierre no interviene en apertura. */
+    private static final EfectosCierrePort SIN_CIERRE = (usuarioId, familiaId, contexto, ahora) -> { };
 
     private static FirmaPort firmaReal() {
         var clave = ClaveFirmaRsa.desdePem(ClavesDePrueba.pemPkcs8(ClavesDePrueba.RSA_3072));
@@ -107,7 +110,7 @@ class AbrirSesionPostgresTest {
                 new PuenteFirmaAcceso(firmaReal()),
                 u -> new DatosIdentidad(u, usuario + "@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), true),
-                RELOJ);
+                SIN_CIERRE, RELOJ);
         usuario = UUID.randomUUID();
         jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?,?,?,?, 'ACTIVO')",
                 usuario, usuario + "@ejemplo.test", "Cliente", "Prueba");
@@ -198,7 +201,7 @@ class AbrirSesionPostgresTest {
         var sinFirma = new SesionService(persistencia, new SesionCryptoAdapter(), firmaCaida,
                 u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), true),
-                RELOJ);
+                SIN_CIERRE, RELOJ);
         var tx = new TransactionTemplate(transacciones);
         long familiasAntes = contar("sesion_familia");
         long tokensAntes = contar("token_refresco");

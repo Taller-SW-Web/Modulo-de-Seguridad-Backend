@@ -14,6 +14,7 @@ import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
 import com.marketplace.auth_service.sesion.application.dto.SecretoRefresco;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.port.out.ProveedorIdentidadPort;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
@@ -97,6 +98,8 @@ class RenovarSesionPostgresTest {
 
     private SesionesPort sesiones;
     private UUID usuario;
+    /** FEAT-12-T2: la auditoría del cierre no interviene en renovación. */
+    private static final EfectosCierrePort SIN_CIERRE = (usuarioId, familiaId, contexto, ahora) -> { };
     private final ProveedorIdentidadPort identidadPermite = u -> new DatosIdentidad(u,
             u + "@ejemplo.test", "Cliente Prueba", List.of("CLIENTE"), List.of(), true);
 
@@ -105,7 +108,7 @@ class RenovarSesionPostgresTest {
         var clave = ClaveFirmaRsa.desdePem(ClavesDePrueba.pemPkcs8(ClavesDePrueba.RSA_3072));
         FirmaPort firma = new FirmarAccesoService(new NimbusFirmadorJws(clave), ISSUER, RELOJ);
         sesiones = new SesionService(persistencia, new SesionCryptoAdapter(),
-                new PuenteFirmaAcceso(firma), identidadPermite, RELOJ);
+                new PuenteFirmaAcceso(firma), identidadPermite, SIN_CIERRE, RELOJ);
         usuario = UUID.randomUUID();
         jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?,?,?,?, 'ACTIVO')",
                 usuario, usuario + "@ejemplo.test", "Cliente", "Prueba");
