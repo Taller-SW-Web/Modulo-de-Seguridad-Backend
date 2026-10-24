@@ -123,6 +123,10 @@ public final class MensajeriaService implements MensajeriaPort {
                 String roles = carga.getOrDefault("roles", "");
                 datos.put("roles", roles.isBlank() ? java.util.List.of() : java.util.List.of(roles.split(",")));
             }
+            case "usuario.atributos_actualizados" -> {
+                String campos = carga.getOrDefault("campos", "");
+                datos.put("campos", campos.isBlank() ? java.util.List.of() : java.util.List.of(campos.split(",")));
+            }
             default -> carga.forEach((clave, valor) -> {
                 if (!java.util.Set.of("eventoId", "tipo", "fecha", "usuarioId").contains(clave)) {
                     datos.put(clave, valor);
