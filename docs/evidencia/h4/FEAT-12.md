@@ -126,8 +126,9 @@ Resultado local: **compilación de código y pruebas en verde**; suites de sesi�
 `ArquitecturaHexagonalTest` en verde (puertos y puentes sin tipos ajenos). Suite
 completa: **790 pruebas, 21 fallos, 82 omitidas**; los 21 fallos son solo la falta
 de Docker/Testcontainers en esta máquina — comprobado ejecutando la misma suite
-con los cambios guardados (`git stash`): idénticos 21 fallos sin ellos. Las
-pruebas PostgreSQL/HTTP de T2 corren en el CI (imagen Docker), como en H3.
+con los cambios guardados (`git stash`): idénticos 21 fallos sin ellos.
+
+**CI (24-oct-2026, run [40106674716](https://github.com/Taller-SW-Web/Modulo-de-Seguridad-Backend/actions/runs/40106674716), commit `cce2953`):** los tres checks en verde (destino del PR, build y pruebas con Docker, imagen Docker). El artefacto de resultados confirma `SesionesIntegracionPostgresTest` **9/9 sin fallos**, incluida `logoutRegistraSesionCerradaEnActividadSinDuplicar`: la aceptación automatizada de T2 (logout → `/auth/me/actividad` con un solo `SESION_CERRADA`; el repetido no duplica) quedó acreditada sobre HTTP y PostgreSQL reales en el CI.
 
 ### T2.4 Comprobación desplegada (pendiente)
 
