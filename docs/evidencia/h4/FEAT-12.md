@@ -1,12 +1,16 @@
 # FEAT-12-T1 — Configuración por entorno del emisor (H4)
 
 **Dueño:** Jose Luis Limachi Sarmiento · **Épica:** EP-02 · **FEAT:** FEAT-12 `feat/EP-02-seguridad-e2e`
-**Fecha de esta evidencia:** 22-oct-2026 · **Estado:** En curso (commit local, sin PR; criterio de despliegue parcial, ver §4)
+**Fecha de esta evidencia:** 22-oct-2026 · **Última actualización:** 24-oct-2026
+**Estado:** En curso — commit `12070f4` en la rama `feat/EP-02-seguridad-e2e` y
+[PR #60](https://github.com/Taller-SW-Web/Modulo-de-Seguridad-Backend/pull/60) en
+borrador; criterio de despliegue parcial, ver §4. No se marca **Verificada**.
 
 ## 1. Fuentes consumidas
 
 - `plan/hito-4/README.md` v1.2 §1, §3 (FEAT-12-T1), §6 y §7; `tareas/hito-4/README.md` y `tareas/hito-4/jose-limachi/TAREAS.md`.
-- [SPEC-17](../../../Modulo-de-Seguridad/specs/funcionales/SPEC-17-tokens-servicio.md) RF-17.1, RF-17.2 y RF-17.14.
+- Documentación SDD del equipo: repo `Modulo-de-Seguridad`, rama `main`,
+  `d44dafb7a054368b6790c87a0b455b95374bd046`. [SPEC-17](https://github.com/Taller-SW-Web/Modulo-de-Seguridad/blob/main/specs/funcionales/SPEC-17-tokens-servicio.md) RF-17.1, RF-17.2 y RF-17.14.
 - Base H3: `IdentidadConfig` / `FirmarAccesoService` / `DescubrimientoController` (TEC-IDENTIDAD-T001 y T003, fusionadas) y `docs/despliegue/DESPLIEGUE-T005.md`.
 - `AGENTS.md` y `CONTEXT.md` de documentación y `AGENTS.md` de este repositorio.
 
@@ -70,3 +74,15 @@ anterior a FEAT-05; hay que verificar el SHA real del servicio (FEAT-09-T1/T2).
 
 No se modificó `problemaIssuer()` (decisión del dueño, 22-oct): la validación actual
 de RF-17.14 se conserva y las pruebas locales siguen usando `localhost` como issuer.
+
+## 6. Historial de revisión
+
+- **22-oct-2026 · commit `12070f4`:** PR #60 en borrador; CI en verde (destino,
+  build y pruebas, imagen Docker).
+- **22-oct-2026 · revisión de Luis David (comentario en PR #60):** conforme como
+  avance de FEAT-12-T1; mantener el PR en borrador (faltan T2 y T3, H4 §6.4), no
+  marcar **Verificada** y corregir esta evidencia.
+- **24-oct-2026 · correcciones aplicadas:** estado con PR en borrador, referencia
+  al repo de documentación con su SHA en lugar de un enlace relativo inexistente
+  en el backend, y el pendiente de validación desplegada explícito en §4 y §5.
+  La rama trae `develop` (merge `fddbdd9`).
