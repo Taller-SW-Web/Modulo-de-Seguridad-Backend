@@ -120,6 +120,29 @@ public final class ProteccionService implements ProteccionPort {
         efectos.desbloqueada(cuenta,bloqueo.revision(),contexto,ahora);
         return ResultadoDesbloqueo.DESBLOQUEADA;
     }
+    @Override public void prepararRestablecimiento(UUID usuarioId) {
+        Objects.requireNonNull(usuarioId);
+        persistencia.bloquearBloqueo(usuarioId);
+        persistencia.bloquearRacha(usuarioId);
+    }
+    @Override public void restablecerPorRecuperacion(UUID usuarioId, ContextoPeticion contexto, Instant ahora) {
+        Objects.requireNonNull(usuarioId); Objects.requireNonNull(contexto); Objects.requireNonNull(ahora);
+        CuentaSnapshot cuenta=cuentas.leer(usuarioId).orElseThrow(() -> new IllegalStateException("Cuenta no disponible"));
+        Bloqueo bloqueo=persistencia.bloquearBloqueo(usuarioId).orElse(null);
+        RachaFallo racha=persistencia.bloquearRacha(usuarioId).orElse(null);
+        if (bloqueo!=null && bloqueo.tipo()==TipoBloqueo.AUTOMATICO) {
+            if (!persistencia.eliminarBloqueo(usuarioId,bloqueo.revision()))
+                throw new IllegalStateException("Revisión del bloqueo cambió");
+            efectos.desbloqueadaPorRestablecimiento(cuenta,bloqueo.revision(),contexto,ahora);
+        }
+        if (racha==null) {
+            persistencia.crearRacha(new RachaFallo(usuarioId,UUID.randomUUID(),huellas.claveActualId(),ahora));
+        } else {
+            normalizarRacha(usuarioId,ahora);
+        }
+        // Preserva bloqueosSeguidos; el restablecimiento solo limpia intentosFallidos.
+        cuentas.guardarContadores(usuarioId,cuenta.bloqueosSeguidos(),0);
+    }
     private static boolean valido(TokenDesbloqueo t) {
         return t!=null && !t.usado() && t.contextoId()!=null
                 && "DESBLOQUEO_AUTOMATICO".equals(t.proposito());

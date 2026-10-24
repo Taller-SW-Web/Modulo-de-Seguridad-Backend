@@ -61,7 +61,7 @@ import static org.assertj.core.api.Assertions.*;
         CredencialesConfig.class,CredencialesJpaAdapter.class,TokensUnUsoConfig.class,
         ProteccionConfig.class,ProteccionCriptografiaConfig.class,ProteccionJpaAdapter.class,EfectosConfig.class,
         SesionConfig.class,SesionJpaAdapter.class,IdentidadConfig.class,LoginConfig.class,
-        MfaConfig.class,MfaCriptografiaConfig.class,MfaJpaAdapter.class,AuditoriaJpaAdapter.class})
+        MfaConfig.class,MfaCriptografiaConfig.class,MfaJpaAdapter.class,AuditoriaJpaAdapter.class,BloqueoManualConfig.class})
 @Transactional(propagation=Propagation.NOT_SUPPORTED)
 @Testcontainers
 class ProteccionComposicionPostgresTest {
@@ -109,6 +109,7 @@ class ProteccionComposicionPostgresTest {
         r.add("identidad.clave-privada",()->ClavesDePrueba.pemPkcs8(ClavesDePrueba.RSA_3072));
     }
     @Autowired ProteccionPort proteccion;
+    @Autowired com.marketplace.auth_service.proteccion.application.port.in.BloqueoManualPort manual;
     @Autowired CuentasProteccionPort cuentas;
     @Autowired PersistenciaProteccionPort persistencia;
     @Autowired LoginPort login;
@@ -230,6 +231,61 @@ class ProteccionComposicionPostgresTest {
             }
         }
         assertThat(auditorias("CUENTA_BLOQUEADA")).isEqualTo(4);assertThat(contar("token_un_uso")).isEqualTo(4);
+    }
+    com.marketplace.auth_service.shared.domain.ActorUsuario administrador() {
+        UUID admin=UUID.randomUUID();
+        jdbc.update("insert into usuario(id,correo,nombres,apellidos,estado,correo_verificado) values(?,?,'Admin','Prueba','ACTIVO',true)",admin,admin+"@example.test");
+        jdbc.update("insert into usuario_rol(usuario_id,rol_codigo) values(?,'ADMIN_SISTEMA')",admin);
+        jdbc.update("insert into permiso(codigo,modulo) values('cuenta.bloquear','seguridad') on conflict do nothing");
+        jdbc.update("insert into rol_permiso(rol_codigo,permiso_codigo) values('ADMIN_SISTEMA','cuenta.bloquear') on conflict do nothing");
+        return new com.marketplace.auth_service.shared.domain.ActorUsuario(admin,UUID.randomUUID(),Set.of("ADMIN_SISTEMA"),Set.of("cuenta.bloquear"));
+    }
+    @Test void manualRevocaSesionesYDesbloqueaSinRevivirlas() {
+        var actor=administrador();
+        var sesion=((ResultadoLogin.Iniciada)login.iniciar(correo,CLAVE,contexto())).sesion();
+        assertThat(manual.ejecutar(actor,usuario.toString(),true,"Motivo privado",contexto())).isNull();
+        var bloqueo=persistencia.buscarBloqueo(usuario).orElseThrow();
+        assertThat(bloqueo.tipo()).isEqualTo(TipoBloqueo.MANUAL);assertThat(bloqueo.bloqueadoHasta()).isNull();
+        assertThat(jdbc.queryForObject("select bool_and(revocada) from sesion_familia where usuario_id=?",Boolean.class,usuario)).isTrue();
+        assertThat(sesiones.renovar(new SecretoRefresco(sesion.refreshToken()))).isInstanceOf(RenovacionResultado.Rechazada.class);
+        assertThat(auditorias("CUENTA_BLOQUEADA")).isEqualTo(1);assertThat(eventos("usuario.bloqueado")).isEqualTo(1);
+        for(var fila:correos("correo.cuenta_bloqueada")) {
+            try {String cuerpo=cifrado.descifrar(new ObjectMapper().readTree((String)fila.get("carga")).path("contenido").asText());
+                assertThat(cuerpo).doesNotContain("Motivo privado","token=","http");} catch(Exception e){throw new AssertionError(e);}
+        }
+        assertThat(manual.ejecutar(actor,usuario.toString(),false,null,contexto())).isNull();
+        assertThat(manual.ejecutar(actor,usuario.toString(),false,null,contexto())).isNull();
+        assertThat(persistencia.buscarBloqueo(usuario)).isEmpty();
+        assertThat(cuentas.leer(usuario).orElseThrow().intentosFallidos()).isZero();
+        assertThat(auditorias("CUENTA_DESBLOQUEADA")).isEqualTo(1);assertThat(eventos("usuario.desbloqueado")).isEqualTo(1);
+        assertThat(sesiones.renovar(new SecretoRefresco(sesion.refreshToken()))).isInstanceOf(RenovacionResultado.Rechazada.class);
+    }
+    @Test void manualReemplazaAutomaticoEInvalidaSuEnlace() throws Exception {
+        var actor=administrador();fallos(5,0);String secreto=enlace();
+        assertThat(manual.ejecutar(actor,usuario.toString(),true,"Revisión administrativa",contexto())).isNull();
+        reloj.avanzar(3600);
+        assertThat(persistencia.buscarBloqueo(usuario).orElseThrow().tipo()).isEqualTo(TipoBloqueo.MANUAL);
+        assertThat(desbloquear(secreto)).isEqualTo(ResultadoDesbloqueo.INVALIDA);
+        assertThat(login.iniciar(correo,CLAVE,contexto())).isEqualTo(ResultadoLogin.Rechazo.CREDENCIALES_INVALIDAS);
+    }
+    @ParameterizedTest @ValueSource(strings={"auditoria_seguridad","outbox"})
+    void manualRevierteBloqueoYSesionesSiFallaEfectoCritico(String tabla) {
+        var actor=administrador();login.iniciar(correo,CLAVE,contexto());
+        String condicion=tabla.equals("outbox") ? "topico <> 'usuario.bloqueado'" : "accion <> 'CUENTA_BLOQUEADA'";
+        jdbc.execute("alter table "+tabla+" add constraint t006_fallo check ("+condicion+") not valid");
+        assertThatThrownBy(()->manual.ejecutar(actor,usuario.toString(),true,"Prueba rollback",contexto())).isInstanceOf(RuntimeException.class);
+        assertThat(persistencia.buscarBloqueo(usuario)).isEmpty();
+        assertThat(jdbc.queryForObject("select bool_or(revocada) from sesion_familia where usuario_id=?",Boolean.class,usuario)).isFalse();
+        assertThat(auditorias("CUENTA_BLOQUEADA")).isZero();assertThat(eventos("usuario.bloqueado")).isZero();
+    }
+    @Test void manualConcurrenteNoDuplicaTransicion() throws Exception {
+        var actor=administrador();var pool=Executors.newFixedThreadPool(2);
+        try {
+            var uno=pool.submit(()->manual.ejecutar(actor,usuario.toString(),true,"Concurrencia",contexto()));
+            var dos=pool.submit(()->manual.ejecutar(actor,usuario.toString(),true,"Concurrencia",contexto()));
+            assertThat(uno.get(20,TimeUnit.SECONDS)).isNull();assertThat(dos.get(20,TimeUnit.SECONDS)).isNull();
+            assertThat(auditorias("CUENTA_BLOQUEADA")).isEqualTo(1);assertThat(eventos("usuario.bloqueado")).isEqualTo(1);
+        } finally {pool.shutdownNow();}
     }
     String enlaceVigente() throws Exception {
         String hash=jdbc.queryForObject("select hash_token from token_un_uso where usuario_id=? and not usado",String.class,usuario);

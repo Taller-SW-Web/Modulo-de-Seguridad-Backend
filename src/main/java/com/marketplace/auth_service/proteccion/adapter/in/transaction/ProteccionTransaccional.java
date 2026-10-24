@@ -21,4 +21,10 @@ public class ProteccionTransaccional implements ProteccionPort {
     public ResultadoDesbloqueo desbloquear(PruebaEnlace prueba, ContextoPeticion contexto) {
         return delegado.desbloquear(prueba,contexto);
     }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public void prepararRestablecimiento(UUID usuarioId) { delegado.prepararRestablecimiento(usuarioId); }
+    @Override @Transactional(propagation=Propagation.MANDATORY)
+    public void restablecerPorRecuperacion(UUID usuarioId, ContextoPeticion contexto, Instant ahora) {
+        delegado.restablecerPorRecuperacion(usuarioId,contexto,ahora);
+    }
 }

@@ -3,7 +3,9 @@ import com.marketplace.auth_service.proteccion.adapter.in.transaction.Proteccion
 import com.marketplace.auth_service.proteccion.adapter.out.capacidad.PuenteCuentasProteccion;
 import com.marketplace.auth_service.proteccion.adapter.out.crypto.HashEnlaceProteccionJca;
 import com.marketplace.auth_service.proteccion.application.dto.*;
+import com.marketplace.auth_service.proteccion.application.port.in.ConsultaBloqueosPort;
 import com.marketplace.auth_service.proteccion.application.port.in.ProteccionPort;
+import com.marketplace.auth_service.proteccion.application.service.ConsultaBloqueosService;
 import com.marketplace.auth_service.proteccion.application.port.out.*;
 import com.marketplace.auth_service.proteccion.application.service.ProteccionService;
 import com.marketplace.auth_service.proteccion.domain.exception.ProteccionNoDisponibleException;
@@ -23,6 +25,10 @@ public class ProteccionConfig {
         return new PuenteCuentasProteccion(cuentas,escritura,roles);
     }
     @Bean HashEnlaceProteccionPort hashEnlaceProteccion() { return new HashEnlaceProteccionJca(); }
+    /** Lectura de bloqueos vigentes para la vista administrativa (RF-15.6); sin locks ni efectos. */
+    @Bean ConsultaBloqueosPort consultaBloqueosPort(PersistenciaProteccionPort persistencia, ObjectProvider<Clock> reloj) {
+        return new ConsultaBloqueosService(persistencia, reloj.getIfAvailable(Clock::systemUTC));
+    }
     @Bean ProteccionPort proteccionPort(PersistenciaProteccionPort persistencia, HuellaProteccionPort huellas,
             CuentasProteccionPort cuentas, HashEnlaceProteccionPort hash,
             ObjectProvider<TokensProteccionPort> tokens, ObjectProvider<EfectosProteccionPort> efectos,
@@ -40,6 +46,9 @@ public class ProteccionConfig {
             }
             public void desbloqueada(CuentaSnapshot c,UUID r,ContextoPeticion p,Instant a) {
                 exigir(efectos,"auditoría/evento Christian").desbloqueada(c,r,p,a);
+            }
+            public void desbloqueadaPorRestablecimiento(CuentaSnapshot c,UUID r,ContextoPeticion p,Instant a) {
+                exigir(efectos,"auditoría/evento Christian").desbloqueadaPorRestablecimiento(c,r,p,a);
             }
         };
         return new ProteccionTransaccional(new ProteccionService(persistencia,huellas,cuentas,requerido,criticos,

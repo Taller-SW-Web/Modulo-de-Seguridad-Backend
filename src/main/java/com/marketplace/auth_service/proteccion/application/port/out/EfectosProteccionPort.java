@@ -9,4 +9,6 @@ public interface EfectosProteccionPort {
     void bloqueada(CuentaSnapshot cuenta, UUID revision, Instant hasta, EnlaceEmitido enlace,
             ContextoPeticion contexto, Instant ahora);
     void desbloqueada(CuentaSnapshot cuenta, UUID revision, ContextoPeticion contexto, Instant ahora);
+    void desbloqueadaPorRestablecimiento(CuentaSnapshot cuenta, UUID revision,
+            ContextoPeticion contexto, Instant ahora);
 }

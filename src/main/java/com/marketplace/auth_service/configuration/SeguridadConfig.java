@@ -70,6 +70,9 @@ public class SeguridadConfig {
     static final String ROLES = "/api/v1/roles";
     static final String PERMISOS = "/api/v1/permisos";
 
+    /** Compartida con la administración por token de persona (SPEC-18 FEAT-06-T1). */
+    static final String USUARIO_DETALLE = "/api/v1/usuarios/{id}";
+
     /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
     static final String[] PUBLICAS_SESION_POST = {
             "/api/v1/auth/login",
@@ -101,6 +104,8 @@ public class SeguridadConfig {
                         .requestMatchers(HttpMethod.GET, PUBLICAS_IDENTIDAD).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLICAS_SESION_POST).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/desbloquear").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/password/recuperar").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/password/restablecer").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/password/politica").permitAll()
                         .requestMatchers(HttpMethod.GET, SALUD).permitAll()
                         .requestMatchers(HttpMethod.POST, TOKEN_SERVICIO).permitAll()
@@ -108,6 +113,8 @@ public class SeguridadConfig {
                             .access(ReglasIntegracion.soloServicio(ScopeServicio.TOKENS_INTROSPECCION))
                         .requestMatchers(HttpMethod.GET, ROLES, PERMISOS)
                             .access(ReglasIntegracion.soloServicio(ScopeServicio.ROLES_LEER))
+                        .requestMatchers(HttpMethod.GET, USUARIO_DETALLE)
+                            .access(ReglasIntegracion.servicioOPersona(ScopeServicio.USUARIOS_LEER))
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -132,6 +139,8 @@ public class SeguridadConfig {
                 || ("POST".equals(peticion.getMethod()) && sesionPost.contains(peticion.getRequestURI()))
                 || ("POST".equals(peticion.getMethod()) && TOKEN_SERVICIO.equals(peticion.getRequestURI()))
                 || ("POST".equals(peticion.getMethod()) && "/api/v1/auth/desbloquear".equals(peticion.getRequestURI()))
+                || ("POST".equals(peticion.getMethod()) && "/api/v1/password/recuperar".equals(peticion.getRequestURI()))
+                || ("POST".equals(peticion.getMethod()) && "/api/v1/password/restablecer".equals(peticion.getRequestURI()))
                 || ("GET".equals(peticion.getMethod())
                     && ("/api/v1/password/politica".equals(peticion.getRequestURI())
                         || SALUD.equals(peticion.getRequestURI())))
@@ -142,6 +151,13 @@ public class SeguridadConfig {
     static boolean esDeIntegracion(HttpServletRequest peticion) {
         String ruta = peticion.getRequestURI();
         return ("POST".equals(peticion.getMethod()) && INTROSPECCION.equals(ruta))
-                || ("GET".equals(peticion.getMethod()) && (ROLES.equals(ruta) || PERMISOS.equals(ruta)));
+                || ("GET".equals(peticion.getMethod()) && (ROLES.equals(ruta) || PERMISOS.equals(ruta)))
+                || ("GET".equals(peticion.getMethod()) && esUsuarioDetalle(ruta));
+    }
+
+    /** {@code /api/v1/usuarios/{id}} sin coincidir con {@code /api/v1/usuarios} (el listado, persona únicamente). */
+    private static boolean esUsuarioDetalle(String ruta) {
+        String prefijo = "/api/v1/usuarios/";
+        return ruta.startsWith(prefijo) && ruta.length() > prefijo.length() && !ruta.substring(prefijo.length()).contains("/");
     }
 }
