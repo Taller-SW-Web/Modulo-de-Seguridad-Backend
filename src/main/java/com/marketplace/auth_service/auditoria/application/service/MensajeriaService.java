@@ -142,6 +142,7 @@ public final class MensajeriaService implements MensajeriaPort {
             case "correo.cuenta_bloqueada" -> "Bloqueamos tu cuenta por seguridad";
             case "correo.cuenta_desbloqueada" -> "Tu cuenta fue desbloqueada";
             case "correo.otp" -> "Tu código de verificación";
+            case "correo.verificacion_correo" -> "Confirma tu correo";
             default -> "Aviso de seguridad de tu cuenta";
         };
     }

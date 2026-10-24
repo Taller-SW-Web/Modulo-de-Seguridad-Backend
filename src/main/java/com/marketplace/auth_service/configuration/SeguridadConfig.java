@@ -73,8 +73,11 @@ public class SeguridadConfig {
     /** Compartida con la administración por token de persona (SPEC-18 FEAT-06-T1). */
     static final String USUARIO_DETALLE = "/api/v1/usuarios/{id}";
 
-    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía). */
+    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía), registro y verificación (FEAT-01). */
     static final String[] PUBLICAS_SESION_POST = {
+            "/api/v1/auth/registro",
+            "/api/v1/auth/verificar-correo",
+            "/api/v1/auth/verificar-correo/reenviar",
             "/api/v1/auth/login",
             "/api/v1/auth/otp/solicitar",
             "/api/v1/auth/otp/verificar",
