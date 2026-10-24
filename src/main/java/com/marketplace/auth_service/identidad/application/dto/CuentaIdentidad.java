@@ -4,7 +4,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /** Cuenta básica proyectada para SPEC-18, sin credenciales ni documento. */
-public record CuentaIdentidad(UUID id, String nombreCompleto, String correo, String telefono, String estado) {
+public record CuentaIdentidad(UUID id, String nombres, String apellidos, String nombreCompleto, String correo,
+                              String celular, String estado, boolean correoVerificado, boolean celularVerificado) {
 
     public CuentaIdentidad {
         Objects.requireNonNull(id, "id");

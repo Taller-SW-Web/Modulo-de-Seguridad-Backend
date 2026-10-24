@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.perfil.application.port.in;
 
+import com.marketplace.auth_service.perfil.application.dto.DocumentoClaro;
 import com.marketplace.auth_service.perfil.application.dto.DocumentoProyectado;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,5 +16,5 @@ public interface ConsultaDocumentoExportPort {
     Optional<DocumentoProyectado> proyectar(UUID usuarioId);
 
     /** Documento en claro; solo para un consumidor con el scope que lo autoriza explícitamente. */
-    Optional<String> leerEnClaro(UUID usuarioId);
+    Optional<DocumentoClaro> leerEnClaro(UUID usuarioId);
 }

@@ -17,7 +17,8 @@ public final class CuentasIdentidadAdapter implements CuentasIdentidadPort {
 
     @Override
     public Optional<CuentaIdentidad> leer(UUID usuarioId) {
-        return cuentas.leer(usuarioId).map(s -> new CuentaIdentidad(s.id(), s.nombreCompleto(), s.correo(),
-                s.celular(), s.estadoEfectivo()));
+        return cuentas.leer(usuarioId).map(s -> new CuentaIdentidad(s.id(), s.nombres(), s.apellidos(),
+                s.nombreCompleto(), s.correo(), s.celular(), s.estadoEfectivo(), s.correoVerificado(),
+                s.celularVerificado()));
     }
 }

@@ -3,6 +3,7 @@ package com.marketplace.auth_service.identidad.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.marketplace.auth_service.identidad.application.dto.CuentaIdentidad;
+import com.marketplace.auth_service.identidad.application.dto.DocumentoIdentidad;
 import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaIdentidad;
 import com.marketplace.auth_service.identidad.application.port.out.AuditoriaIdentidadPort;
 import com.marketplace.auth_service.identidad.application.port.out.CuentasIdentidadPort;
@@ -25,24 +26,25 @@ class ConsultaIdentidadServiceTest {
 
     private static final UUID CLIENTE = UUID.randomUUID();
     private static final Clock RELOJ = Clock.fixed(Instant.parse("2026-10-23T20:00:00Z"), ZoneOffset.UTC);
-    private static final CuentaIdentidad CUENTA = new CuentaIdentidad(CLIENTE, "Ana Pérez", "ana@clientes.test",
-            "+51987654321", "ACTIVO");
+    private static final CuentaIdentidad CUENTA = new CuentaIdentidad(CLIENTE, "Ana", "Pérez", "Ana Pérez",
+            "ana@clientes.test", "+51987654321", "ACTIVO", true, true);
 
     private record Auditado(String accion, String clientId, UUID objetivo) {
     }
 
-    private static ConsultaIdentidadService servicio(List<Auditado> registros, Optional<String> enmascarado,
-                                                       Optional<String> enClaro) {
+    private static ConsultaIdentidadService servicio(List<Auditado> registros,
+                                                       Optional<DocumentoIdentidad> enmascarado,
+                                                       Optional<DocumentoIdentidad> enClaro) {
         CuentasIdentidadPort cuentas = id -> id.equals(CLIENTE) ? Optional.of(CUENTA) : Optional.empty();
         RolesIdentidadPort roles = id -> List.of("CLIENTE");
         DocumentoIdentidadPort documentos = new DocumentoIdentidadPort() {
             @Override
-            public Optional<String> proyectar(UUID usuarioId) {
+            public Optional<DocumentoIdentidad> proyectar(UUID usuarioId) {
                 return enmascarado;
             }
 
             @Override
-            public Optional<String> leerEnClaro(UUID usuarioId) {
+            public Optional<DocumentoIdentidad> leerEnClaro(UUID usuarioId) {
                 return enClaro;
             }
         };
@@ -63,13 +65,15 @@ class ConsultaIdentidadServiceTest {
     @Test
     void sinScopeDeDocumentoLoDevuelveEnmascaradoYAuditaSoloLaConsulta() {
         List<Auditado> registros = new ArrayList<>();
-        ConsultaIdentidadService servicio = servicio(registros, Optional.of("*****234"), Optional.empty());
+        ConsultaIdentidadService servicio = servicio(registros,
+                Optional.of(new DocumentoIdentidad("DNI", "*****234")), Optional.empty());
         ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
 
         var resultado = (ResultadoConsultaIdentidad.Encontrado) servicio.obtener(actor, CLIENTE.toString());
 
-        assertThat(resultado.usuario().documento()).isEqualTo("*****234");
-        assertThat(resultado.usuario().documentoEnClaro()).isFalse();
+        assertThat(resultado.usuario().documentoEnmascarado()).isEqualTo("*****234");
+        assertThat(resultado.usuario().documento()).isNull();
+        assertThat(resultado.usuario().tipoDocumento()).isEqualTo("DNI");
         assertThat(resultado.usuario().roles()).containsExactly("CLIENTE");
         assertThat(registros).containsExactly(new Auditado("MODULO_CONSULTO_USUARIO", "despacho", CLIENTE));
     }
@@ -77,21 +81,24 @@ class ConsultaIdentidadServiceTest {
     @Test
     void conScopeDeDocumentoLoDevuelveEnClaroYAuditaAmbosHechos() {
         List<Auditado> registros = new ArrayList<>();
-        ConsultaIdentidadService servicio = servicio(registros, Optional.of("*****234"), Optional.of("12345234"));
+        ConsultaIdentidadService servicio = servicio(registros,
+                Optional.of(new DocumentoIdentidad("DNI", "*****234")),
+                Optional.of(new DocumentoIdentidad("DNI", "12345234")));
         ActorServicio actor = new ActorServicio("ventas", UUID.randomUUID(),
                 Set.of(ScopeServicio.USUARIOS_LEER.codigo(), ScopeServicio.USUARIOS_LEER_DOCUMENTO.codigo()));
 
         var resultado = (ResultadoConsultaIdentidad.Encontrado) servicio.obtener(actor, CLIENTE.toString());
 
         assertThat(resultado.usuario().documento()).isEqualTo("12345234");
-        assertThat(resultado.usuario().documentoEnClaro()).isTrue();
+        assertThat(resultado.usuario().documentoEnmascarado()).isNull();
+        assertThat(resultado.usuario().tipoDocumento()).isEqualTo("DNI");
         assertThat(registros).containsExactly(
                 new Auditado("MODULO_OBTUVO_DOCUMENTO", "ventas", CLIENTE),
                 new Auditado("MODULO_CONSULTO_USUARIO", "ventas", CLIENTE));
     }
 
     @Test
-    void sinDocumentoRegistradoNoHayEnmascaradoNiEnClaro() {
+    void sinDocumentoRegistradoNoHayEnmascaradoNiEnClaroNiTipo() {
         List<Auditado> registros = new ArrayList<>();
         ConsultaIdentidadService servicio = servicio(registros, Optional.empty(), Optional.empty());
         ActorServicio actor = new ActorServicio("chatbot", UUID.randomUUID(), Set.of("usuarios:leer"));
@@ -99,6 +106,8 @@ class ConsultaIdentidadServiceTest {
         var resultado = (ResultadoConsultaIdentidad.Encontrado) servicio.obtener(actor, CLIENTE.toString());
 
         assertThat(resultado.usuario().documento()).isNull();
+        assertThat(resultado.usuario().documentoEnmascarado()).isNull();
+        assertThat(resultado.usuario().tipoDocumento()).isNull();
     }
 
     @Test

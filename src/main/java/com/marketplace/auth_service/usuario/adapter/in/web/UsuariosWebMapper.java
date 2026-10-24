@@ -15,9 +15,9 @@ final class UsuariosWebMapper {
 
     /** SPEC-18: proyección de identidad para un módulo consumidor (servicio). */
     static UsuarioServicioResponse aRespuestaServicio(UsuarioServicioVista v) {
-        return new UsuarioServicioResponse(v.id(), v.nombreCompleto(), v.correo(), v.telefono(), v.estado(),
-                v.roles(), v.documento() == null ? null
-                        : new UsuarioServicioResponse.DocumentoResponse(v.documento(), v.documentoEnClaro()));
+        return new UsuarioServicioResponse(v.id(), v.nombres(), v.apellidos(), v.nombreCompleto(), v.correo(),
+                v.celular(), v.estado(), v.correoVerificado(), v.celularVerificado(), v.roles(), v.tipoDocumento(),
+                v.documento(), v.documentoEnmascarado());
     }
 
     static UsuarioResponse aRespuesta(UsuarioVista u) {

@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.perfil.application.service;
 
+import com.marketplace.auth_service.perfil.application.dto.DocumentoClaro;
 import com.marketplace.auth_service.perfil.application.dto.DocumentoProyectado;
 import com.marketplace.auth_service.perfil.application.port.in.ConsultaDocumentoExportPort;
 import com.marketplace.auth_service.perfil.application.port.out.PerfilesPersistidosPort;
@@ -34,8 +35,8 @@ public final class ConsultaDocumentoExport implements ConsultaDocumentoExportPor
     }
 
     @Override
-    public Optional<String> leerEnClaro(UUID usuarioId) {
-        return documentoDe(usuarioId).map(protector::descifrar);
+    public Optional<DocumentoClaro> leerEnClaro(UUID usuarioId) {
+        return documentoDe(usuarioId).map(d -> new DocumentoClaro(d.tipo().name(), protector.descifrar(d)));
     }
 
     private Optional<DocumentoProtegido> documentoDe(UUID usuarioId) {

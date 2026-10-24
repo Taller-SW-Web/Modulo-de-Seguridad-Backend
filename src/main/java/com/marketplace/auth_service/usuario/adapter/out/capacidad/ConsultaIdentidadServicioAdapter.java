@@ -28,8 +28,9 @@ public final class ConsultaIdentidadServicioAdapter implements ConsultaIdentidad
         return switch (identidad.obtener(actor, idTexto)) {
             case ResultadoConsultaIdentidad.Encontrado encontrado -> {
                 var v = encontrado.usuario();
-                yield new UsuarioServicioVista(v.id(), v.nombreCompleto(), v.correo(), v.telefono(), v.estado(),
-                        v.roles(), v.documento(), v.documentoEnClaro());
+                yield new UsuarioServicioVista(v.id(), v.nombres(), v.apellidos(), v.nombreCompleto(), v.correo(),
+                        v.celular(), v.estado(), v.correoVerificado(), v.celularVerificado(), v.roles(),
+                        v.tipoDocumento(), v.documento(), v.documentoEnmascarado());
             }
             case ResultadoConsultaIdentidad.Invalida invalida ->
                     throw new ConsultaInvalidaException(invalida.campo(), invalida.mensaje());

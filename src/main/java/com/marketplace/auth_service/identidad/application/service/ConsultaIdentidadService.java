@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.identidad.application.service;
 
 import com.marketplace.auth_service.identidad.application.dto.CuentaIdentidad;
+import com.marketplace.auth_service.identidad.application.dto.DocumentoIdentidad;
 import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaIdentidad;
 import com.marketplace.auth_service.identidad.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
@@ -20,10 +21,10 @@ import java.util.UUID;
 /**
  * Consulta de identidad para módulos consumidores (SPEC-18 ESC-18.1, ESC-18.5,
  * ESC-18.6). Orden fijo: leer la cuenta, resolver roles, proyectar el documento
- * según el scope del actor, y auditar el acceso. Sin excepciones en la
- * frontera exportada (igual que {@code ResultadoTokenServicio} de SPEC-17);
- * sin Spring, JPA ni HTTP; solo depende de sus propios puertos y de
- * {@code shared.domain}.
+ * según el scope del actor (en claro o enmascarado, nunca ambos), y auditar el
+ * acceso. Sin excepciones en la frontera exportada (igual que
+ * {@code ResultadoTokenServicio} de SPEC-17); solo depende de sus propios
+ * puertos y de {@code shared.domain}.
  */
 public final class ConsultaIdentidadService implements ConsultaIdentidadPort {
 
@@ -59,33 +60,25 @@ public final class ConsultaIdentidadService implements ConsultaIdentidadPort {
         }
 
         boolean verClaro = actor.tiene(ScopeServicio.USUARIOS_LEER_DOCUMENTO);
-        DocumentoResultado documento = proyectarDocumento(id, verClaro);
-        auditar(actor, id, documento);
+        Optional<DocumentoIdentidad> documento = verClaro ? documentos.leerEnClaro(id) : documentos.proyectar(id);
+        auditar(actor, id, verClaro && documento.isPresent());
 
         CuentaIdentidad c = cuenta.get();
-        return new ResultadoConsultaIdentidad.Encontrado(new UsuarioServicioVista(c.id(), c.nombreCompleto(),
-                c.correo(), c.telefono(), c.estado(), roles.rolesDe(id), documento.valor(), documento.enClaro()));
-    }
+        String tipoDocumento = documento.map(DocumentoIdentidad::tipo).orElse(null);
+        String documentoClaro = verClaro ? documento.map(DocumentoIdentidad::valor).orElse(null) : null;
+        String documentoEnmascarado = verClaro ? null : documento.map(DocumentoIdentidad::valor).orElse(null);
 
-    private DocumentoResultado proyectarDocumento(UUID id, boolean verClaro) {
-        if (verClaro) {
-            return documentos.leerEnClaro(id).map(valor -> new DocumentoResultado(valor, true))
-                    .orElse(DocumentoResultado.AUSENTE);
-        }
-        return documentos.proyectar(id).map(valor -> new DocumentoResultado(valor, false))
-                .orElse(DocumentoResultado.AUSENTE);
+        return new ResultadoConsultaIdentidad.Encontrado(new UsuarioServicioVista(c.id(), c.nombres(),
+                c.apellidos(), c.nombreCompleto(), c.correo(), c.celular(), c.estado(), c.correoVerificado(),
+                c.celularVerificado(), roles.rolesDe(id), tipoDocumento, documentoClaro, documentoEnmascarado));
     }
 
     /** No crítica siempre (RF-18.6); además crítica cuando el documento salió en claro (RF-18.4/ESC-18.5). */
-    private void auditar(ActorServicio actor, UUID objetivo, DocumentoResultado documento) {
+    private void auditar(ActorServicio actor, UUID objetivo, boolean documentoEnClaro) {
         Instant ahora = clock.instant();
-        if (documento.enClaro()) {
+        if (documentoEnClaro) {
             auditoria.moduloObtuvoDocumento(actor.clientId(), objetivo, ahora);
         }
         auditoria.moduloConsultoUsuario(actor.clientId(), objetivo, ahora);
-    }
-
-    private record DocumentoResultado(String valor, boolean enClaro) {
-        static final DocumentoResultado AUSENTE = new DocumentoResultado(null, false);
     }
 }

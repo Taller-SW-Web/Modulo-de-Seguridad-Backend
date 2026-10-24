@@ -5,14 +5,15 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Proyección de usuario para un módulo consumidor (SPEC-18 RF-18.1/RF-18.4),
- * tal como la entrega el puente a identidad. {@code documento} es {@code null}
- * si el cliente no tiene uno registrado; si lo tiene, viene enmascarado salvo
- * que {@code documentoEnClaro} sea verdadero.
+ * Proyección de usuario para un módulo consumidor (esquema {@code Usuario}
+ * del contrato, SPEC-18 RF-18.1/RF-18.4), tal como la entrega el puente a
+ * identidad. {@code documento} (en claro) y {@code documentoEnmascarado} son
+ * mutuamente excluyentes; ambos {@code null} si no hay documento registrado.
  */
 public record UsuarioServicioVista(
-        UUID id, String nombreCompleto, String correo, String telefono, String estado,
-        List<String> roles, String documento, boolean documentoEnClaro) {
+        UUID id, String nombres, String apellidos, String nombreCompleto, String correo, String celular,
+        String estado, boolean correoVerificado, boolean celularVerificado, List<String> roles,
+        String tipoDocumento, String documento, String documentoEnmascarado) {
 
     public UsuarioServicioVista {
         Objects.requireNonNull(id, "id");
