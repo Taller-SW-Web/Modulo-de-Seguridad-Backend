@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -172,6 +173,7 @@ class RegistroClientePostgresTest {
     @Autowired VerificacionCorreoPort verificacion;
     @Autowired AuditoriaEnMemoria auditoria;
     @Autowired CifradoMensajesPort cifrado;
+    @Autowired MensajeriaService mensajeria;
     @Autowired JdbcTemplate jdbc;
 
     @BeforeEach
@@ -259,6 +261,16 @@ class RegistroClientePostgresTest {
         String evento = jdbc.queryForObject("select payload::text from outbox where topico = 'usuario.creado'", String.class);
         assertThat(new ObjectMapper().readTree(evento).path("usuarioId").asText()).isEqualTo(id.toString());
         assertThat(evento).contains("CLIENTE").doesNotContain(token, "maria@ejemplo.com");
+
+        // Mensaje final que el publicador entrega al broker, con el sobre del catálogo.
+        List<Map<String, Object>> publicados = new ArrayList<>();
+        assertThat(mensajeria.procesarEventos((tipo, sobre) -> publicados.add(sobre))).isEqualTo(1);
+        assertThat(publicados).singleElement().satisfies(sobre -> {
+            assertThat(sobre).containsEntry("tipo", "usuario.creado").containsEntry("version", 1)
+                    .containsEntry("usuarioId", id.toString()).containsKeys("eventoId", "fecha");
+            assertThat(sobre.get("datos")).isEqualTo(Map.of("roles", List.of("CLIENTE")));
+            assertThat(new ObjectMapper().writeValueAsString(sobre)).doesNotContain(token, "maria@ejemplo.com");
+        });
 
         assertThat(verificacion.verificar(token, CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
         assertThat(verificacion.verificar("token-inventado", CONTEXTO)).isEqualTo(ResultadoVerificacion.INVALIDA);

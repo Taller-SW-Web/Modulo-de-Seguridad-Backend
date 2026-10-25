@@ -48,8 +48,7 @@ public final class EfectosVerificacionAdapter implements EfectosVerificacionPort
 
     @Override
     public void publicarUsuarioCreado(UUID usuarioId, Instant ahora) {
-        // El catálogo pide "roles" como lista, pero MensajeriaService.sobre() solo la arma para
-        // usuario.roles_cambiados: por ahora viaja como texto separado por comas (pendiente con Christian).
+        // Los roles van separados por comas en la carga; MensajeriaService.sobre() los publica como lista.
         mensajeria.guardarEvento(new EventoUsuario(UUID.randomUUID(), "usuario.creado", Map.of(
                 "usuarioId", usuarioId.toString(), "fecha", ahora.toString(),
                 "roles", String.join(",", autorizacion.resolver(usuarioId).codigosRoles()))));
