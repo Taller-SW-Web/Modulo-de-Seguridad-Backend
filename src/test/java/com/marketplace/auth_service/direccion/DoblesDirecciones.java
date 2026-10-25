@@ -116,12 +116,19 @@ public final class DoblesDirecciones {
 
     public static final class Auditoria implements AuditoriaDireccionesPort {
         public record Llamada(UUID actor, UUID objetivo, ContextoPeticion contexto) {}
+        public record LlamadaServicio(String clientId, UUID objetivo) {}
 
         public final List<Llamada> registradas = new ArrayList<>();
+        public final List<LlamadaServicio> registradasServicio = new ArrayList<>();
 
         @Override
         public void direccionAgregada(ActorUsuario actor, UUID usuarioId, ContextoPeticion contexto) {
             registradas.add(new Llamada(actor.sub(), usuarioId, contexto));
+        }
+
+        @Override
+        public void moduloConsultoDirecciones(String clientId, UUID usuarioId) {
+            registradasServicio.add(new LlamadaServicio(clientId, usuarioId));
         }
     }
 }

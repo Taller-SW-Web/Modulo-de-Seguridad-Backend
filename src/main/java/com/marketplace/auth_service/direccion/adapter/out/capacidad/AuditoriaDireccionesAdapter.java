@@ -37,4 +37,15 @@ public final class AuditoriaDireccionesAdapter implements AuditoriaDireccionesPo
             LOG.warn("No se pudo registrar ATRIBUTOS_ACTUALIZADOS de direcciones: {}", fallo.getClass().getSimpleName());
         }
     }
+
+    @Override
+    public void moduloConsultoDirecciones(String clientId, UUID usuarioId) {
+        try {
+            auditoria.registrarNoCriticaTrasCommit(new RegistroSeguro(UUID.randomUUID(),
+                    "MODULO_CONSULTO_DIRECCIONES", "EXITO", "MODULO", clientId, usuarioId, Instant.now(), null, null,
+                    Map.of("endpoint", "GET /api/v1/usuarios/{id}/direcciones")));
+        } catch (RuntimeException fallo) {
+            LOG.warn("No se pudo registrar MODULO_CONSULTO_DIRECCIONES: {}", fallo.getClass().getSimpleName());
+        }
+    }
 }

@@ -298,14 +298,45 @@ class DireccionesHttpTest {
     }
 
     @Test
-    void unTokenDeServicioResponde403TokenNoAplicable() throws Exception {
+    void unTokenDeServicioSinElScopeDeDireccionesResponde403ScopeInsuficiente() throws Exception {
+        // SPEC-18 FEAT-06-T3: la ruta acepta token de servicio desde esta tarea, pero exige
+        // direcciones:leer; usuarios:leer (el scope por defecto del doble) no alcanza.
         String servicio = TokensDePrueba.firmarRs256(TokensDePrueba.servicioValido(ISSUER).build());
 
         HttpResponse<String> respuesta = listar(titular.toString(), servicio);
 
         assertThat(respuesta.statusCode()).isEqualTo(403);
-        assertThat(problema(respuesta).get("code").asText()).isEqualTo("TOKEN_NO_APLICABLE");
+        assertThat(problema(respuesta).get("code").asText()).isEqualTo("SCOPE_INSUFICIENTE");
         assertThat(PERSISTENCIA.llamadas).isZero();
+    }
+
+    @Test
+    void unTokenDeServicioConDireccionesLeerListaSinAutorizarPorTitularYAudita() throws Exception {
+        crear(titular.toString(), cuerpo("Casa", true), token());
+        AUDITORIA.registradas.clear();
+        String servicio = TokensDePrueba.firmarRs256(TokensDePrueba.servicioValido(ISSUER)
+                .claim("scope", "direcciones:leer").subject("modulo-despacho").build());
+
+        HttpResponse<String> respuesta = listar(titular.toString(), servicio);
+
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        JsonNode cuerpo = json.readTree(respuesta.body());
+        assertThat(cuerpo.get("direcciones")).hasSize(1);
+        assertThat(AUDITORIA.registradasServicio).containsExactly(
+                new DoblesDirecciones.Auditoria.LlamadaServicio("modulo-despacho", titular));
+        assertThat(AUDITORIA.registradas).as("no se mezcla con la auditoría de alta del titular").isEmpty();
+    }
+
+    @Test
+    void unTokenDeServicioSobreCuentaInexistenteResponde404() throws Exception {
+        CUENTAS.existentes.clear();
+        String servicio = TokensDePrueba.firmarRs256(TokensDePrueba.servicioValido(ISSUER)
+                .claim("scope", "direcciones:leer").build());
+
+        HttpResponse<String> respuesta = listar(titular.toString(), servicio);
+
+        assertThat(respuesta.statusCode()).isEqualTo(404);
+        assertThat(AUDITORIA.registradasServicio).isEmpty();
     }
 
     @Test
