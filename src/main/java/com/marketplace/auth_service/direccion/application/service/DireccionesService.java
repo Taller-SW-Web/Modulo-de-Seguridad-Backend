@@ -9,6 +9,7 @@ import com.marketplace.auth_service.direccion.application.port.out.DireccionesPe
 import com.marketplace.auth_service.direccion.application.port.out.EventosDireccionesPort;
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoEncontradaException;
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoPermitidaException;
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.List;
@@ -54,5 +55,14 @@ public class DireccionesService implements DireccionesPort {
         eventos.direccionesActualizadas(usuarioId);
         auditoria.direccionAgregada(actor, usuarioId, contexto);
         return creada;
+    }
+
+    @Override
+    public List<DireccionDatos> listarParaServicio(ActorServicio actor, UUID usuarioId) {
+        Objects.requireNonNull(actor, "actor");
+        if (!cuentas.existe(usuarioId)) throw new DireccionNoEncontradaException();
+        List<DireccionDatos> direcciones = persistencia.listar(usuarioId);
+        auditoria.moduloConsultoDirecciones(actor.clientId(), usuarioId);
+        return direcciones;
     }
 }

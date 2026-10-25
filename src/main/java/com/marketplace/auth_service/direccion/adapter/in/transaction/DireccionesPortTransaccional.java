@@ -2,6 +2,7 @@ package com.marketplace.auth_service.direccion.adapter.in.transaction;
 
 import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort;
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.List;
@@ -24,6 +25,11 @@ public class DireccionesPortTransaccional implements DireccionesPort {
     @Override
     public List<DireccionDatos> listar(ActorUsuario actor, UUID usuarioId) {
         return delegado.listar(actor, usuarioId);
+    }
+
+    @Override
+    public List<DireccionDatos> listarParaServicio(ActorServicio actor, UUID usuarioId) {
+        return delegado.listarParaServicio(actor, usuarioId);
     }
 
     @Override

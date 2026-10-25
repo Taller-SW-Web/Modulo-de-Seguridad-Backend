@@ -4,6 +4,7 @@ import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort.DatosNuevaDireccion;
 import com.marketplace.auth_service.shared.adapter.web.ContextoPeticiones;
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -23,9 +24,11 @@ public class DireccionesController {
     public DireccionesController(DireccionesPort direcciones) { this.direcciones = direcciones; }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, Object> listar(@AuthenticationPrincipal ActorUsuario actor, @PathVariable UUID id) {
-        List<DireccionResponse> resultado = direcciones.listar(actor, id).stream()
-                .map(DireccionesController::respuesta).toList();
+    public Map<String, Object> listar(@AuthenticationPrincipal Object principal, @PathVariable UUID id) {
+        List<DireccionDatos> datos = principal instanceof ActorServicio servicio
+                ? direcciones.listarParaServicio(servicio, id)
+                : direcciones.listar((ActorUsuario) principal, id);
+        List<DireccionResponse> resultado = datos.stream().map(DireccionesController::respuesta).toList();
         return Map.of("direcciones", resultado);
     }
 
