@@ -302,6 +302,27 @@ class MensajeriaYAuditoriaServiceTest {
     }
 
     @Test
+    void usuarioCreadoPublicaLosRolesComoListaDelCatalogo() {
+        var outbox = new Outbox();
+        var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
+        UUID evento = UUID.randomUUID();
+        servicio.guardarEvento(new EventoUsuario(evento, "usuario.creado", Map.of("usuarioId", TITULAR.toString(),
+                "roles", "CLIENTE", "fecha", AHORA.toString())));
+        List<Map<String, Object>> publicados = new ArrayList<>();
+
+        assertThat(servicio.procesarEventos((tipo, sobre) -> publicados.add(sobre))).isEqualTo(1);
+
+        assertThat(publicados.getFirst()).containsEntry("tipo", "usuario.creado").containsEntry("version", 1)
+                .containsEntry("usuarioId", TITULAR.toString());
+        assertThat(datos(publicados.getFirst())).containsExactly(Map.entry("roles", List.of("CLIENTE")));
+    }
+
+    @Test
+    void elCorreoDeVerificacionTieneAsuntoPropio() {
+        assertThat(MensajeriaService.asunto("correo.verificacion_correo")).isEqualTo("Confirma tu correo");
+    }
+
+    @Test
     void brokerSinConfirmarDejaElEventoPendienteParaReintentar() {
         var outbox = new Outbox();
         var servicio = new MensajeriaService(outbox, aes, (d, a, c) -> { }, Clock.fixed(AHORA, ZoneOffset.UTC));
