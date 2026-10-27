@@ -90,3 +90,39 @@ jobs:
             echo '::error::La imagen contiene archivos privados o fuentes.'
             exit 1
           fi
+
+  deploy:
+    name: Backend - deploy a Render
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [destino-pr, build-test, imagen]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      - name: Disparar deploy en Render
+        env:
+          RENDER_DEPLOY_HOOK_ID: ${{ secrets.RENDER_DEPLOY_HOOK_ID }}
+        run: |
+          if [ -z "${RENDER_DEPLOY_HOOK_ID}" ]; then
+            echo "::error::Falta el secreto RENDER_DEPLOY_HOOK_ID para el deploy en Render."
+            exit 1
+          fi
+          echo "Disparando deploy en Render para el SHA ${GITHUB_SHA}..."
+          curl --fail --show-error --silent --location --request POST \
+            --output /dev/null \
+            "https://api.render.com/deploy/${RENDER_DEPLOY_HOOK_ID}"
+
+      - name: Esperar version nueva en Render
+        run: |
+          for intento in $(seq 1 60); do
+            HTTP_CODE=$(curl --silent --output /tmp/g7-health.json --write-out '%{http_code}' \
+              --max-time 10 \
+              https://g7-auth-service.onrender.com/actuator/health || true)
+            if [ "$HTTP_CODE" = "200" ]; then
+              cat /tmp/g7-health.json
+              exit 0
+            fi
+            echo "Esperando health de Render... intento ${intento}/60"
+            sleep 10
+          done
+          echo "::error::Render no respondió en /actuator/health dentro de 600s."
+          exit 1
