@@ -139,8 +139,9 @@ class ClientesServicioPostgresTest {
         assertThat(despacho.codigosScopes()).containsExactly("direcciones:leer", "usuarios:leer", "ventas:pedidos:estado");
         assertThat(despacho.audiencias()).containsExactly("api-seguridad", "api-ventas");
         assertThat(clientes.buscar("modulo-marketplace").orElseThrow().codigosScopes())
-                .doesNotContain("catalogo:leer", "precios:leer")
-                .as("Productos para Marketplace sigue pendiente de G6");
+                .contains("catalogo:leer")
+                .doesNotContain("precios:leer")
+                .as("catalogo:leer aprobado por G6 el 26-oct; precios:leer sigue pendiente");
     }
 
     @Test
