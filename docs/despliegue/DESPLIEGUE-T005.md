@@ -115,6 +115,12 @@ Sin la lista común el servicio arranca, pero no permite fijar contraseñas
    ```
 5. Pasar a G5 solo la URL pública del JWKS y el `issuer` (nunca la clave).
 
+El despliegue de integración desde GitHub Actions usa `RENDER_DEPLOY_HOOK_URL`
+(URL completa y secreta, incluida su autenticación) y `RENDER_API_KEY`. El job
+fija `ref=<GITHUB_SHA>` y verifica id, estado y commit del deploy antes de
+comprobar health. Detalle y límites en
+[CI.md](../../.github/CI.md#despliegue-a-render-feat-09-t1).
+
 El nivel gratuito duerme el servicio tras inactividad: despertarlo unos minutos
 antes de la demo con `/actuator/health`.
 
