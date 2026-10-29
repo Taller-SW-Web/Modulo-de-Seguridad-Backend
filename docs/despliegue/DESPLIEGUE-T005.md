@@ -101,8 +101,9 @@ Sin la lista común el servicio arranca, pero no permite fijar contraseñas
 
 1. New → Web Service → repositorio `Modulo-de-Seguridad-Backend`, rama `main`
    (solo versiones probadas), runtime **Docker**, región la más cercana a Supabase.
-   En H3 el servicio se informó sobre `develop`; antes de fusionar en la rama
-   que sigue Render, revisar si tiene despliegue automático activo.
+   En H3 el servicio se informó sobre `develop`; para el despliegue por CI de
+   FEAT-09-T1, mantener **Auto-Deploy desactivado** en Render y usar el hook
+   como único disparador.
 2. Health check path: `/actuator/health`.
 3. Environment: las variables de la tabla; Secret Files: los tres archivos (Render
    los monta en `/etc/secrets/`).

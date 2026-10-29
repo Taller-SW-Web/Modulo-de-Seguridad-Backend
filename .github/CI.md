@@ -52,7 +52,8 @@ tablas por sí solos; esa parte también requiere revisión y pruebas funcionale
 
 El job `deploy` de `.github/workflows/ci.yml` solo se ejecuta en `push` a
 `develop`, después de que `destino-pr`, `build-test` e `imagen` terminen bien.
-En PR no se despliega.
+En PR no se despliega. En Render, mantener **Auto-Deploy desactivado** para que
+el hook sea el único disparador y no se dupliquen despliegues.
 
 Secretos de GitHub Actions:
 
