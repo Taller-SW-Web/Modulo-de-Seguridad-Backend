@@ -48,6 +48,35 @@ Las reglas permiten paquetes aún sin clases en el scaffold y se aplican cuando
 se implementan. Comprueban dependencias de clases, no el SQL ni la propiedad de
 tablas por sí solos; esa parte también requiere revisión y pruebas funcionales.
 
+## Despliegue a Render (FEAT-09-T1)
+
+El job `deploy` de `.github/workflows/ci.yml` solo se ejecuta en `push` a
+`develop`, después de que `destino-pr`, `build-test` e `imagen` terminen bien.
+En PR no se despliega. En Render, mantener **Auto-Deploy desactivado** para que
+el hook sea el único disparador y no se dupliquen despliegues.
+
+Secretos de GitHub Actions:
+
+| Secreto | Contenido |
+|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | URL completa del deploy hook del servicio, incluida su autenticación (`key=...`). Es secreta; no se imprime ni se registra. |
+| `RENDER_API_KEY` | API key/token de Render con permiso para leer los deploys del servicio. Se usa para verificar id, estado y commit; no se imprime. |
+
+El service ID se obtiene del path del hook (`/deploy/srv-...`). Si el formato
+cambia, definir `RENDER_SERVICE_ID`.
+
+El job fija el commit con `ref=<GITHUB_SHA>`, conserva el `deploy.id` de la
+respuesta, espera estado `live` con `commit.id` igual al SHA esperado y solo
+entonces comprueba `/actuator/health` = `UP`. Un health 200 de la versión
+anterior no aprueba el job. Un `202` sin id de deploy se trata como fallo para
+no aprobar sin verificación. Límites: 30 s por petición HTTP, 15 min para el
+deploy, 2 min para health, sondeo cada 10 s y timeout de job de 20 min.
+
+Pruebas simuladas de la lógica:
+`python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v`
+(se ejecutan en `build-test`). La ejecución real contra Render requiere los
+secretos configurados y un push a `develop`.
+
 ## Contratos internos exportados
 
 El check existente `Backend - build y pruebas` ejecuta también las reglas de
