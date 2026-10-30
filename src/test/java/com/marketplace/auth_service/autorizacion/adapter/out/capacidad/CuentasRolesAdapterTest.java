@@ -46,6 +46,8 @@ class CuentasRolesAdapterTest {
         }
 
         @Override
+        public java.util.Map<UUID, CuentaSnapshot> leerLote(Set<UUID> ids) { throw new UnsupportedOperationException(); }
+        @Override
         public long contarActivos(Set<UUID> ids) {
             conteos.add(ids);
             return ids.stream().filter(id -> cuentas.containsKey(id)

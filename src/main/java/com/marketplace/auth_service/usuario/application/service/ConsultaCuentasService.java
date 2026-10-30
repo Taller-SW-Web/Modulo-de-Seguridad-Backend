@@ -7,6 +7,8 @@ import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.usuario.application.port.out.RolesConsultaPort;
 import com.marketplace.auth_service.usuario.application.port.out.UsuarioRepositoryPort;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +30,10 @@ public final class ConsultaCuentasService implements CuentasPort {
     public CuentaSnapshot bloquear(UUID id) { return usuarios.lockById(id); }
     @Override
     public long contarActivos(Set<UUID> ids) { return usuarios.countActiveByIds(ids); }
+    @Override
+    public Map<UUID, CuentaSnapshot> leerLote(Set<UUID> ids) {
+        return usuarios.findAllByIds(Objects.requireNonNull(ids, "usuarioIds"));
+    }
     @Override
     public PaginaResultado<CuentaSnapshot> consultar(FiltroCuenta filtro, Paginacion paginacion) {
         Set<UUID> ids = filtro != null && filtro.rol() != null ? roles.usuariosConRol(filtro.rol()) : null;
