@@ -48,7 +48,7 @@ Las reglas permiten paquetes aún sin clases en el scaffold y se aplican cuando
 se implementan. Comprueban dependencias de clases, no el SQL ni la propiedad de
 tablas por sí solos; esa parte también requiere revisión y pruebas funcionales.
 
-## Despliegue a Render (FEAT-09-T1)
+## Despliegue a Render y smoke test (FEAT-09-T1/T2)
 
 El job `deploy` de `.github/workflows/ci.yml` solo se ejecuta en `push` a
 `develop`, después de que `destino-pr`, `build-test` e `imagen` terminen bien.
@@ -77,6 +77,32 @@ Pruebas simuladas de la lógica:
 `python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v`
 (se ejecutan en `build-test`). La ejecución real contra Render requiere los
 secretos configurados y un push a `develop`.
+
+### Smoke test (FEAT-09-T2)
+
+Después del deploy, el job ejecuta `.github/scripts/smoke_test.py` contra el
+servicio desplegado. El smoke comprueba, en este orden:
+
+1. `/actuator/health` responde `UP`.
+2. `/api/v1/auth/.well-known/jwks.json` responde 200 con al menos una clave
+   RSA/RS256 de firma, con `kid`, `n` y `e`, y sin campos privados (`d`, `p`,
+   `q`, `dp`, `dq`, `qi`, `oth`).
+3. `POST /api/v1/auth/login` con la cuenta de fixtures devuelve 200, tokens,
+   `tokenType=Bearer`, `expiresIn` positivo y el mismo correo de la cuenta.
+
+Secretos de GitHub Actions para el smoke:
+
+| Secreto | Contenido |
+|---|---|
+| `SMOKE_LOGIN_EMAIL` | Correo de una cuenta fixture `ACTIVO`, con correo verificado y sin MFA. La cuenta A (`cliente.a@fixtures.g7.test`) es la recomendada. |
+| `SMOKE_LOGIN_PASSWORD` | Contraseña de esa cuenta. No se imprime ni se registra. |
+
+El smoke **no reintenta un login rechazado** para no consumir intentos de la
+cuenta. Si falta un secreto, el health falla, el JWKS es inválido o el login es
+rechazado, el job queda en rojo. No se aprueba el deploy solo porque una versión
+anterior siga respondiendo 200: el job de T1 ya verificó que el commit `live` de
+Render coincide con `GITHUB_SHA`. El procedimiento manual está en
+[`docs/runbooks/smoke-test.md`](../docs/runbooks/smoke-test.md).
 
 ## Contratos internos exportados
 
