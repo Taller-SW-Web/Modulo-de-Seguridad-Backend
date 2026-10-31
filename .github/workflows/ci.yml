@@ -96,7 +96,7 @@ jobs:
   deploy:
     name: Backend - deploy a Render
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     needs: [destino-pr, build-test, imagen]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     steps:
@@ -110,7 +110,7 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_HEALTH_URL: https://g7-auth-service.onrender.com/actuator/health
           RENDER_REQUEST_TIMEOUT_SECONDS: 30
-          RENDER_DEPLOY_TIMEOUT_SECONDS: 900
+          RENDER_DEPLOY_TIMEOUT_SECONDS: 1800
           RENDER_HEALTH_TIMEOUT_SECONDS: 120
           RENDER_POLL_INTERVAL_SECONDS: 10
         run: python3 .github/scripts/render_deploy.py
