@@ -114,3 +114,12 @@ jobs:
           RENDER_HEALTH_TIMEOUT_SECONDS: 120
           RENDER_POLL_INTERVAL_SECONDS: 10
         run: python3 .github/scripts/render_deploy.py
+      - name: Smoke test del entorno desplegado (health, JWKS y login)
+        env:
+          SMOKE_BASE_URL: https://g7-auth-service.onrender.com
+          SMOKE_LOGIN_EMAIL: ${{ secrets.SMOKE_LOGIN_EMAIL }}
+          SMOKE_LOGIN_PASSWORD: ${{ secrets.SMOKE_LOGIN_PASSWORD }}
+          SMOKE_REQUEST_TIMEOUT_SECONDS: 30
+          SMOKE_HEALTH_TIMEOUT_SECONDS: 120
+          SMOKE_POLL_INTERVAL_SECONDS: 10
+        run: python3 .github/scripts/smoke_test.py
