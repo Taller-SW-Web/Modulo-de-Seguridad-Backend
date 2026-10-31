@@ -69,8 +69,9 @@ El job fija el commit con `ref=<GITHUB_SHA>`, conserva el `deploy.id` de la
 respuesta, espera estado `live` con `commit.id` igual al SHA esperado y solo
 entonces comprueba `/actuator/health` = `UP`. Un health 200 de la versión
 anterior no aprueba el job. Un `202` sin id de deploy se trata como fallo para
-no aprobar sin verificación. Límites: 30 s por petición HTTP, 15 min para el
-deploy, 2 min para health, sondeo cada 10 s y timeout de job de 20 min.
+no aprobar sin verificación. Límites: 30 s por petición HTTP, 30 min (1800 s)
+para el deploy, 2 min para health, sondeo cada 10 s y timeout de job de 40 min.
+El margen cubre builds en frío del plan gratuito sin dejar el job sin límite.
 
 Pruebas simuladas de la lógica:
 `python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v`
