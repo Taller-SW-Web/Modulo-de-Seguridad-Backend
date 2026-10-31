@@ -2,6 +2,7 @@ package com.marketplace.auth_service.credencial;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.CuentaRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
 import com.marketplace.auth_service.credencial.application.port.out.AuditoriaRecuperacionPort;
@@ -30,11 +31,12 @@ class SolicitudRecuperacionServiceTest {
     void cuentaExistenteEmiteCorreoAuditaSinExponerCorreoYNormalizaLaEntrada() {
         var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "persona@example.test", true)), Duration.ZERO);
 
-        var resultado = fixture.service.solicitar("  Persona@Example.Test ", CONTEXTO);
+        var resultado = fixture.service.solicitar("  Persona@Example.Test ", CanalOrigenRecuperacion.WEB, CONTEXTO);
 
         assertThat(resultado).isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
         assertThat(fixture.cuota.correo).isEqualTo("persona@example.test");
         assertThat(fixture.correos).containsExactly(USUARIO);
+        assertThat(fixture.canales).containsExactly(CanalOrigenRecuperacion.WEB);
         assertThat(fixture.auditoria.objetivos).containsExactly(USUARIO);
         assertThat(fixture.auditoria.aceptadas).containsExactly(true);
     }
@@ -43,18 +45,19 @@ class SolicitudRecuperacionServiceTest {
     void cuentaConBloqueoEfectivoTambienPuedeSolicitarRecuperacion() {
         var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "bloqueada@example.test", true)), Duration.ZERO);
 
-        assertThat(fixture.service.solicitar("bloqueada@example.test", CONTEXTO))
+        assertThat(fixture.service.solicitar("bloqueada@example.test", CanalOrigenRecuperacion.MARKETPLACE, CONTEXTO))
                 .isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
         assertThat(fixture.correos).containsExactly(USUARIO);
+        assertThat(fixture.canales).containsExactly(CanalOrigenRecuperacion.MARKETPLACE);
     }
 
     @Test
     void falloDeEnvioSeRespondeComoAceptadaYConservaLaReserva() {
         var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "persona@example.test", true)),
-                Duration.ZERO, (cuenta, ahora) -> { throw new com.marketplace.auth_service.credencial.domain.exception
+                Duration.ZERO, (cuenta, canal, ahora) -> { throw new com.marketplace.auth_service.credencial.domain.exception
                         .SolicitudRecuperacionNoDisponibleException(); });
 
-        assertThat(fixture.service.solicitar("persona@example.test", CONTEXTO))
+        assertThat(fixture.service.solicitar("persona@example.test", CanalOrigenRecuperacion.WEB, CONTEXTO))
                 .isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
         assertThat(fixture.auditoria.aceptadas).containsExactly(true);
     }
@@ -63,7 +66,7 @@ class SolicitudRecuperacionServiceTest {
     void correoSinCuentaRecibeElMismoResultadoAceptadoYNoGeneraTokenNiCorreo() {
         var fixture = new Fixture(Optional.empty(), Duration.ZERO);
 
-        var resultado = fixture.service.solicitar("nadie@example.test", CONTEXTO);
+        var resultado = fixture.service.solicitar("nadie@example.test", CanalOrigenRecuperacion.WEB, CONTEXTO);
 
         assertThat(resultado).isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
         assertThat(fixture.correos).isEmpty();
@@ -75,7 +78,7 @@ class SolicitudRecuperacionServiceTest {
     void cuentaNoElegibleNoRecibeCorreoPeroLaRespuestaSigueSiendoAceptada() {
         var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "pendiente@example.test", false)), Duration.ZERO);
 
-        assertThat(fixture.service.solicitar("pendiente@example.test", CONTEXTO))
+        assertThat(fixture.service.solicitar("pendiente@example.test", CanalOrigenRecuperacion.WEB, CONTEXTO))
                 .isInstanceOf(ResultadoSolicitudRecuperacion.Aceptada.class);
         assertThat(fixture.correos).isEmpty();
     }
@@ -85,7 +88,7 @@ class SolicitudRecuperacionServiceTest {
         var fixture = new Fixture(Optional.of(new CuentaRecuperacion(USUARIO, "persona@example.test", true)),
                 Duration.ofSeconds(37));
 
-        var resultado = fixture.service.solicitar("persona@example.test", CONTEXTO);
+        var resultado = fixture.service.solicitar("persona@example.test", CanalOrigenRecuperacion.WEB, CONTEXTO);
 
         assertThat(resultado).isEqualTo(new ResultadoSolicitudRecuperacion.Limite(37));
         assertThat(fixture.consultasCuenta.get()).isZero();
@@ -96,6 +99,7 @@ class SolicitudRecuperacionServiceTest {
     private static final class Fixture {
         final AtomicInteger consultasCuenta = new AtomicInteger();
         final ArrayList<UUID> correos = new ArrayList<>();
+        final ArrayList<CanalOrigenRecuperacion> canales = new ArrayList<>();
         final Cuota cuota;
         final Registro auditoria = new Registro();
         final SolicitudRecuperacionService service;
@@ -111,7 +115,7 @@ class SolicitudRecuperacionServiceTest {
                 return cuenta;
             };
             CorreoRecuperacionPort entrega = entregaForzado == null
-                    ? (c, instante) -> correos.add(c.usuarioId()) : entregaForzado;
+                    ? (c, canal, instante) -> { correos.add(c.usuarioId()); canales.add(canal); } : entregaForzado;
             service = new SolicitudRecuperacionService(cuentas, cuota, entrega, auditoria,
                     Clock.fixed(AHORA, ZoneOffset.UTC));
         }

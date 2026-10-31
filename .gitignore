@@ -43,3 +43,7 @@ out/
 *.pem
 *.key
 *.crt
+
+### Python de los scripts de CI ###
+__pycache__/
+*.pyc

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.configuration.IdentidadConfig;
 import com.marketplace.auth_service.configuration.SeguridadConfig;
+import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoRestablecimiento;
 import com.marketplace.auth_service.credencial.application.port.in.RestablecerContrasenaPort;
@@ -51,7 +52,10 @@ class SolicitarRecuperacionHttpTest {
     static final class ResultadoPrueba implements SolicitarRecuperacionPort, RestablecerContrasenaPort {
         final AtomicReference<ResultadoSolicitudRecuperacion> resultado = new AtomicReference<>(
                 new ResultadoSolicitudRecuperacion.Aceptada());
-        @Override public ResultadoSolicitudRecuperacion solicitar(String correo, ContextoPeticion contexto) {
+        final AtomicReference<CanalOrigenRecuperacion> canal = new AtomicReference<>();
+        @Override public ResultadoSolicitudRecuperacion solicitar(String correo, CanalOrigenRecuperacion canalOrigen,
+                                                                    ContextoPeticion contexto) {
+            canal.set(canalOrigen);
             return resultado.get();
         }
         @Override public ResultadoRestablecimiento restablecer(
@@ -81,8 +85,21 @@ class SolicitarRecuperacionHttpTest {
             assertThat(respuesta.body()).isEmpty();
             assertThat(transcurrido).isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toNanos(290));
         }
+        assertThat(prueba.canal.get()).isEqualTo(CanalOrigenRecuperacion.WEB);
         assertThat(solicitar("correo-invalido", null).statusCode()).isEqualTo(400);
         assertThat(solicitar("a".repeat(255) + "@example.test", null).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void aceptaSoloCanalesPublicadosYPropagaMarketplaceAlCasoDeUso() throws Exception {
+        prueba.resultado.set(new ResultadoSolicitudRecuperacion.Aceptada());
+        prueba.canal.set(null);
+        HttpResponse<String> respuesta = solicitar("persona@example.test", "MARKETPLACE", null);
+
+        assertThat(respuesta.statusCode()).isEqualTo(202);
+        assertThat(prueba.canal.get()).isEqualTo(CanalOrigenRecuperacion.MARKETPLACE);
+        assertThat(solicitar("persona@example.test", "https://otro-sitio.example", null).statusCode()).isEqualTo(400);
+        assertThat(prueba.canal.get()).isEqualTo(CanalOrigenRecuperacion.MARKETPLACE);
     }
 
     @Test
@@ -108,9 +125,15 @@ class SolicitarRecuperacionHttpTest {
     }
 
     private HttpResponse<String> solicitar(String correo, String bearer) throws Exception {
+        return solicitar(correo, null, bearer);
+    }
+
+    private HttpResponse<String> solicitar(String correo, String canalOrigen, String bearer) throws Exception {
+        String cuerpo = "{\"correo\":\"" + correo + "\""
+                + (canalOrigen == null ? "" : ",\"canalOrigen\":\"" + canalOrigen + "\"") + "}";
         var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/v1/password/recuperar"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"correo\":\"" + correo + "\"}"));
+                .POST(HttpRequest.BodyPublishers.ofString(cuerpo));
         if (bearer != null) builder.header("Authorization", bearer);
         return cliente.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
