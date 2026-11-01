@@ -4,9 +4,11 @@ import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoLoteServicio;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
 import com.marketplace.auth_service.usuario.application.port.in.ConsultaUsuariosPort;
+import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -38,5 +40,12 @@ public class ConsultaUsuariosTransaccional implements ConsultaUsuariosPort {
     @Transactional
     public UsuarioServicioVista obtenerParaServicio(ActorServicio actor, String idTexto) {
         return casoDeUso.obtenerParaServicio(actor, idTexto);
+    }
+
+    /** No es de solo lectura: la auditoría crítica (RF-18.4) escribe dentro de esta transacción. */
+    @Override
+    @Transactional
+    public ResultadoLoteServicio obtenerLoteParaServicio(ActorServicio actor, List<String> idsTexto) {
+        return casoDeUso.obtenerLoteParaServicio(actor, idsTexto);
     }
 }

@@ -3,6 +3,7 @@ package com.marketplace.auth_service.usuario.adapter.in.web;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import com.marketplace.auth_service.usuario.domain.exception.ConsultaInvalidaException;
 import com.marketplace.auth_service.usuario.domain.exception.CuentaNoEncontradaException;
+import com.marketplace.auth_service.usuario.domain.exception.LoteDemasiadoGrandeException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.core.Ordered;
@@ -33,5 +34,11 @@ class UsuariosErroresAdvice {
     @ExceptionHandler(CuentaNoEncontradaException.class)
     ResponseEntity<ProblemDetail> noEncontrada(CuentaNoEncontradaException e) {
         return Problemas.respuesta(HttpStatus.NOT_FOUND, "NO_ENCONTRADO", "Usuario no encontrado", null);
+    }
+
+    @ExceptionHandler(LoteDemasiadoGrandeException.class)
+    ResponseEntity<ProblemDetail> loteDemasiadoGrande(LoteDemasiadoGrandeException e) {
+        return Problemas.respuesta(HttpStatus.BAD_REQUEST, "LOTE_DEMASIADO_GRANDE",
+                "El lote supera el máximo permitido", e.getMessage());
     }
 }

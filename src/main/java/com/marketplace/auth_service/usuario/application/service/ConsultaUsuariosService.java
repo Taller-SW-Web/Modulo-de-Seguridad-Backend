@@ -8,6 +8,7 @@ import com.marketplace.auth_service.usuario.application.dto.CuentaSnapshot;
 import com.marketplace.auth_service.usuario.application.dto.FiltroCuenta;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
 import com.marketplace.auth_service.usuario.application.dto.Paginacion;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoLoteServicio;
 import com.marketplace.auth_service.usuario.application.dto.RolesDeCuenta;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
@@ -49,8 +50,16 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
 
     public ConsultaUsuariosService(CuentasPort cuentas, AutorizacionUsuariosPort autorizacion,
                                    BloqueosConsultaPort bloqueos) {
-        this(cuentas, autorizacion, bloqueos, (actor, idTexto) -> {
-            throw new UnsupportedOperationException("ConsultaIdentidadServicioPort no configurado");
+        this(cuentas, autorizacion, bloqueos, new ConsultaIdentidadServicioPort() {
+            @Override
+            public UsuarioServicioVista obtener(ActorServicio actor, String idTexto) {
+                throw new UnsupportedOperationException("ConsultaIdentidadServicioPort no configurado");
+            }
+
+            @Override
+            public ResultadoLoteServicio obtenerLote(ActorServicio actor, List<String> idsTexto) {
+                throw new UnsupportedOperationException("ConsultaIdentidadServicioPort no configurado");
+            }
         });
     }
 
@@ -98,6 +107,12 @@ public final class ConsultaUsuariosService implements ConsultaUsuariosPort {
     public UsuarioServicioVista obtenerParaServicio(ActorServicio actor, String idTexto) {
         Objects.requireNonNull(actor, "actor");
         return identidadServicio.obtener(actor, idTexto);
+    }
+
+    @Override
+    public ResultadoLoteServicio obtenerLoteParaServicio(ActorServicio actor, List<String> idsTexto) {
+        Objects.requireNonNull(actor, "actor");
+        return identidadServicio.obtenerLote(actor, idsTexto);
     }
 
     /** Solo se consulta protección por las cuentas cuyo estado efectivo es BLOQUEADO. */

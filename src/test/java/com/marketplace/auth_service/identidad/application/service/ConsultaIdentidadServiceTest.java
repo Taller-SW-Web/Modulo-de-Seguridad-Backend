@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.marketplace.auth_service.identidad.application.dto.CuentaIdentidad;
 import com.marketplace.auth_service.identidad.application.dto.DocumentoIdentidad;
 import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaIdentidad;
+import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaLoteIdentidad;
 import com.marketplace.auth_service.identidad.application.port.out.AuditoriaIdentidadPort;
 import com.marketplace.auth_service.identidad.application.port.out.CuentasIdentidadPort;
 import com.marketplace.auth_service.identidad.application.port.out.DocumentoIdentidadPort;
@@ -19,6 +20,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 /** Núcleo de SPEC-18 ESC-18.1/18.5/18.6: documento enmascarado o en claro, y su auditoría. */
@@ -129,5 +132,68 @@ class ConsultaIdentidadServiceTest {
         var resultado = servicio.obtener(actor, "no-es-uuid");
 
         assertThat(resultado).isEqualTo(new ResultadoConsultaIdentidad.Invalida("id", "No es un identificador válido."));
+    }
+
+    // ── obtenerLote (SPEC-18 RF-18.2/ESC-18.2/ESC-18.3, FEAT-06-T2) ──────────
+
+    @Test
+    void loteDevuelveEncontradosYNoHalladosPorSeparadoYAuditaSoloLosEncontrados() {
+        List<Auditado> registros = new ArrayList<>();
+        ConsultaIdentidadService servicio = servicio(registros, Optional.empty(), Optional.empty());
+        ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
+        UUID inexistente = UUID.randomUUID();
+
+        var resultado = (ResultadoConsultaLoteIdentidad.Resultado)
+                servicio.obtenerLote(actor, List.of(CLIENTE.toString(), inexistente.toString()));
+
+        assertThat(resultado.usuarios()).hasSize(1);
+        assertThat(resultado.usuarios().get(0).id()).isEqualTo(CLIENTE);
+        assertThat(resultado.noEncontrados()).containsExactly(inexistente);
+        assertThat(registros).containsExactly(new Auditado("MODULO_CONSULTO_USUARIO", "despacho", CLIENTE));
+    }
+
+    @Test
+    void loteColapsaDuplicadosAUnaSolaAparicion() {
+        ConsultaIdentidadService servicio = servicio(new ArrayList<>(), Optional.empty(), Optional.empty());
+        ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
+
+        var resultado = (ResultadoConsultaLoteIdentidad.Resultado)
+                servicio.obtenerLote(actor, List.of(CLIENTE.toString(), CLIENTE.toString()));
+
+        assertThat(resultado.usuarios()).hasSize(1);
+    }
+
+    @Test
+    void loteConMasDeCienIdentificadoresEsDemasiadoGrandeSinLeerNada() {
+        List<Auditado> registros = new ArrayList<>();
+        ConsultaIdentidadService servicio = servicio(registros, Optional.empty(), Optional.empty());
+        ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
+        List<String> ids = IntStream.range(0, 101).mapToObj(i -> UUID.randomUUID().toString()).collect(Collectors.toList());
+
+        var resultado = servicio.obtenerLote(actor, ids);
+
+        assertThat(resultado).isEqualTo(new ResultadoConsultaLoteIdentidad.LoteDemasiadoGrande(101, 100));
+        assertThat(registros).isEmpty();
+    }
+
+    @Test
+    void loteConUnIdentificadorMalformadoEsInvalidaConSuIndice() {
+        ConsultaIdentidadService servicio = servicio(new ArrayList<>(), Optional.empty(), Optional.empty());
+        ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
+
+        var resultado = servicio.obtenerLote(actor, List.of(CLIENTE.toString(), "no-es-uuid"));
+
+        assertThat(resultado).isEqualTo(new ResultadoConsultaLoteIdentidad.Invalida("ids[1]", "No es un identificador válido."));
+    }
+
+    @Test
+    void loteVacioEsInvalida() {
+        ConsultaIdentidadService servicio = servicio(new ArrayList<>(), Optional.empty(), Optional.empty());
+        ActorServicio actor = new ActorServicio("despacho", UUID.randomUUID(), Set.of("usuarios:leer"));
+
+        var resultado = servicio.obtenerLote(actor, List.of());
+
+        assertThat(resultado)
+                .isEqualTo(new ResultadoConsultaLoteIdentidad.Invalida("ids", "Debe incluir al menos un identificador."));
     }
 }

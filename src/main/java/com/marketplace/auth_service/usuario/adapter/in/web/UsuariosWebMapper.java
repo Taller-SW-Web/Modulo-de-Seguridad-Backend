@@ -1,9 +1,11 @@
 package com.marketplace.auth_service.usuario.adapter.in.web;
 
+import com.marketplace.auth_service.usuario.adapter.in.web.dto.LoteUsuariosResponse;
 import com.marketplace.auth_service.usuario.adapter.in.web.dto.PaginaUsuariosResponse;
 import com.marketplace.auth_service.usuario.adapter.in.web.dto.UsuarioResponse;
 import com.marketplace.auth_service.usuario.adapter.in.web.dto.UsuarioServicioResponse;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoLoteServicio;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
 
@@ -25,6 +27,12 @@ final class UsuariosWebMapper {
                 u.estado(), u.correoVerificado(), u.celularVerificado(), u.mfaHabilitado(), u.roles(),
                 u.bloqueo() == null ? null
                         : new UsuarioResponse.BloqueoResponse(u.bloqueo().tipo(), u.bloqueo().hasta(), u.bloqueo().motivo()));
+    }
+
+    /** SPEC-18 ESC-18.2: esquema {@code LoteUsuarios}, encontrados y no hallados por separado. */
+    static LoteUsuariosResponse aRespuestaLote(ResultadoLoteServicio resultado) {
+        return new LoteUsuariosResponse(resultado.usuarios().stream().map(UsuariosWebMapper::aRespuestaServicio).toList(),
+                resultado.noEncontrados());
     }
 
     static PaginaUsuariosResponse aRespuesta(PaginaResultado<UsuarioVista> pagina) {

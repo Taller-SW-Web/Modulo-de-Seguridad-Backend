@@ -4,8 +4,10 @@ import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
 import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoLoteServicio;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
+import java.util.List;
 
 /**
  * Consulta administrativa de cuentas (SPEC-03 RF-03.2): listado con filtros
@@ -31,4 +33,11 @@ public interface ConsultaUsuariosPort {
      * (SPEC-18 FEAT-06-T1): la regla de la ruta ya exigió {@code usuarios:leer}.
      */
     UsuarioServicioVista obtenerParaServicio(ActorServicio actor, String idTexto);
+
+    /**
+     * {@code POST /usuarios/lote} (SPEC-18 RF-18.2, FEAT-06-T2): hasta 100 identificadores,
+     * encontrados y no hallados por separado (ESC-18.2); la regla de la ruta ya exigió
+     * {@code usuarios:leer}.
+     */
+    ResultadoLoteServicio obtenerLoteParaServicio(ActorServicio actor, List<String> idsTexto);
 }
