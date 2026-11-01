@@ -52,6 +52,19 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort {
         return ids.isEmpty() ? 0 : estados.countActiveByIds(ids);
     }
     @Override
+    public Map<UUID, CuentaSnapshot> findAllByIds(Set<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        var encontradas = usuarios.findAllById(ids);
+        if (encontradas.isEmpty()) return Map.of();
+        Map<UUID, UsuarioEstadoEfectivoJpaEntity> porId = estadosPorId(encontradas.stream().map(UsuarioJpaEntity::getId).toList());
+        return encontradas.stream().collect(Collectors.toUnmodifiableMap(UsuarioJpaEntity::getId,
+                u -> UsuarioPersistenceMapper.toSnapshot(u, porId.get(u.getId()))));
+    }
+    private Map<UUID, UsuarioEstadoEfectivoJpaEntity> estadosPorId(List<UUID> ids) {
+        return ids.isEmpty() ? Map.of() : estados.findAllById(ids).stream()
+                .collect(Collectors.toMap(UsuarioEstadoEfectivoJpaEntity::getId, Function.identity()));
+    }
+    @Override
     public PaginaResultado<CuentaSnapshot> findByFiltro(FiltroCuenta filtro, Paginacion paginacion, Set<UUID> idsPorRol) {
         if (idsPorRol != null && idsPorRol.isEmpty())
             return new PaginaResultado<>(List.of(), paginacion.pagina(), paginacion.tamano(), 0);
@@ -77,8 +90,7 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort {
         var pagina = usuarios.findAll(condiciones, PageRequest.of(paginacion.pagina() - 1, paginacion.tamano(),
                 Sort.by(Sort.Order.desc("creadoEn"), Sort.Order.asc("id"))));
         var ids = pagina.getContent().stream().map(UsuarioJpaEntity::getId).toList();
-        Map<UUID, UsuarioEstadoEfectivoJpaEntity> porId = ids.isEmpty() ? Map.of() :
-                estados.findAllById(ids).stream().collect(Collectors.toMap(UsuarioEstadoEfectivoJpaEntity::getId, Function.identity()));
+        Map<UUID, UsuarioEstadoEfectivoJpaEntity> porId = estadosPorId(ids);
         var elementos = pagina.getContent().stream().map(u -> UsuarioPersistenceMapper.toSnapshot(u, porId.get(u.getId()))).toList();
         return new PaginaResultado<>(elementos, paginacion.pagina(), paginacion.tamano(), pagina.getTotalElements());
     }
