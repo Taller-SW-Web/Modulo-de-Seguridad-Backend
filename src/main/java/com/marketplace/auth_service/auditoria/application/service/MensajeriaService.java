@@ -119,7 +119,8 @@ public final class MensajeriaService implements MensajeriaPort {
                 datos.put("hasta", carga.get("hasta"));
             }
             case "usuario.desbloqueado" -> datos.put("via", carga.getOrDefault("via", "ENLACE"));
-            case "usuario.roles_cambiados" -> {
+            // usuario.creado publica los roles de la cuenta activada (catálogo: "roles": ["CLIENTE"]).
+            case "usuario.roles_cambiados", "usuario.creado" -> {
                 String roles = carga.getOrDefault("roles", "");
                 datos.put("roles", roles.isBlank() ? java.util.List.of() : java.util.List.of(roles.split(",")));
             }
@@ -142,6 +143,7 @@ public final class MensajeriaService implements MensajeriaPort {
             case "correo.cuenta_bloqueada" -> "Bloqueamos tu cuenta por seguridad";
             case "correo.cuenta_desbloqueada" -> "Tu cuenta fue desbloqueada";
             case "correo.otp" -> "Tu código de verificación";
+            case "correo.verificacion_correo" -> "Confirma tu correo";
             default -> "Aviso de seguridad de tu cuenta";
         };
     }

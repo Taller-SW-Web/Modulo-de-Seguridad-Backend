@@ -45,6 +45,7 @@ class PuentesPerfilTest {
         public Optional<CuentaSnapshot> leer(UUID id) { return cuenta; }
         public CuentaSnapshot bloquear(UUID id) { bloqueos.add(id); return cuenta.orElseThrow(); }
         public long contarActivos(Set<UUID> ids) { throw new UnsupportedOperationException(); }
+        public java.util.Map<UUID, CuentaSnapshot> leerLote(Set<UUID> ids) { throw new UnsupportedOperationException(); }
         public PaginaResultado<CuentaSnapshot> consultar(FiltroCuenta f, Paginacion p) { throw new UnsupportedOperationException(); }
     }
 

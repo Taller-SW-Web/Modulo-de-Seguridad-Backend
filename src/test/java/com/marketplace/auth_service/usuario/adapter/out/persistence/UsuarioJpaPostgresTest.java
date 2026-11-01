@@ -36,7 +36,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static com.marketplace.auth_service.usuario.application.dto.CampoBasico.*;
 
-@DataJpaTest(properties={"spring.flyway.enabled=false","spring.jpa.hibernate.ddl-auto=validate"}, showSql=false)
+@DataJpaTest(properties={"spring.flyway.enabled=false","spring.jpa.hibernate.ddl-auto=validate",
+        "spring.jpa.properties.hibernate.generate_statistics=true"}, showSql=false)
 @AutoConfigureTestDatabase(replace=AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes=AuthServiceApplication.class)
 @Import({UsuarioConfiguration.class, UsuarioJpaPostgresTest.Propia.class})
@@ -64,6 +65,7 @@ class UsuarioJpaPostgresTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager tm;
     @Autowired UsuarioEstadoEfectivoRepository vista;
+    @Autowired jakarta.persistence.EntityManagerFactory emf;
     @MockitoBean AutorizacionPort autorizacion;
 
     @BeforeEach void limpiar() { jdbc.execute("truncate usuario cascade"); }
@@ -127,6 +129,37 @@ class UsuarioJpaPostgresTest {
         bloqueo(bloqueado,"AUTOMATICO",null);
         assertThat(cuentas.contarActivos(Set.of(activo,vencido,bloqueado,inactivo,pendiente))).isEqualTo(2);
         assertThat(cuentas.contarActivos(Set.of())).isZero();
+    }
+
+    @Test void leerLoteDevuelveSoloLasEncontradasConSuEstadoEfectivo() {
+        UUID activo=usuario("a@ejemplo.test","ACTIVO",1);
+        UUID bloqueado=usuario("b@ejemplo.test","ACTIVO",2);
+        UUID pendiente=usuario("c@ejemplo.test","PENDIENTE_VERIFICACION",3);
+        bloqueo(bloqueado,"AUTOMATICO",null);
+        UUID ausente=UUID.randomUUID();
+
+        var lote=cuentas.leerLote(Set.of(activo,bloqueado,pendiente,ausente));
+
+        assertThat(lote).containsOnlyKeys(activo,bloqueado,pendiente);
+        assertThat(lote.get(activo).correo()).isEqualTo("a@ejemplo.test");
+        assertThat(lote.get(bloqueado).estadoEfectivo()).isEqualTo("BLOQUEADO");
+        assertThat(lote.get(pendiente).estadoEfectivo()).isEqualTo("PENDIENTE_VERIFICACION");
+        assertThat(lote.get(activo)).isEqualTo(cuentas.leer(activo).orElseThrow());
+        assertThat(cuentas.leerLote(Set.of())).isEmpty();
+        assertThat(cuentas.leerLote(Set.of(ausente))).isEmpty();
+        assertThatThrownBy(()->cuentas.leerLote(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test void leerLoteDeCienIdsUsaDosConsultasNoUnaPorCuenta() {
+        Set<UUID> ids=new HashSet<>();
+        for (int i=0;i<50;i++) ids.add(usuario("lote"+i+"@ejemplo.test","ACTIVO",i));
+        for (int i=0;i<50;i++) ids.add(UUID.randomUUID());
+        var estadisticas=emf.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        estadisticas.clear();
+
+        assertThat(cuentas.leerLote(ids)).hasSize(50);
+        // SPEC-18 RF-18.2: hasta 100 IDs en <1 s; cuentas + estado efectivo, sin N+1.
+        assertThat(estadisticas.getPrepareStatementCount()).isEqualTo(2);
     }
 
     @Test void filtrosCombinadosAntesDelTotalYPaginacionConPuenteDeRol() {

@@ -354,7 +354,8 @@ class TokenUnUsoJpaPostgresTest {
         var contexto = new ContextoPeticion("127.0.0.1", "test", UUID.randomUUID());
         var resultados = new java.util.ArrayList<ResultadoSolicitudRecuperacion>();
 
-        for (int i = 0; i < 4; i++) resultados.add(solicitud.solicitar(correo, contexto));
+        for (int i = 0; i < 4; i++) resultados.add(solicitud.solicitar(correo,
+                com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion.WEB, contexto));
 
         if (existe) {
             assertThat(repository.findById(anterior.id()).orElseThrow().isUsado()).isFalse();

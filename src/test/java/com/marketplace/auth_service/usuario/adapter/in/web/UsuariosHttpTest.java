@@ -132,6 +132,10 @@ class UsuariosHttpTest {
                 public long contarActivos(Set<UUID> ids) {
                     throw new UnsupportedOperationException();
                 }
+                @Override
+                public java.util.Map<UUID, CuentaSnapshot> leerLote(Set<UUID> ids) {
+                    throw new UnsupportedOperationException();
+                }
 
                 @Override
                 public PaginaResultado<CuentaSnapshot> consultar(FiltroCuenta filtro, Paginacion paginacion) {

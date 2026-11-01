@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marketplace.auth_service.direccion.DoblesDirecciones;
+import com.marketplace.auth_service.direccion.application.dto.DireccionDatos;
 import com.marketplace.auth_service.direccion.application.port.in.DireccionesPort.DatosNuevaDireccion;
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoEncontradaException;
 import com.marketplace.auth_service.direccion.domain.model.DireccionNoPermitidaException;
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.ArrayList;
@@ -214,5 +216,35 @@ class DireccionesServiceTest {
                 UUID.randomUUID(), datos("Casa", null), CTX)).isInstanceOf(DireccionNoEncontradaException.class);
         assertThat(persistencia.llamadas).isZero();
         assertThat(auditoria.registradas).isEmpty();
+    }
+
+    // --- Lectura por módulo con token de servicio (SPEC-18 ESC-18.4, FEAT-06-T3) ---
+
+    @Test
+    void unModuloConScopeListaSinAutorizarPorRolNiTitularidadYAudita() {
+        ActorServicio despacho = new ActorServicio("despacho", UUID.randomUUID(), Set.of("direcciones:leer"));
+        servicio.crear(actor, titular, datos("Casa", null), CTX);
+
+        List<DireccionDatos> resultado = servicio.listarParaServicio(despacho, titular);
+
+        assertThat(resultado).hasSize(1);
+        assertThat(auditoria.registradasServicio).containsExactly(
+                new DoblesDirecciones.Auditoria.LlamadaServicio("despacho", titular));
+        assertThat(auditoria.registradas).as("no mezcla con la auditoría de alta del titular").hasSize(1);
+    }
+
+    @Test
+    void unModuloSobreCuentaInexistenteEsNoEncontradaSinAuditar() {
+        ActorServicio despacho = new ActorServicio("despacho", UUID.randomUUID(), Set.of("direcciones:leer"));
+
+        assertThatThrownBy(() -> servicio.listarParaServicio(despacho, UUID.randomUUID()))
+                .isInstanceOf(DireccionNoEncontradaException.class);
+        assertThat(auditoria.registradasServicio).isEmpty();
+    }
+
+    @Test
+    void sinActorDeServicioSeRechaza() {
+        assertThatThrownBy(() -> servicio.listarParaServicio(null, titular))
+                .isInstanceOf(NullPointerException.class);
     }
 }
