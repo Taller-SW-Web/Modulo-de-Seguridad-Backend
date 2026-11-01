@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.credencial.application.service;
 
+import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.CuentaRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
 import com.marketplace.auth_service.credencial.application.port.in.SolicitarRecuperacionPort;
@@ -33,7 +34,9 @@ public final class SolicitudRecuperacionService implements SolicitarRecuperacion
     }
 
     @Override
-    public ResultadoSolicitudRecuperacion solicitar(String correoSolicitado, ContextoPeticion contexto) {
+    public ResultadoSolicitudRecuperacion solicitar(String correoSolicitado, CanalOrigenRecuperacion canalOrigen,
+                                                     ContextoPeticion contexto) {
+        Objects.requireNonNull(canalOrigen, "canalOrigen");
         Objects.requireNonNull(contexto, "contexto");
         String normalizado = normalizar(correoSolicitado);
         var ahora = reloj.instant();
@@ -46,7 +49,7 @@ public final class SolicitudRecuperacionService implements SolicitarRecuperacion
         CuentaRecuperacion cuenta = cuentas.buscar(normalizado).orElse(null);
         if (cuenta != null && cuenta.elegible()) {
             try {
-                correo.emitirYEnviar(cuenta, ahora);
+                correo.emitirYEnviar(cuenta, canalOrigen, ahora);
             } catch (SolicitudRecuperacionNoDisponibleException indisponible) {
                 // La reserva ya quedó confirmada; no revelar si falló para una cuenta real.
                 auditoria.registrar(cuenta.usuarioId(), true, contexto, ahora);

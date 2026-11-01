@@ -251,7 +251,7 @@ def main() -> None:
     )
     health_url = os.environ.get("RENDER_HEALTH_URL") or DEFAULT_HEALTH_URL
     request_timeout = _int_env("RENDER_REQUEST_TIMEOUT_SECONDS", 30)
-    deploy_timeout = _int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 900)
+    deploy_timeout = _int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 1800)
     health_timeout = _int_env("RENDER_HEALTH_TIMEOUT_SECONDS", 120)
     poll_interval = _int_env("RENDER_POLL_INTERVAL_SECONDS", 10)
 

@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.credencial.adapter.in.web;
 
+import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.ResultadoSolicitudRecuperacion;
 import com.marketplace.auth_service.credencial.application.port.in.SolicitarRecuperacionPort;
 import com.marketplace.auth_service.credencial.domain.exception.SolicitudRecuperacionNoDisponibleException;
@@ -8,6 +9,7 @@ import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -27,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SolicitarRecuperacionController {
     private static final long LATENCIA_MINIMA_NANOS = TimeUnit.MILLISECONDS.toNanos(300);
-    public record SolicitarRecuperacionRequest(String correo) {
+    public record SolicitarRecuperacionRequest(String correo, String canalOrigen) {
         @Override public String toString() { return "SolicitarRecuperacionRequest[REDACTADO]"; }
     }
 
@@ -40,9 +42,13 @@ public class SolicitarRecuperacionController {
     @PostMapping(path = "/api/v1/password/recuperar", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CompletionStage<ResponseEntity<?>> solicitar(@RequestBody(required = false) SolicitarRecuperacionRequest cuerpo,
                                                         HttpServletRequest peticion) {
-        if (!correoValido(cuerpo == null ? null : cuerpo.correo())) return validacion();
+        List<Map<String, String>> errores = validar(cuerpo);
+        if (!errores.isEmpty()) return validacion(errores);
+        String correo = cuerpo.correo();
+        CanalOrigenRecuperacion canalOrigen = cuerpo.canalOrigen() == null
+                ? CanalOrigenRecuperacion.WEB : CanalOrigenRecuperacion.valueOf(cuerpo.canalOrigen());
         long inicio = System.nanoTime();
-        var resultado = solicitudes.solicitar(cuerpo.correo(), ContextoPeticiones.desde(peticion));
+        var resultado = solicitudes.solicitar(correo, canalOrigen, ContextoPeticiones.desde(peticion));
         ResponseEntity<?> respuesta = switch (resultado) {
             case ResultadoSolicitudRecuperacion.Aceptada aceptada -> ResponseEntity.accepted().build();
             case ResultadoSolicitudRecuperacion.Limite limite -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -64,8 +70,22 @@ public class SolicitarRecuperacionController {
                 "Servicio no disponible", "Inténtalo nuevamente.");
     }
 
+    private static List<Map<String, String>> validar(SolicitarRecuperacionRequest cuerpo) {
+        List<Map<String, String>> errores = new ArrayList<>();
+        String correo = cuerpo == null ? null : cuerpo.correo();
+        String canalOrigen = cuerpo == null ? null : cuerpo.canalOrigen();
+        if (correo == null || correo.isBlank() || correo.length() > 254) {
+            errores.add(Map.of("campo", "correo", "mensaje", "Escribe un correo válido."));
+        } else if (!correoValido(correo)) {
+            errores.add(Map.of("campo", "correo", "mensaje", "Escribe un correo válido."));
+        }
+        if (canalOrigen != null && !canalValido(canalOrigen)) {
+            errores.add(Map.of("campo", "canalOrigen", "mensaje", "No es un canal permitido."));
+        }
+        return errores;
+    }
+
     private static boolean correoValido(String correo) {
-        if (correo == null || correo.isBlank() || correo.length() > 254) return false;
         try {
             InternetAddress direccion = new InternetAddress(correo.strip(), true);
             direccion.validate();
@@ -75,10 +95,19 @@ public class SolicitarRecuperacionController {
         }
     }
 
-    private static CompletionStage<ResponseEntity<?>> validacion() {
+    private static boolean canalValido(String canalOrigen) {
+        try {
+            CanalOrigenRecuperacion.valueOf(canalOrigen);
+            return true;
+        } catch (IllegalArgumentException invalido) {
+            return false;
+        }
+    }
+
+    private static CompletionStage<ResponseEntity<?>> validacion(List<Map<String, String>> errores) {
         ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION",
                 "Datos de entrada inválidos", null);
-        problema.setProperty("errores", List.of(Map.of("campo", "correo", "mensaje", "Escribe un correo válido.")));
+        problema.setProperty("errores", errores);
         return CompletableFuture.completedFuture(
                 ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema));
     }

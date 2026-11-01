@@ -2,6 +2,7 @@ package com.marketplace.auth_service.credencial.adapter.out.capacidad;
 
 import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
+import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.CuentaRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
@@ -27,12 +28,14 @@ public final class CorreoRecuperacionAdapter implements CorreoRecuperacionPort {
     }
 
     @Override
-    public void emitirYEnviar(CuentaRecuperacion cuenta, Instant ahora) {
+    public void emitirYEnviar(CuentaRecuperacion cuenta, CanalOrigenRecuperacion canalOrigen, Instant ahora) {
         Objects.requireNonNull(cuenta);
+        Objects.requireNonNull(canalOrigen);
         Objects.requireNonNull(ahora);
         var emitido = tokens.emitir(cuenta.usuarioId(), PropositoToken.RECUPERACION, Duration.ofMinutes(30));
         String enlace = urlSpa + "/recuperar-contrasena?token="
-                + URLEncoder.encode(emitido.tokenClaro(), StandardCharsets.UTF_8);
+                + URLEncoder.encode(emitido.tokenClaro(), StandardCharsets.UTF_8)
+                + (canalOrigen == CanalOrigenRecuperacion.WEB ? "" : "&canal=" + canalOrigen.name());
         String contenido = "Recibimos una solicitud para recuperar la contraseña de tu cuenta.\n\n"
                 + "Abre este enlace para crear una contraseña nueva (vence en 30 minutos):\n"
                 + enlace + "\n\nSi no solicitaste este cambio, ignora este mensaje. "
