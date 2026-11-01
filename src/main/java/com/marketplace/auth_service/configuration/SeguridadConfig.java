@@ -76,6 +76,9 @@ public class SeguridadConfig {
     /** Compartida con el titular/usuario.ver por token de persona (SPEC-18 ESC-18.4, FEAT-06-T3). */
     static final String DIRECCIONES_USUARIO = "/api/v1/usuarios/{id}/direcciones";
 
+    /** Solo token de servicio, sin alternativa de persona (SPEC-18 RF-18.2, FEAT-06-T2). */
+    static final String USUARIOS_LOTE = "/api/v1/usuarios/lote";
+
     /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía), registro y verificación (FEAT-01). */
     static final String[] PUBLICAS_SESION_POST = {
             "/api/v1/auth/registro",
@@ -123,6 +126,8 @@ public class SeguridadConfig {
                             .access(ReglasIntegracion.servicioOPersona(ScopeServicio.USUARIOS_LEER))
                         .requestMatchers(HttpMethod.GET, DIRECCIONES_USUARIO)
                             .access(ReglasIntegracion.servicioOPersona(ScopeServicio.DIRECCIONES_LEER))
+                        .requestMatchers(HttpMethod.POST, USUARIOS_LOTE)
+                            .access(ReglasIntegracion.soloServicio(ScopeServicio.USUARIOS_LEER))
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .bearerTokenResolver(soloFueraDeRutasPublicas())
@@ -161,7 +166,8 @@ public class SeguridadConfig {
         return ("POST".equals(peticion.getMethod()) && INTROSPECCION.equals(ruta))
                 || ("GET".equals(peticion.getMethod()) && (ROLES.equals(ruta) || PERMISOS.equals(ruta)))
                 || ("GET".equals(peticion.getMethod()) && esUsuarioDetalle(ruta))
-                || ("GET".equals(peticion.getMethod()) && esDireccionesUsuario(ruta));
+                || ("GET".equals(peticion.getMethod()) && esDireccionesUsuario(ruta))
+                || ("POST".equals(peticion.getMethod()) && USUARIOS_LOTE.equals(ruta));
     }
 
     /** {@code /api/v1/usuarios/{id}} sin coincidir con {@code /api/v1/usuarios} (el listado, persona únicamente). */
