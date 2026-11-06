@@ -16,6 +16,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  destino-pr:
+    name: Backend - destino del PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Exigir develop como origen de los PR hacia main
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          REPO_HEAD: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENTO" = "pull_request" ] && [ "$BASE" = "main" ]; then
+            if [ "$HEAD" != "develop" ] || [ "$REPO_HEAD" != "$REPO" ]; then
+              echo '::error::Los cambios llegan a main mediante un PR de develop de este repositorio.'
+              exit 1
+            fi
+          fi
+
   build-test:
     name: Backend - build y pruebas
     runs-on: ubuntu-24.04
@@ -77,18 +97,50 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [build-test, imagen]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Desplegar a Render
+      - name: Desplegar a Render y verificar SHA
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
-          echo "Desplegando a Render..."
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "Desplegando a Render con SHA: $GITHUB_SHA"
+          response=$(curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "Respuesta del deploy hook: $response"
+          deploy_id=$(echo "$response" | jq -r '.id // empty')
+          if [ -z "$deploy_id" ]; then
+            echo "::error::No se obtuvo deploy.id del hook de Render"
+            exit 1
+          fi
+          echo "Deploy ID: $deploy_id"
+          echo "Verificando despliegue en Render..."
+          for i in $(seq 1 30); do
+            status=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$deploy_id" \
+              | jq -r '.status // empty')
+            echo "Estado del despliegue: $status"
+            if [ "$status" = "live" ]; then
+              commit_id=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+                "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$deploy_id" \
+                | jq -r '.commitId // empty')
+              echo "Commit desplegado: $commit_id"
+              if [ "$commit_id" = "$GITHUB_SHA" ]; then
+                echo "✅ SHA desplegado coincide con GITHUB_SHA"
+                break
+              else
+                echo "::warning::SHA desplegado ($commit_id) no coincide con GITHUB_SHA ($GITHUB_SHA)"
+              fi
+            elif [ "$status" = "failed" ] || [ "$status" = "canceled" ]; then
+              echo "::error::Despliegue falló o cancelado: $status"
+              exit 1
+            fi
+            sleep 20
+          done
 
   smoke-test:
     name: Backend - smoke test
@@ -123,12 +175,23 @@ jobs:
             echo "Esperando descubrimiento OIDC... intento $i"
             sleep 10
           done
-      - name: Smoke test login
+      - name: Smoke test login real
         env:
           SMOKE_LOGIN_EMAIL: ${{ secrets.SMOKE_LOGIN_EMAIL }}
           SMOKE_LOGIN_PASSWORD: ${{ secrets.SMOKE_LOGIN_PASSWORD }}
         run: |
-          echo "Probando login de smoke con cuenta de prueba..."
+          echo "Probando login real con cuenta de prueba..."
+          response=$(curl -s -X POST https://g7-auth-service.onrender.com/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d "{\"correo\":\"$SMOKE_LOGIN_EMAIL\",\"contrasena\":\"$SMOKE_LOGIN_PASSWORD\"}")
+          echo "Respuesta del login: $response"
+          token=$(echo "$response" | jq -r '.accessToken // empty')
+          if [ -n "$token" ]; then
+            echo "✅ Login de smoke exitoso - token obtenido"
+          else
+            echo "::error::Login de smoke falló - no se obtuvo token"
+            exit 1
+          fi
 
   e2e-playwright:
     name: E2E Playwright (FEAT-12-T4)
@@ -136,8 +199,11 @@ jobs:
     timeout-minutes: 30
     needs: [deploy, smoke-test, build-test, imagen]
     env:
-      E2E_BASE_URL: https://g7-auth-service.onrender.com
+      # Apunta a la SPA desplegada en Render, no al backend API
+      E2E_BASE_URL: https://g7-seguridad-spa.onrender.com
+      # Credenciales de cuenta de prueba (solo por variable de entorno, nunca en Git)
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
+      # Correos para recibir OTP en CI
       E2E_CORREO_CLIENTE: ${{ secrets.E2E_CORREO_CLIENTE }}
       E2E_CORREO_ADMIN: ${{ secrets.E2E_CORREO_ADMIN }}
     steps:
