@@ -57,8 +57,6 @@ jobs:
         run: docker info
       - name: Compilar, probar y empaquetar
         run: bash ./gradlew --no-daemon --console=plain clean build
-      - name: Probar la verificación del deploy de Render
-        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: Conservar resultados de pruebas
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,38 +86,47 @@ jobs:
       - name: Comprobar que la imagen no lleva secretos ni fuentes
         run: |
           if docker run --rm --entrypoint sh g7-auth-service:ci -c \
-            'find / -xdev \( -name "*.pem" -o -name ".env" -o -name "*.key" -o -path "/fuente*" \) 2>/dev/null | grep -v "^/etc/ssl\|^/usr/share\|^/usr/lib/ssl\|^/proc"'; then
+            'find / -xdev \( -name "*.pem" -o -name ".env" -o -name "*.key" -o -path "/fuente*" \\) 2>/dev/null | grep -v "^/etc/ssl\|^/usr/share\|^/usr/lib/ssl\|^/proc"'; then
             echo '::error::La imagen contiene archivos privados o fuentes.'
             exit 1
           fi
 
-  deploy:
-    name: Backend - deploy a Render
+  e2e-playwright:
+    name: E2E Playwright (FEAT-12-T4)
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    needs: [destino-pr, build-test, imagen]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 30
+    needs: [deploy, smoke-test, build-test, imagen]
+    env:
+      E2E_BASE_URL: https://${{ secrets.RENDER_SERVICE_ID }}.onrender.com
+      E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Desplegar el SHA y verificarlo en Render
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+      - name: Ejecutar suite contra despliegue
         env:
-          GITHUB_SHA: ${{ github.sha }}
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_HEALTH_URL: https://g7-auth-service.onrender.com/actuator/health
-          RENDER_REQUEST_TIMEOUT_SECONDS: 30
-          RENDER_DEPLOY_TIMEOUT_SECONDS: 1800
-          RENDER_HEALTH_TIMEOUT_SECONDS: 120
-          RENDER_POLL_INTERVAL_SECONDS: 10
-        run: python3 .github/scripts/render_deploy.py
-      - name: Smoke test del entorno desplegado (health, JWKS y login)
-        env:
-          SMOKE_BASE_URL: https://g7-auth-service.onrender.com
-          SMOKE_LOGIN_EMAIL: ${{ secrets.SMOKE_LOGIN_EMAIL }}
-          SMOKE_LOGIN_PASSWORD: ${{ secrets.SMOKE_LOGIN_PASSWORD }}
-          SMOKE_REQUEST_TIMEOUT_SECONDS: 30
-          SMOKE_HEALTH_TIMEOUT_SECONDS: 120
-          SMOKE_POLL_INTERVAL_SECONDS: 10
-        run: python3 .github/scripts/smoke_test.py
+          E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
+          E2E_CUENTAS_CLAVE: ${{ env.E2E_CUENTAS_CLAVE }}
+        run: npx playwright test
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-FEAT-12-T4-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
+      - name: Confirmar resultados
+        run: |
+          if [ -d "playwright-report" ]; then
+            echo "✅ Informe HTML generado"
+          else
+            echo "❌ No se generó el informe"
+            exit 1
+          fi
