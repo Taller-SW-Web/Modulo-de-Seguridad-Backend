@@ -144,15 +144,26 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      # Checkout del frontend repo para ejecutar la suite Playwright
+      - name: Checkout frontend repo para E2E
+        uses: actions/checkout@v6
+        with:
+          repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
+          ref: feat/EP-02-seguridad-e2e
+          path: frontend
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar dependencias Node
+      - name: Instalar dependencias del frontend
+        working-directory: frontend
         run: npm ci
       - name: Instalar Playwright y navegadores
+        working-directory: frontend
         run: npx playwright install --with-deps chromium
       - name: Ejecutar suite E2E contra despliegue
+        working-directory: frontend
         env:
           E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
           E2E_CUENTAS_CLAVE: ${{ env.E2E_CUENTAS_CLAVE }}
@@ -164,12 +175,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-FEAT-12-T4-${{ github.run_id }}
-          path: playwright-report/
+          path: frontend/playwright-report/
           retention-days: 7
       - name: Confirmar resultados
         run: |
-          if [ -d "playwright-report" ]; then
-            echo "✅ Informe HTML generado en playwright-report/"
+          if [ -d "frontend/playwright-report" ]; then
+            echo "✅ Informe HTML generado en frontend/playwright-report/"
           else
             echo "❌ No se generó el informe"
             exit 1
