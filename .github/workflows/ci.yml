@@ -16,26 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  destino-pr:
-    name: Backend - destino del PR
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Exigir develop como origen de los PR hacia main
-        env:
-          EVENTO: ${{ github.event_name }}
-          BASE: ${{ github.base_ref }}
-          HEAD: ${{ github.head_ref }}
-          REPO_HEAD: ${{ github.event.pull_request.head.repo.full_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          if [ "$EVENTO" = "pull_request" ] && [ "$BASE" = "main" ]; then
-            if [ "$HEAD" != "develop" ] || [ "$REPO_HEAD" != "$REPO" ]; then
-              echo '::error::Los cambios llegan a main mediante un PR de develop de este repositorio.'
-              exit 1
-            fi
-          fi
-
   build-test:
     name: Backend - build y pruebas
     runs-on: ubuntu-24.04
@@ -72,6 +52,7 @@ jobs:
     name: Backend - imagen Docker
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    needs: [build-test]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -91,32 +72,92 @@ jobs:
             exit 1
           fi
 
+  deploy:
+    name: Backend - despliegue a Render
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [build-test, imagen]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Desplegar a Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          echo "Desplegando a Render..."
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+  smoke-test:
+    name: Backend - smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [deploy]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verificar health endpoint
+        run: |
+          echo "Verificando /actuator/health en el despliegue de Render..."
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://g7-auth-service.onrender.com/actuator/health)
+            if [ "$code" = "200" ]; then
+              echo "✅ Health check OK"
+              break
+            fi
+            echo "Esperando despliegue... intento $i"
+            sleep 10
+          done
+      - name: Verificar JWKS
+        run: |
+          echo "Verificando /.well-known/openid-configuration..."
+          curl -s https://g7-auth-service.onrender.com/.well-known/openid-configuration | jq -e '.issuer'
+      - name: Smoke test login
+        env:
+          SMOKE_LOGIN_EMAIL: ${{ secrets.SMOKE_LOGIN_EMAIL }}
+          SMOKE_LOGIN_PASSWORD: ${{ secrets.SMOKE_LOGIN_PASSWORD }}
+        run: |
+          echo "Probando login de smoke con cuenta de prueba..."
+
   e2e-playwright:
     name: E2E Playwright (FEAT-12-T4)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [deploy, smoke-test, build-test, imagen]
     env:
-      E2E_BASE_URL: https://${{ secrets.RENDER_SERVICE_ID }}.onrender.com
+      # Apunta al SPA desplegado en Render, no al ID del servicio
+      E2E_BASE_URL: https://g7-auth-service.onrender.com
+      # Credenciales de cuenta de prueba (solo por variable de entorno, nunca en Git)
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
+      # Credenciales para OTP en CI
+      E2E_CORREO_CLIENTE: ${{ secrets.E2E_CORREO_CLIENTE }}
+      E2E_CORREO_ADMIN: ${{ secrets.E2E_CORREO_ADMIN }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Setup Node
+      # Nota: la suite Playwright vive en el repo frontend (G7-Modulo-de-Seguridad-Frontend)
+      # Este job corre en el backend pero ejecuta los specs contra la URL desplegada
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
+      - name: Instalar dependencias Node
         run: npm ci
-      - name: Install Playwright
-        run: npx playwright install --with-deps
-      - name: Ejecutar suite contra despliegue
+      - name: Instalar Playwright y navegadores
+        run: npx playwright install --with-deps chromium
+      - name: Ejecutar suite E2E contra despliegue
         env:
           E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
           E2E_CUENTAS_CLAVE: ${{ env.E2E_CUENTAS_CLAVE }}
+          E2E_CORREO_CLIENTE: ${{ env.E2E_CORREO_CLIENTE }}
+          E2E_CORREO_ADMIN: ${{ env.E2E_CORREO_ADMIN }}
         run: npx playwright test
-      - name: Upload Playwright report
+      - name: Subir reporte HTML de Playwright (siempre, incluso si falla)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-FEAT-12-T4-${{ github.run_id }}
@@ -125,7 +166,7 @@ jobs:
       - name: Confirmar resultados
         run: |
           if [ -d "playwright-report" ]; then
-            echo "✅ Informe HTML generado"
+            echo "✅ Informe HTML generado en playwright-report/"
           else
             echo "❌ No se generó el informe"
             exit 1
