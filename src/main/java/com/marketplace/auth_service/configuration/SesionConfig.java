@@ -1,8 +1,10 @@
 package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.sesion.adapter.in.transaction.SesionTransaccional;
+import com.marketplace.auth_service.sesion.adapter.out.capacidad.EfectosCierreAdapter;
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteCuentasSesion;
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteFirmaAcceso;
 import com.marketplace.auth_service.sesion.adapter.out.crypto.SesionCryptoAdapter;
@@ -26,11 +28,14 @@ public class SesionConfig {
         return new PuenteCuentasSesion(cuentas, autorizacion, proteccion.getIfAvailable(),
                 reloj.getIfAvailable(Clock::systemUTC));
     }
+    @Bean EfectosCierrePort efectosCierrePort(AuditoriaPort auditoria) {
+        return new EfectosCierreAdapter(auditoria);
+    }
     @Bean SesionesPort sesionesPort(PersistenciaSesionPort persistencia, CriptografiaSesionPort criptografia,
             FirmadorAccesoPort firmador, ProveedorIdentidadPort identidad, BloqueoCuentaSesionPort cuentas,
-            ObjectProvider<Clock> clock) {
+            EfectosCierrePort efectosCierre, ObjectProvider<Clock> clock) {
         return new SesionTransaccional(new SesionService(persistencia, criptografia, firmador, identidad,
-                clock.getIfAvailable(Clock::systemUTC)), persistencia, criptografia, cuentas);
+                efectosCierre, clock.getIfAvailable(Clock::systemUTC)), persistencia, criptografia, cuentas);
     }
 
 }

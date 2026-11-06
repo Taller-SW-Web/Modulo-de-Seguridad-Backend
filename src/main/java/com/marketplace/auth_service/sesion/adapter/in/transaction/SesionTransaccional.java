@@ -33,9 +33,9 @@ public class SesionTransaccional implements SesionesPort {
         return casoDeUso.renovar(secreto);
     }
     @Override @Transactional(isolation = Isolation.READ_COMMITTED)
-    public CierreResultado cerrar(SecretoRefresco secreto) {
+    public CierreResultado cerrar(SecretoRefresco secreto, ContextoPeticion contexto) {
         bloquearCuentaDelRefresco(secreto);
-        return casoDeUso.cerrar(secreto);
+        return casoDeUso.cerrar(secreto, contexto);
     }
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public void revocarTodas(UUID usuarioId) { casoDeUso.revocarTodas(usuarioId); }

@@ -15,6 +15,7 @@ import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
 import com.marketplace.auth_service.sesion.application.dto.SecretoRefresco;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -88,15 +90,22 @@ class CerrarSesionPostgresTest {
 
     private SesionesPort sesiones;
     private UUID usuario;
+    /** FEAT-12-T2: registra los llamados de auditoría que hace el cierre. */
+    private final List<LlamadoCierre> cierresAuditados = new CopyOnWriteArrayList<>();
+
+    private record LlamadoCierre(UUID usuarioId, UUID familiaId, ContextoPeticion contexto) { }
 
     @BeforeEach
     void servicio() {
         var clave = ClaveFirmaRsa.desdePem(ClavesDePrueba.pemPkcs8(ClavesDePrueba.RSA_3072));
         FirmaPort firma = new FirmarAccesoService(new NimbusFirmadorJws(clave), ISSUER, RELOJ);
+        cierresAuditados.clear();
         sesiones = new SesionService(persistencia, new SesionCryptoAdapter(),
                 new PuenteFirmaAcceso(firma),
                 u -> new DatosIdentidad(u, u + "@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), true),
+                (usuarioId, familiaId, contexto, ahora) ->
+                        cierresAuditados.add(new LlamadoCierre(usuarioId, familiaId, contexto)),
                 RELOJ);
         usuario = UUID.randomUUID();
         jdbc.update("insert into usuario(id, correo, nombres, apellidos, estado) values (?,?,?,?, 'ACTIVO')",
@@ -109,41 +118,51 @@ class CerrarSesionPostgresTest {
                 new ContextoPeticion("127.0.0.1", "prueba", UUID.randomUUID()));
     }
 
+    private ContextoPeticion contexto() {
+        return new ContextoPeticion("127.0.0.1", "cierre-test", UUID.randomUUID());
+    }
+
     private UUID unicaFamilia() {
         return jdbc.queryForObject("select id from sesion_familia where usuario_id=?", UUID.class, usuario);
     }
 
     @Test
-    void cierreNormalRevocaLaFamilia() {
+    void cierreNormalRevocaLaFamiliaYAuditaElHecho() {
         SesionIniciada iniciada = abrir();
         UUID familia = unicaFamilia();
 
-        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken())))
+        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken()), contexto()))
                 .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
         assertThat(jdbc.queryForObject("select revocada from sesion_familia where id=?", Boolean.class, familia))
                 .isTrue();
         assertThat(jdbc.queryForObject("select count(*) from token_refresco where familia_id=? and not revocado",
                 Integer.class, familia)).isZero();
+        // FEAT-12-T2: un solo hecho, con la identidad real y el contexto de la petición.
+        assertThat(cierresAuditados).hasSize(1);
+        assertThat(cierresAuditados.get(0).usuarioId()).isEqualTo(usuario);
+        assertThat(cierresAuditados.get(0).familiaId()).isEqualTo(familia);
+        assertThat(cierresAuditados.get(0).contexto().ip()).isEqualTo("127.0.0.1");
     }
 
     @Test
-    void cierreRepetidoYDesconocidoNoMutan() {
+    void cierreRepetidoYDesconocidoNoMutanNiDuplicanElHecho() {
         SesionIniciada iniciada = abrir();
-        sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken()));
+        sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken()), contexto());
         long revocadas = contar("sesion_familia", "revocada");
 
-        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken())))
+        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken()), contexto()))
                 .isEqualTo(new CierreResultado.YaCerrada());
-        assertThat(sesiones.cerrar(new SecretoRefresco("inexistente")))
+        assertThat(sesiones.cerrar(new SecretoRefresco("inexistente"), contexto()))
                 .isEqualTo(new CierreResultado.YaCerrada());
         assertThat(contar("sesion_familia", "revocada")).isEqualTo(revocadas);
+        assertThat(cierresAuditados).hasSize(1);
     }
 
     @Test
     void sesionIndependienteSigueRenovandoTrasElCierre() {
         SesionIniciada primera = abrir();
         SesionIniciada segunda = abrir();
-        sesiones.cerrar(new SecretoRefresco(primera.refreshToken()));
+        sesiones.cerrar(new SecretoRefresco(primera.refreshToken()), contexto());
 
         assertThat(sesiones.renovar(new SecretoRefresco(segunda.refreshToken())))
                 .isInstanceOf(RenovacionResultado.Renovada.class);
@@ -160,10 +179,11 @@ class CerrarSesionPostgresTest {
                 OffsetDateTime.ofInstant(AHORA.minusSeconds(8 * 24 * 3600), ZoneOffset.UTC),
                 OffsetDateTime.ofInstant(AHORA.minusSeconds(1), ZoneOffset.UTC), usuario);
 
-        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken())))
+        assertThat(sesiones.cerrar(new SecretoRefresco(iniciada.refreshToken()), contexto()))
                 .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
         assertThat(jdbc.queryForObject("select revocada from sesion_familia where id=?", Boolean.class, familia))
                 .isTrue();
+        assertThat(cierresAuditados).hasSize(1);
     }
 
     private UUID familiaDe(String secreto) {

@@ -14,6 +14,7 @@ import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.dto.TokenAccesoFirmado;
 import com.marketplace.auth_service.sesion.application.dto.UsuarioAutenticado;
 import com.marketplace.auth_service.sesion.application.port.out.CriptografiaSesionPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.port.out.FirmadorAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.out.PersistenciaSesionPort;
 import com.marketplace.auth_service.sesion.domain.exception.AccesoDesconocidoException;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +48,7 @@ class SesionServiceTest {
 
     private Memoria persistencia;
     private FirmadorFijo firmador;
+    private EfectosCierreRegistrados efectos;
     private SesionService servicio;
     private UUID usuario;
     private IdentidadAutorizada identidad;
@@ -54,10 +57,11 @@ class SesionServiceTest {
     void base() {
         persistencia = new Memoria();
         firmador = new FirmadorFijo();
+        efectos = new EfectosCierreRegistrados();
         servicio = new SesionService(persistencia, new CriptoFija(), firmador,
                 u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), true),
-                RELOJ);
+                efectos, RELOJ);
         usuario = UUID.randomUUID();
         identidad = new IdentidadAutorizada(usuario, "Cliente Prueba", "c@ejemplo.test",
                 List.of("CLIENTE"), List.of());
@@ -127,7 +131,7 @@ class SesionServiceTest {
         var despues = new SesionService(persistencia, new CriptoFija(), firmador,
                 u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), true),
-                Clock.fixed(AHORA.plusSeconds(901), ZoneOffset.UTC));
+                efectos, Clock.fixed(AHORA.plusSeconds(901), ZoneOffset.UTC));
         assertThatThrownBy(() -> despues.resolverAcceso(new AccesoVerificado(usuario, FirmadorFijo.JTI)))
                 .isInstanceOf(AccesoDesconocidoException.class);
     }
@@ -231,7 +235,7 @@ class SesionServiceTest {
         var sinCuenta = new SesionService(persistencia, new CriptoFija(), firmador,
                 u -> new DatosIdentidad(u, "c@ejemplo.test", "Cliente Prueba",
                         List.of("CLIENTE"), List.of(), false),
-                RELOJ);
+                efectos, RELOJ);
         assertThat(sinCuenta.renovar(new SecretoRefresco(SECRETO)))
                 .extracting(r -> ((RenovacionResultado.Rechazada) r).motivo())
                 .isEqualTo(MotivoRechazo.CUENTA_NO_DISPONIBLE);
@@ -239,24 +243,36 @@ class SesionServiceTest {
     }
 
     @Test
-    void cerrarRevocaLaFamilia() {
+    void cerrarRevocaLaFamiliaYAuditaElHechoConElContexto() {
         servicio.abrir(usuario, identidad, contexto());
         UUID familia = persistencia.familias.values().iterator().next().id();
 
-        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO)))
+        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO), contexto()))
                 .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
         assertThat(persistencia.familias.get(familia).revocada()).isTrue();
         assertThat(persistencia.tokens.values()).allMatch(TokenRefresco::revocado);
+
+        // FEAT-12-T2: el hecho nace solo desde Cerrada, con la identidad real.
+        assertThat(efectos.registros).hasSize(1);
+        var registro = efectos.registros.get(0);
+        assertThat(registro.usuarioId()).isEqualTo(usuario);
+        assertThat(registro.familiaId()).isEqualTo(familia);
+        assertThat(registro.ahora()).isEqualTo(AHORA);
+        assertThat(registro.contexto().ip()).isEqualTo("127.0.0.1");
     }
 
     @Test
-    void cerrarRepetidoYDesconocidoSonYaCerrada() {
+    void cerrarRepetidoYDesconocidoSonYaCerradaSinAuditar() {
         servicio.abrir(usuario, identidad, contexto());
-        servicio.cerrar(new SecretoRefresco(SECRETO));
-        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO)))
+        servicio.cerrar(new SecretoRefresco(SECRETO), contexto());
+        assertThat(servicio.cerrar(new SecretoRefresco(SECRETO), contexto()))
                 .isEqualTo(new CierreResultado.YaCerrada());
-        assertThat(servicio.cerrar(new SecretoRefresco("inexistente")))
+        assertThat(servicio.cerrar(new SecretoRefresco("inexistente"), contexto()))
                 .isEqualTo(new CierreResultado.YaCerrada());
+
+        // Un logout repetido no duplica el hecho y un refresco desconocido
+        // jamás audita una identidad inventada.
+        assertThat(efectos.registros).hasSize(1);
     }
 
     @Test
@@ -265,9 +281,10 @@ class SesionServiceTest {
         persistencia.guardarFamilia(SesionFamilia.nueva(familia, usuario, AHORA.minusSeconds(8 * 24 * 3600)));
         persistencia.guardarToken(new TokenRefresco(UUID.randomUUID(), usuario, familia, "f".repeat(64),
                 false, false, AHORA.minusSeconds(3600), AHORA.minusSeconds(8 * 24 * 3600)));
-        assertThat(servicio.cerrar(new SecretoRefresco("cualquiera")))
+        assertThat(servicio.cerrar(new SecretoRefresco("cualquiera"), contexto()))
                 .isEqualTo(new CierreResultado.Cerrada(usuario, familia));
         assertThat(persistencia.familias.get(familia).revocada()).isTrue();
+        assertThat(efectos.registros).hasSize(1);
     }
 
     static class Memoria implements PersistenciaSesionPort {
@@ -301,6 +318,16 @@ class SesionServiceTest {
         @Override public TokenAccesoFirmado firmar(DatosAcceso datos) {
             ultimosDatos = datos;
             return new TokenAccesoFirmado(TOKEN, JTI, AHORA, AHORA.plusSeconds(900));
+        }
+    }
+
+    static class EfectosCierreRegistrados implements EfectosCierrePort {
+        record Llamado(UUID usuarioId, UUID familiaId, ContextoPeticion contexto, Instant ahora) { }
+        final List<Llamado> registros = new ArrayList<>();
+
+        @Override
+        public void auditarCierre(UUID usuarioId, UUID familiaId, ContextoPeticion contexto, Instant ahora) {
+            registros.add(new Llamado(usuarioId, familiaId, contexto, ahora));
         }
     }
 

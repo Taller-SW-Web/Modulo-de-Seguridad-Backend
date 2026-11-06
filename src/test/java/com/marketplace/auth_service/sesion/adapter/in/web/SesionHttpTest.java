@@ -89,7 +89,7 @@ class SesionHttpTest {
                 }
 
                 @Override
-                public CierreResultado cerrar(SecretoRefresco secreto) {
+                public CierreResultado cerrar(SecretoRefresco secreto, ContextoPeticion contexto) {
                     RECIBIDO.set(secreto);
                     return COMPORTAMIENTO_CIERRE.get().apply(secreto);
                 }
