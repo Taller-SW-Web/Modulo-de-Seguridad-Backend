@@ -53,7 +53,9 @@ tablas por sí solos; esa parte también requiere revisión y pruebas funcionale
 El job `deploy` de `.github/workflows/ci.yml` solo se ejecuta en `push` a
 `develop`, después de que `destino-pr`, `build-test` e `imagen` terminen bien.
 En PR no se despliega. En Render, mantener **Auto-Deploy desactivado** para que
-el hook sea el único disparador y no se dupliquen despliegues.
+el despliegue automático quede controlado por el pipeline y no se dupliquen
+despliegues. Los despliegues manuales desde el panel de Render siguen siendo
+posibles; el workflow no los gobierna.
 
 Secretos de GitHub Actions:
 
@@ -97,8 +99,9 @@ Secretos de GitHub Actions para el smoke:
 | `SMOKE_LOGIN_EMAIL` | Correo de una cuenta fixture `ACTIVO`, con correo verificado y sin MFA. La cuenta A (`cliente.a@fixtures.g7.test`) es la recomendada. |
 | `SMOKE_LOGIN_PASSWORD` | Contraseña de esa cuenta. No se imprime ni se registra. |
 
-El smoke **no reintenta un login rechazado** para no consumir intentos de la
-cuenta. Si falta un secreto, el health falla, el JWKS es inválido o el login es
+El smoke **no reintenta un login rechazado**: así no gasta varios intentos de la
+cuenta, aunque el intento fallido del propio smoke sí cuenta en su protección.
+Si falta un secreto, el health falla, el JWKS es inválido o el login es
 rechazado, el job queda en rojo. No se aprueba el deploy solo porque una versión
 anterior siga respondiendo 200: el job de T1 ya verificó que el commit `live` de
 Render coincide con `GITHUB_SHA`. El procedimiento manual está en
