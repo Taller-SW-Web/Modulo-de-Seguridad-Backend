@@ -1,12 +1,16 @@
 package com.marketplace.auth_service.usuario.adapter.out.capacidad;
 
 import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaIdentidad;
+import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaLoteIdentidad;
 import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
 import com.marketplace.auth_service.shared.domain.ActorServicio;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoLoteServicio;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioServicioVista;
 import com.marketplace.auth_service.usuario.application.port.out.ConsultaIdentidadServicioPort;
 import com.marketplace.auth_service.usuario.domain.exception.ConsultaInvalidaException;
 import com.marketplace.auth_service.usuario.domain.exception.CuentaNoEncontradaException;
+import com.marketplace.auth_service.usuario.domain.exception.LoteDemasiadoGrandeException;
+import java.util.List;
 
 /**
  * Puente a {@code ConsultaIdentidadPort} (Sergio, SPEC-18): {@code GET /usuarios/{id}}
@@ -26,16 +30,30 @@ public final class ConsultaIdentidadServicioAdapter implements ConsultaIdentidad
     @Override
     public UsuarioServicioVista obtener(ActorServicio actor, String idTexto) {
         return switch (identidad.obtener(actor, idTexto)) {
-            case ResultadoConsultaIdentidad.Encontrado encontrado -> {
-                var v = encontrado.usuario();
-                yield new UsuarioServicioVista(v.id(), v.nombres(), v.apellidos(), v.nombreCompleto(), v.correo(),
-                        v.celular(), v.estado(), v.correoVerificado(), v.celularVerificado(), v.roles(),
-                        v.tipoDocumento(), v.documento(), v.documentoEnmascarado());
-            }
+            case ResultadoConsultaIdentidad.Encontrado encontrado -> aVista(encontrado.usuario());
             case ResultadoConsultaIdentidad.Invalida invalida ->
                     throw new ConsultaInvalidaException(invalida.campo(), invalida.mensaje());
             case ResultadoConsultaIdentidad.NoEncontrado noEncontrado ->
                     throw new CuentaNoEncontradaException(noEncontrado.id());
         };
+    }
+
+    @Override
+    public ResultadoLoteServicio obtenerLote(ActorServicio actor, List<String> idsTexto) {
+        return switch (identidad.obtenerLote(actor, idsTexto)) {
+            case ResultadoConsultaLoteIdentidad.Resultado resultado ->
+                    new ResultadoLoteServicio(resultado.usuarios().stream().map(ConsultaIdentidadServicioAdapter::aVista).toList(),
+                            resultado.noEncontrados());
+            case ResultadoConsultaLoteIdentidad.Invalida invalida ->
+                    throw new ConsultaInvalidaException(invalida.campo(), invalida.mensaje());
+            case ResultadoConsultaLoteIdentidad.LoteDemasiadoGrande demasiadoGrande ->
+                    throw new LoteDemasiadoGrandeException(demasiadoGrande.recibidos(), demasiadoGrande.maximo());
+        };
+    }
+
+    private static UsuarioServicioVista aVista(com.marketplace.auth_service.identidad.application.dto.UsuarioServicioVista v) {
+        return new UsuarioServicioVista(v.id(), v.nombres(), v.apellidos(), v.nombreCompleto(), v.correo(),
+                v.celular(), v.estado(), v.correoVerificado(), v.celularVerificado(), v.roles(),
+                v.tipoDocumento(), v.documento(), v.documentoEnmascarado());
     }
 }

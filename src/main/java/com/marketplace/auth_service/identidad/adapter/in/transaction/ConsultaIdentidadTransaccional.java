@@ -1,8 +1,10 @@
 package com.marketplace.auth_service.identidad.adapter.in.transaction;
 
 import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaIdentidad;
+import com.marketplace.auth_service.identidad.application.dto.ResultadoConsultaLoteIdentidad;
 import com.marketplace.auth_service.identidad.application.port.in.ConsultaIdentidadPort;
 import com.marketplace.auth_service.shared.domain.ActorServicio;
+import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -23,5 +25,11 @@ public class ConsultaIdentidadTransaccional implements ConsultaIdentidadPort {
     @Transactional
     public ResultadoConsultaIdentidad obtener(ActorServicio actor, String idTexto) {
         return casoDeUso.obtener(actor, idTexto);
+    }
+
+    @Override
+    @Transactional
+    public ResultadoConsultaLoteIdentidad obtenerLote(ActorServicio actor, List<String> idsTexto) {
+        return casoDeUso.obtenerLote(actor, idsTexto);
     }
 }
