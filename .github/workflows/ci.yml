@@ -87,7 +87,7 @@ jobs:
       - name: Comprobar que la imagen no lleva secretos ni fuentes
         run: |
           if docker run --rm --entrypoint sh g7-auth-service:ci -c \
-            'find / -xdev \( -name "*.pem" -o -name ".env" -o -name "*.key" -o -path "/fuente*" \\) 2>/dev/null | grep -v "^/etc/ssl\|^/usr/share\|^/usr/lib/ssl\|^/proc"'; then
+            'find / -xdev \( -name "*.pem" -o -name ".env" -o -name "*.key" -o -path "/fuente*" \) 2>/dev/null | grep -v "^/etc/ssl\|^/usr/share\|^/usr/lib/ssl\|^/proc"'; then
             echo '::error::La imagen contiene archivos privados o fuentes.'
             exit 1
           fi
@@ -95,8 +95,8 @@ jobs:
   deploy:
     name: Backend - despliegue a Render
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    needs: [build-test, imagen]
+    timeout-minutes: 40
+    needs: [destino-pr, build-test, imagen, pruebas-script-deploy, pruebas-script-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v6
@@ -159,12 +159,21 @@ jobs:
     name: E2E Playwright (FEAT-12-T4)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [deploy, smoke-test, build-test, imagen]
+    needs: [deploy, smoke-test, build-test, imagen, pruebas-script-deploy, pruebas-script-smoke]
+    if: >-
+      ${{ always() && needs.build-test.result == 'success' &&
+          needs.imagen.result == 'success' &&
+          needs.pruebas-script-deploy.result == 'success' &&
+          needs.pruebas-script-smoke.result == 'success' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+            needs.deploy.result == 'success' && needs.smoke-test.result == 'success') ||
+           github.event_name == 'workflow_dispatch') }}
     env:
       E2E_BASE_URL: https://g7-seguridad-spa.onrender.com
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
       E2E_CORREO_CLIENTE: ${{ secrets.E2E_CORREO_CLIENTE }}
       E2E_CORREO_ADMIN: ${{ secrets.E2E_CORREO_ADMIN }}
+      E2E_CORREO_API: ${{ secrets.E2E_CORREO_API }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -180,6 +189,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Comprobar configuración de la prueba
+        shell: bash
+        run: |
+          for variable in E2E_CUENTAS_CLAVE E2E_CORREO_CLIENTE E2E_CORREO_ADMIN E2E_CORREO_API; do
+            if [ -z "${!variable}" ]; then
+              echo "::error::Falta configurar $variable para ejecutar la suite completa."
+              exit 1
+            fi
+          done
       - name: Instalar dependencias del frontend
         working-directory: frontend
         run: npm ci
