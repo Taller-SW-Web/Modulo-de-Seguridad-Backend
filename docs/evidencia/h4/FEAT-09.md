@@ -21,7 +21,7 @@ T3 y el cierre de T6 quedan pendientes y se marcan como tal, sin declarar lo que
 
 - Job `Backend - deploy a Render` en `.github/workflows/ci.yml`, con `needs` de build, pruebas e imagen.
 - Dispara el deploy hook de Render y espera a que el servicio quede `live` con el `GITHUB_SHA` esperado antes de dar el job por bueno (`render_deploy.py`).
-- Auto-Deploy de Render desactivado: el único disparador es el pipeline.
+- Auto-Deploy de Render desactivado: el despliegue **automático** queda controlado por el pipeline. Un despliegue manual desde el panel de Render sigue siendo posible (se han visto en las capturas) y el workflow no lo impide.
 - Evidencia (run `41167699740`, `develop`):
 
 ```text
@@ -33,7 +33,7 @@ Deploy dep-dbimnloae00c73c4his0 verificado: 4b7e21e... live y salud UP.
 
 - Paso `Smoke test del entorno desplegado (health, JWKS y login)` tras la verificación del SHA.
 - Comprueba `/actuator/health` = `UP`, el JWKS público (solo claves RSA/RS256 de firma, sin material privado) y un login real con la fixture A.
-- Sin reintento del login: un rechazo deja el run en rojo y no consume intentos de protección.
+- Sin reintento del login: un rechazo deja el run en rojo. Evitar reintentos evita gastar varios intentos, pero el intento fallido del smoke **sí cuenta** en la protección de la cuenta (el bloqueo automático llega a los 5).
 - Evidencia (run `41167699740`):
 
 ```text
