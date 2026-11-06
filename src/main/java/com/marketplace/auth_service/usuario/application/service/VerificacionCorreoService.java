@@ -1,6 +1,7 @@
 package com.marketplace.auth_service.usuario.application.service;
 
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoAplicacionCorreo;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoReenvio;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoVerificacion;
 import com.marketplace.auth_service.usuario.application.port.in.VerificacionCorreoPort;
@@ -10,6 +11,7 @@ import com.marketplace.auth_service.usuario.application.port.out.CuotaReenvioPor
 import com.marketplace.auth_service.usuario.application.port.out.EfectosVerificacionPort;
 import com.marketplace.auth_service.usuario.application.port.out.TokensVerificacionPort;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
+import com.marketplace.auth_service.usuario.domain.model.TokenVerificacion;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +25,12 @@ import java.util.Objects;
  *   <li>Verificar, en una transacción: cuenta bloqueada y aún pendiente → token consumido →
  *       {@code ACTIVO} → {@code usuario.creado} por el outbox. Cualquier rechazo revierte, así la
  *       cuenta sigue pendiente y no se publica nada (ESC-02.2). Vencido y usado se auditan.</li>
+ *   <li>Confirmar un cambio de correo (SPEC-16, ESC-16.3): el mismo endpoint y el mismo mecanismo de
+ *       token; si el token es {@code CAMBIO_CORREO}, en una transacción: cuenta bloqueada y correo nuevo
+ *       libre → correo reemplazado y verificado → token consumido → {@code CORREO_CAMBIADO} crítico y
+ *       {@code usuario.atributos_actualizados}. Cualquier rechazo revierte y el login sigue con el
+ *       correo anterior. El enlace vencido, usado o con la dirección ya tomada responde igual que en la
+ *       verificación (410) y se audita como fallo.</li>
  *   <li>Reenviar: la cuota se reserva y confirma por correo exista o no la cuenta (ESC-02.5); solo
  *       con cuota y una cuenta pendiente se emite, en otra transacción, un enlace nuevo que
  *       invalida el anterior (RF-02.4).</li>
@@ -57,21 +65,44 @@ public final class VerificacionCorreoService implements VerificacionCorreoPort {
             return ResultadoVerificacion.INVALIDA; // sin cuenta conocida: no hay a quién atribuir el intento
         }
         Instant ahora = reloj.instant();
-        var resultado = efectos.enTransaccion(() -> {
-            if (token.usado()) return ResultadoVerificacion.YA_USADA;
-            if (!token.vigenteEn(ahora)) return ResultadoVerificacion.EXPIRADA;
-            // Cuenta antes que token: dos verificaciones simultáneas se ordenan por la fila de la cuenta.
-            if (!cuentas.activarSiPendiente(token.usuarioId(), ahora)) return ResultadoVerificacion.YA_USADA;
-            if (!tokens.consumir(token.id(), token.usuarioId(), ahora)) return ResultadoVerificacion.YA_USADA;
-            efectos.publicarUsuarioCreado(token.usuarioId(), ahora);
-            return ResultadoVerificacion.VERIFICADA;
-        }, r -> r == ResultadoVerificacion.VERIFICADA);
+        boolean cambioCorreo = token.esCambioCorreo();
+        var resultado = efectos.enTransaccion(
+                () -> cambioCorreo ? confirmarCambioCorreo(token, ahora, contexto) : activarCuenta(token, ahora),
+                r -> r == ResultadoVerificacion.VERIFICADA);
+        if (cambioCorreo && resultado == ResultadoVerificacion.VERIFICADA) {
+            return resultado; // CORREO_CAMBIADO ya se registró en la transacción del cambio (crítica)
+        }
         efectos.auditarVerificacion(token.usuarioId(), switch (resultado) {
             case VERIFICADA -> null;
             case EXPIRADA -> "ENLACE_EXPIRADO";
             case YA_USADA, INVALIDA -> "ENLACE_YA_USADO";
         }, contexto);
         return resultado;
+    }
+
+    private ResultadoVerificacion activarCuenta(TokenVerificacion token, Instant ahora) {
+        if (token.usado()) return ResultadoVerificacion.YA_USADA;
+        if (!token.vigenteEn(ahora)) return ResultadoVerificacion.EXPIRADA;
+        // Cuenta antes que token: dos verificaciones simultáneas se ordenan por la fila de la cuenta.
+        if (!cuentas.activarSiPendiente(token.usuarioId(), ahora)) return ResultadoVerificacion.YA_USADA;
+        if (!tokens.consumir(token.id(), token.usuarioId(), ahora)) return ResultadoVerificacion.YA_USADA;
+        efectos.publicarUsuarioCreado(token.usuarioId(), ahora);
+        return ResultadoVerificacion.VERIFICADA;
+    }
+
+    private ResultadoVerificacion confirmarCambioCorreo(TokenVerificacion token, Instant ahora,
+                                                        ContextoPeticion contexto) {
+        if (token.usado()) return ResultadoVerificacion.YA_USADA;
+        if (!token.vigenteEn(ahora)) return ResultadoVerificacion.EXPIRADA;
+        // Misma regla: la fila de la cuenta se bloquea antes de gastar el token. El contrato solo publica
+        // los dos 410 de enlace, así que una dirección ya tomada se responde como enlace ya usado.
+        if (cuentas.aplicarCambioCorreo(token.usuarioId(), token.destinoCorreo(), ahora)
+                != ResultadoAplicacionCorreo.APLICADO) {
+            return ResultadoVerificacion.YA_USADA;
+        }
+        if (!tokens.consumirCambioCorreo(token.id(), token.usuarioId(), ahora)) return ResultadoVerificacion.YA_USADA;
+        efectos.registrarCorreoCambiado(token.usuarioId(), ahora, contexto);
+        return ResultadoVerificacion.VERIFICADA;
     }
 
     @Override
