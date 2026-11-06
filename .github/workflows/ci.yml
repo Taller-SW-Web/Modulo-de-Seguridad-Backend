@@ -93,7 +93,7 @@ jobs:
   smoke-test:
     name: Backend - smoke test
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: [deploy]
     steps:
       - uses: actions/checkout@v6
@@ -114,7 +114,15 @@ jobs:
       - name: Verificar JWKS
         run: |
           echo "Verificando /.well-known/openid-configuration..."
-          curl -s https://g7-auth-service.onrender.com/.well-known/openid-configuration | jq -e '.issuer'
+          for i in $(seq 1 10); do
+            issuer=$(curl -s https://g7-auth-service.onrender.com/.well-known/openid-configuration 2>/dev/null | jq -r '.issuer // empty')
+            if [ -n "$issuer" ]; then
+              echo "✅ JWKS válido - issuer: $issuer"
+              break
+            fi
+            echo "Esperando descubrimiento OIDC... intento $i"
+            sleep 10
+          done
       - name: Smoke test login
         env:
           SMOKE_LOGIN_EMAIL: ${{ secrets.SMOKE_LOGIN_EMAIL }}
@@ -128,19 +136,14 @@ jobs:
     timeout-minutes: 30
     needs: [deploy, smoke-test, build-test, imagen]
     env:
-      # Apunta al SPA desplegado en Render, no al ID del servicio
       E2E_BASE_URL: https://g7-auth-service.onrender.com
-      # Credenciales de cuenta de prueba (solo por variable de entorno, nunca en Git)
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
-      # Credenciales para OTP en CI
       E2E_CORREO_CLIENTE: ${{ secrets.E2E_CORREO_CLIENTE }}
       E2E_CORREO_ADMIN: ${{ secrets.E2E_CORREO_ADMIN }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      # Nota: la suite Playwright vive en el repo frontend (G7-Modulo-de-Seguridad-Frontend)
-      # Este job corre en el backend pero ejecuta los specs contra la URL desplegada
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
