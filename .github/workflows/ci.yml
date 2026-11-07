@@ -165,6 +165,7 @@ jobs:
           needs.imagen.result == 'success' &&
           needs.pruebas-script-deploy.result == 'success' &&
           needs.pruebas-script-smoke.result == 'success' &&
+          vars.E2E_RENDER_HABILITADO == 'true' &&
           github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
           needs.deploy.result == 'success' && needs.smoke-test.result == 'success' }}
     env:
@@ -229,7 +230,7 @@ jobs:
 
   e2e-aislado:
     name: E2E Playwright en entorno aislado
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
