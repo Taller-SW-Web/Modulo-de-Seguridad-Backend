@@ -1,8 +1,10 @@
 package com.marketplace.auth_service.perfil.application.port.in;
 
+import com.marketplace.auth_service.perfil.application.dto.CambioAdministrativo;
 import com.marketplace.auth_service.perfil.application.dto.CambioAtributos;
 import com.marketplace.auth_service.perfil.application.dto.PerfilProyectado;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.UUID;
 
 /**
@@ -19,4 +21,11 @@ public interface PerfilPort {
 
     /** Edita solo nombres/apellidos/celular propios; los omitidos se conservan. Devuelve el perfil actualizado. */
     PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio);
+
+    /**
+     * Edición administrativa (FEAT-04-T6): exige {@code atributos.editar} revalidado contra la base,
+     * también sobre la cuenta propia. Sin permiso no lee ni escribe nada.
+     */
+    PerfilProyectado actualizarComoAdministrador(ActorUsuario actor, UUID usuarioId, CambioAdministrativo cambio,
+                                                 ContextoPeticion contexto);
 }

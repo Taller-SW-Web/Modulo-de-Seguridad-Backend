@@ -1,9 +1,11 @@
 package com.marketplace.auth_service.perfil.application.service;
 
+import com.marketplace.auth_service.perfil.application.dto.CambioAdministrativo;
 import com.marketplace.auth_service.perfil.application.dto.CambioAtributos;
 import com.marketplace.auth_service.perfil.application.dto.PerfilProyectado;
 import com.marketplace.auth_service.perfil.application.port.in.PerfilPort;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -11,10 +13,13 @@ import java.util.UUID;
 public final class PerfilService implements PerfilPort {
     private final ConsultarPerfil consulta;
     private final EditarPerfilPropio edicion;
+    private final EditarAtributosAdministrativo edicionAdministrativa;
 
-    public PerfilService(ConsultarPerfil consulta, EditarPerfilPropio edicion) {
+    public PerfilService(ConsultarPerfil consulta, EditarPerfilPropio edicion,
+                         EditarAtributosAdministrativo edicionAdministrativa) {
         this.consulta = Objects.requireNonNull(consulta, "consulta");
         this.edicion = Objects.requireNonNull(edicion, "edicion");
+        this.edicionAdministrativa = Objects.requireNonNull(edicionAdministrativa, "edicionAdministrativa");
     }
 
     @Override
@@ -30,5 +35,11 @@ public final class PerfilService implements PerfilPort {
     @Override
     public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
         return edicion.actualizarPropio(actor, cambio);
+    }
+
+    @Override
+    public PerfilProyectado actualizarComoAdministrador(ActorUsuario actor, UUID usuarioId,
+                                                        CambioAdministrativo cambio, ContextoPeticion contexto) {
+        return edicionAdministrativa.actualizar(actor, usuarioId, cambio, contexto);
     }
 }

@@ -1,6 +1,10 @@
 package com.marketplace.auth_service.perfil.adapter.in.web;
 
 import com.marketplace.auth_service.perfil.domain.model.AtributoInvalidoException;
+import com.marketplace.auth_service.perfil.domain.model.AtributoNoAplicableException;
+import com.marketplace.auth_service.perfil.domain.model.CuentaObjetivoNoEncontradaException;
+import com.marketplace.auth_service.perfil.domain.model.EdicionAdministrativaNoPermitidaException;
+import com.marketplace.auth_service.perfil.domain.model.ProyeccionNoAutorizadaException;
 import com.marketplace.auth_service.perfil.domain.model.CuentaPerfilNoEncontradaException;
 import com.marketplace.auth_service.perfil.domain.model.DocumentoNoLegibleException;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
@@ -19,7 +23,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * Errores de {@link AtributosPropiosController}. Los datos inválidos responden 400
+ * Errores de {@link AtributosPropiosController} (rama propia y administrativa). Los datos inválidos responden 400
  * {@code VALIDACION} con {@code errores[]} por campo (catálogo de errores, FRONT-00 §2);
  * nunca se devuelve el valor recibido.
  */
@@ -33,6 +37,23 @@ class AtributosPropiosErroresAdvice {
     @ExceptionHandler(EdicionNoPermitidaException.class)
     ResponseEntity<ProblemDetail> noPermitida(EdicionNoPermitidaException e) {
         return Problemas.respuesta(HttpStatus.FORBIDDEN, "SCOPE_INSUFICIENTE", "Permisos insuficientes", null);
+    }
+
+    @ExceptionHandler({EdicionAdministrativaNoPermitidaException.class, ProyeccionNoAutorizadaException.class})
+    ResponseEntity<ProblemDetail> administrativaNoPermitida(RuntimeException e) {
+        return Problemas.respuesta(HttpStatus.FORBIDDEN, "SCOPE_INSUFICIENTE", "Permisos insuficientes", null);
+    }
+
+    @ExceptionHandler(CuentaObjetivoNoEncontradaException.class)
+    ResponseEntity<ProblemDetail> objetivoInexistente(CuentaObjetivoNoEncontradaException e) {
+        return Problemas.respuesta(HttpStatus.NOT_FOUND, "NO_ENCONTRADO", "Usuario no encontrado", null);
+    }
+
+    /** Nombra el campo y el rol que exige, nunca el valor recibido. */
+    @ExceptionHandler(AtributoNoAplicableException.class)
+    ResponseEntity<ProblemDetail> noAplicable(AtributoNoAplicableException e) {
+        return Problemas.respuesta(HttpStatus.UNPROCESSABLE_ENTITY, "ATRIBUTO_NO_APLICABLE",
+                "Atributo no aplicable al rol", e.getMessage());
     }
 
     @ExceptionHandler(AtributoInvalidoException.class)
