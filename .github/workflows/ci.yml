@@ -265,7 +265,7 @@ jobs:
       AUTH_OTP_HMAC_KEY_ID: ci
       AUTH_FALLOS_HMAC_KEY_ID: ci
       AUTH_OUTBOX_AES_KEY_ID: ci
-      E2E_CORREO_API: http://127.0.0.1:8025
+      E2E_CORREO_API: http://mailpit:8025
       G7_BACKEND_URL: http://127.0.0.1:8080
       E2E_CORREO_CLIENTE: cliente.a@fixtures.g7.test
       E2E_CORREO_ADMIN: admin@fixtures.g7.test
