@@ -1,6 +1,9 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.auditoria.application.port.in.AuditoriaPort;
+import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
 import com.marketplace.auth_service.autorizacion.application.port.in.AutorizacionPort;
+import com.marketplace.auth_service.perfil.adapter.out.capacidad.EfectosPerfilAdapter;
 import com.marketplace.auth_service.perfil.adapter.in.transaction.PerfilPortTransaccional;
 import com.marketplace.auth_service.perfil.adapter.out.capacidad.AutorizacionPerfilAdapter;
 import com.marketplace.auth_service.perfil.adapter.out.capacidad.CuentasPerfilAdapter;
@@ -21,6 +24,7 @@ import com.marketplace.auth_service.perfil.application.service.PerfilService;
 import com.marketplace.auth_service.perfil.application.service.ProyectorDocumento;
 import com.marketplace.auth_service.usuario.application.port.in.CuentaEscrituraInterna;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
+import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,6 +44,7 @@ public class PerfilConfig {
     @Bean
     PerfilPort perfilPort(CuentasPort cuentas, CuentaEscrituraInterna escritura, AutorizacionPort autorizacion,
                           PerfilClienteJpaRepository clientes, PerfilVendedorJpaRepository vendedores,
+                          AuditoriaPort auditoria, MensajeriaPort mensajeria,
                           ObjectProvider<ProtectorDocumento> protector) {
         var consulta = new ConsultarPerfil(
                 new CuentasPerfilAdapter(cuentas),
@@ -48,7 +53,8 @@ public class PerfilConfig {
                 new PerfilesPersistidosAdapter(clientes, vendedores),
                 new AutorizacionPerfilAdapter(autorizacion),
                 new ProyectorDocumento(protector.getIfAvailable(ProtectorDocumentoSinClave::new)));
-        var edicion = new EditarPerfilPropio(new EscrituraCuentaPerfilAdapter(cuentas, escritura), consulta);
+        var edicion = new EditarPerfilPropio(new EscrituraCuentaPerfilAdapter(cuentas, escritura), consulta,
+                new EfectosPerfilAdapter(auditoria, mensajeria, Clock.systemUTC()));
         return new PerfilPortTransaccional(new PerfilService(consulta, edicion));
     }
 

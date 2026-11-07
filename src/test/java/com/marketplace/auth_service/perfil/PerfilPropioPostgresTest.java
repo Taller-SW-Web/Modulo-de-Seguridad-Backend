@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marketplace.auth_service.AuthServiceApplication;
+import com.marketplace.auth_service.auditoria.adapter.out.persistence.AuditoriaJpaAdapter;
 import com.marketplace.auth_service.autorizacion.adapter.out.persistence.RequierePostgres;
+import com.marketplace.auth_service.configuration.AuditoriaConfig;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
 import com.marketplace.auth_service.configuration.PerfilConfig;
 import com.marketplace.auth_service.configuration.UsuarioConfiguration;
@@ -21,6 +23,9 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -33,6 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.DockerClientFactory;
@@ -47,8 +53,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
         showSql = false)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = AuthServiceApplication.class)
-@Import({UsuarioConfiguration.class, AutorizacionConfig.class, PerfilConfig.class,
-        PerfilPropioPostgresTest.Persistencia.class})
+@ImportAutoConfiguration(JacksonAutoConfiguration.class)
+@Import({UsuarioConfiguration.class, AutorizacionConfig.class, PerfilConfig.class, AuditoriaConfig.class,
+        AuditoriaJpaAdapter.class, PerfilPropioPostgresTest.Persistencia.class})
 @RequierePostgres
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PerfilPropioPostgresTest {
@@ -56,10 +63,12 @@ class PerfilPropioPostgresTest {
     @TestConfiguration(proxyBeanMethods = false)
     @EntityScan({"com.marketplace.auth_service.usuario.adapter.out.persistence.entity",
             "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity",
-            "com.marketplace.auth_service.perfil.adapter.out.persistence.entity"})
+            "com.marketplace.auth_service.perfil.adapter.out.persistence.entity",
+            "com.marketplace.auth_service.auditoria.adapter.out.persistence.entity"})
     @EnableJpaRepositories({"com.marketplace.auth_service.usuario.adapter.out.persistence.repository",
             "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository",
-            "com.marketplace.auth_service.perfil.adapter.out.persistence.repository"})
+            "com.marketplace.auth_service.perfil.adapter.out.persistence.repository",
+            "com.marketplace.auth_service.auditoria.adapter.out.persistence.repository"})
     static class Persistencia { }
 
     private static PostgreSQLContainer<?> contenedor;
@@ -88,6 +97,7 @@ class PerfilPropioPostgresTest {
         String propia = url.replaceFirst("/[^/?]+(\\?|$)", "/" + nombre + "$1");
         try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
             s.execute(leer("mfa/base-observada/schema.sql"));
+            s.execute(leer("db/migration/V106__auditoria_registro_id_y_outbox_reintento.sql"));
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
         }
         registro.add("spring.datasource.url", () -> propia);
@@ -100,6 +110,9 @@ class PerfilPropioPostgresTest {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
+
+    /** AuditoriaConfig pide un RabbitTemplate para el reintento; la porcion JPA no autoconfigura RabbitMQ. */
+    @MockitoBean RabbitTemplate rabbit;
 
     @Autowired PerfilPort perfil;
     @Autowired JdbcTemplate jdbc;
