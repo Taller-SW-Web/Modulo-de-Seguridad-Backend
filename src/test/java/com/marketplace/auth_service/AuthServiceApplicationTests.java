@@ -22,12 +22,16 @@ class AuthServiceApplicationTests {
         assertThat(contexto.getBeansOfType(CuentasPort.class)).hasSize(1);
         assertThat(contexto.getBeansOfType(CuentaEscrituraInterna.class)).hasSize(1);
         assertThat(contexto.getBeansOfType(ConsultaCuentasService.class)).isEmpty();
-        // EP-01-T003/T004 publican solo la consulta: GET del listado y del detalle, sin escritura administrativa.
-        var consultaUsuarios = rutas.getHandlerMethods().keySet().stream()
+        // EP-01-T003/T004 publican la consulta (GET del listado y del detalle) y FEAT-02 (SPEC-04) solo
+        // la baja lógica (DELETE del detalle); ninguna otra escritura sobre estas rutas.
+        var rutasUsuarios = rutas.getHandlerMethods().keySet().stream()
                 .filter(r -> r.getPatternValues().contains("/api/v1/usuarios")
                         || r.getPatternValues().contains("/api/v1/usuarios/{id}"))
                 .toList();
-        assertThat(consultaUsuarios).hasSize(2).allSatisfy(r ->
-                assertThat(r.getMethodsCondition().getMethods()).containsExactly(RequestMethod.GET));
+        assertThat(rutasUsuarios).hasSize(3);
+        assertThat(rutasUsuarios).filteredOn(r -> r.getMethodsCondition().getMethods().contains(RequestMethod.GET))
+                .hasSize(2);
+        assertThat(rutasUsuarios).filteredOn(r -> r.getMethodsCondition().getMethods().contains(RequestMethod.DELETE))
+                .singleElement().satisfies(r -> assertThat(r.getPatternValues()).containsExactly("/api/v1/usuarios/{id}"));
     }
 }
