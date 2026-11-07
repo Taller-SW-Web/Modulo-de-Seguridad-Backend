@@ -26,6 +26,11 @@ final class AtributosPropiosWebMapper {
     private AtributosPropiosWebMapper() {
     }
 
+    /** ¿El cuerpo trae algún atributo que exige edición administrativa? */
+    static boolean tienePrivilegiados(Map<String, Object> cuerpo) {
+        return cuerpo.keySet().stream().anyMatch(PRIVILEGIADOS::contains);
+    }
+
     static CambioAtributos aCambio(Map<String, Object> cuerpo) {
         for (String clave : cuerpo.keySet()) {
             if (PRIVILEGIADOS.contains(clave)) {

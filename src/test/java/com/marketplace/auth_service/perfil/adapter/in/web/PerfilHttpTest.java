@@ -12,6 +12,7 @@ import com.marketplace.auth_service.identidad.application.dto.ClaimsAcceso;
 import com.marketplace.auth_service.identidad.application.port.in.FirmaPort;
 import com.marketplace.auth_service.perfil.application.dto.AtributosCliente;
 import com.marketplace.auth_service.perfil.application.dto.AtributosVendedor;
+import com.marketplace.auth_service.perfil.application.dto.CambioAdministrativo;
 import com.marketplace.auth_service.perfil.application.dto.CambioAtributos;
 import com.marketplace.auth_service.perfil.application.dto.DocumentoProyectado;
 import com.marketplace.auth_service.perfil.application.dto.PerfilProyectado;
@@ -19,6 +20,7 @@ import com.marketplace.auth_service.perfil.application.port.in.PerfilPort;
 import com.marketplace.auth_service.perfil.domain.model.CuentaPerfilNoEncontradaException;
 import com.marketplace.auth_service.perfil.domain.model.DocumentoNoLegibleException;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -78,6 +80,12 @@ class PerfilHttpTest {
 
                 @Override
                 public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public PerfilProyectado actualizarComoAdministrador(ActorUsuario actor, UUID usuarioId,
+                        CambioAdministrativo cambio, ContextoPeticion contexto) {
                     throw new UnsupportedOperationException();
                 }
             };

@@ -1,9 +1,11 @@
 package com.marketplace.auth_service.perfil.adapter.in.transaction;
 
+import com.marketplace.auth_service.perfil.application.dto.CambioAdministrativo;
 import com.marketplace.auth_service.perfil.application.dto.CambioAtributos;
 import com.marketplace.auth_service.perfil.application.dto.PerfilProyectado;
 import com.marketplace.auth_service.perfil.application.port.in.PerfilPort;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.shared.domain.ContextoPeticion;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,5 +33,12 @@ public class PerfilPortTransaccional implements PerfilPort {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
         return delegado.actualizarPropio(actor, cambio);
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public PerfilProyectado actualizarComoAdministrador(ActorUsuario actor, UUID usuarioId,
+                                                        CambioAdministrativo cambio, ContextoPeticion contexto) {
+        return delegado.actualizarComoAdministrador(actor, usuarioId, cambio, contexto);
     }
 }
