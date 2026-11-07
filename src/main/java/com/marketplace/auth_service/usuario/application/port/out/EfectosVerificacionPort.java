@@ -16,6 +16,13 @@ public interface EfectosVerificacionPort {
     void publicarUsuarioCreado(UUID usuarioId, Instant ahora);
 
     /**
+     * Un cambio de correo confirmado (RF-16.9, RF-16.10), dentro de la transacción del cambio:
+     * {@code CORREO_CAMBIADO} crítico y {@code usuario.atributos_actualizados} con {@code "campos": ["correo"]}
+     * por el outbox. Ninguno lleva direcciones.
+     */
+    void registrarCorreoCambiado(UUID usuarioId, Instant ahora, ContextoPeticion contexto);
+
+    /**
      * {@code USUARIO_VERIFICADO} no crítico (RF-02.7): el éxito y los enlaces vencidos o usados.
      *
      * @param motivo {@code null} si se verificó; si no, el código del 410

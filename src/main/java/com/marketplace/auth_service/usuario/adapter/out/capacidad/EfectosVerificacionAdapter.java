@@ -55,6 +55,17 @@ public final class EfectosVerificacionAdapter implements EfectosVerificacionPort
     }
 
     @Override
+    public void registrarCorreoCambiado(UUID usuarioId, Instant ahora, ContextoPeticion contexto) {
+        // Crítica: confirma junto al cambio y, si el registro falla, el correo no cambia (RF-12.6).
+        // Ni el detalle ni el evento llevan direcciones (RF-16.9): solo el nombre del campo.
+        auditoria.registrarCritica(new RegistroSeguro(UUID.randomUUID(), "CORREO_CAMBIADO", "EXITO", "USUARIO",
+                usuarioId.toString(), usuarioId, reloj.instant(), contexto.ip(), contexto.agente(),
+                Map.of("via", "ENLACE")));
+        mensajeria.guardarEvento(new EventoUsuario(UUID.randomUUID(), "usuario.atributos_actualizados", Map.of(
+                "usuarioId", usuarioId.toString(), "campos", "correo", "fecha", ahora.toString())));
+    }
+
+    @Override
     public void auditarVerificacion(UUID usuarioId, String motivo, ContextoPeticion contexto) {
         boolean exito = motivo == null;
         var detalle = new LinkedHashMap<String, String>();

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
+import com.marketplace.auth_service.usuario.application.dto.ResultadoAplicacionCorreo;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoReenvio;
 import com.marketplace.auth_service.usuario.application.dto.ResultadoVerificacion;
 import com.marketplace.auth_service.usuario.application.port.out.CuentasVerificacionPort;
@@ -27,7 +28,10 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** FEAT-01-T3 con dobles: los cuatro casos del token, reversión de rechazos y cuota neutra del reenvío. */
+/**
+ * FEAT-01-T3 con dobles: los cuatro casos del token, reversión de rechazos y cuota neutra del reenvío.
+ * FEAT-04-T3 (ESC-16.3): el mismo endpoint confirma el cambio de correo con un token {@code CAMBIO_CORREO}.
+ */
 class VerificacionCorreoServiceTest {
 
     private static final Instant AHORA = Instant.parse("2026-10-23T15:00:00Z");
@@ -39,6 +43,7 @@ class VerificacionCorreoServiceTest {
     private TokenVerificacion token;
     private boolean pendiente = true;
     private boolean consumible = true;
+    private ResultadoAplicacionCorreo aplicacionCorreo = ResultadoAplicacionCorreo.APLICADO;
     private Duration espera = Duration.ZERO;
     private Optional<CuentaPendiente> cuentaPorCorreo = Optional.empty();
     private RuntimeException falloCorreo;
@@ -56,11 +61,19 @@ class VerificacionCorreoServiceTest {
                 pasos.add("consumir");
                 return consumible;
             }
+            @Override public boolean consumirCambioCorreo(UUID tokenId, UUID usuarioId, Instant ahora) {
+                pasos.add("consumir-cambio");
+                return consumible;
+            }
         };
         CuentasVerificacionPort cuentas = new CuentasVerificacionPort() {
             @Override public boolean activarSiPendiente(UUID usuarioId, Instant ahora) {
                 pasos.add("activar");
                 return pendiente;
+            }
+            @Override public ResultadoAplicacionCorreo aplicarCambioCorreo(UUID usuarioId, String correoNuevo, Instant ahora) {
+                pasos.add("aplicar-correo:" + correoNuevo);
+                return aplicacionCorreo;
             }
             @Override public Optional<CuentaPendiente> buscarPendiente(String correoNormalizado) {
                 pasos.add("buscar:" + correoNormalizado);
@@ -117,6 +130,71 @@ class VerificacionCorreoServiceTest {
         assertThat(pasos).isEmpty();
     }
 
+    private static TokenVerificacion cambioCorreo(Instant expira, boolean usado) {
+        return new TokenVerificacion(TOKEN_ID, USUARIO, expira, usado, "nuevo@ejemplo.com");
+    }
+
+    @Test
+    void esc163TokenDeCambioDeCorreoAplicaConsumeYRegistraElCambioSinActivarNiPublicarUsuarioCreado() {
+        token = cambioCorreo(AHORA.plus(Duration.ofHours(1)), false);
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.VERIFICADA);
+
+        // Cuenta antes que token; CORREO_CAMBIADO dentro de la transacción y sin USUARIO_VERIFICADO aparte.
+        assertThat(pasos).containsExactly("transaccion", "aplicar-correo:nuevo@ejemplo.com", "consumir-cambio",
+                "correo.cambiado");
+        assertThat(revertida).isFalse();
+    }
+
+    @Test
+    void tokenDeCambioDeCorreoVencidoNoCambiaNadaYAuditaElEnlaceExpirado() {
+        token = cambioCorreo(AHORA, false);
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.EXPIRADA);
+        assertThat(pasos).containsExactly("transaccion", "auditoria:ENLACE_EXPIRADO");
+        assertThat(revertida).isTrue();
+    }
+
+    @Test
+    void tokenDeCambioDeCorreoUsadoSeRespondeComoYaUsadoSinTocarLaCuenta() {
+        token = cambioCorreo(AHORA.plusSeconds(60), true);
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(pasos).containsExactly("transaccion", "auditoria:ENLACE_YA_USADO");
+        assertThat(revertida).isTrue();
+    }
+
+    @Test
+    void siLaDireccionNuevaYaEsDeOtraCuentaNoSeConsumeNiSeRegistraElCambio() {
+        token = cambioCorreo(AHORA.plusSeconds(60), false);
+        aplicacionCorreo = ResultadoAplicacionCorreo.CORREO_NO_DISPONIBLE; // la tomaron tras la solicitud
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(pasos).containsExactly("transaccion", "aplicar-correo:nuevo@ejemplo.com",
+                "auditoria:ENLACE_YA_USADO");
+        assertThat(revertida).isTrue();
+    }
+
+    @Test
+    void siOtraPeticionConsumioElTokenDeCambioSeRevierteElCorreoYNoSeRegistraNada() {
+        token = cambioCorreo(AHORA.plusSeconds(60), false);
+        consumible = false;
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(pasos).doesNotContain("correo.cambiado").containsExactly("transaccion",
+                "aplicar-correo:nuevo@ejemplo.com", "consumir-cambio", "auditoria:ENLACE_YA_USADO");
+        assertThat(revertida).isTrue();
+    }
+
+    @Test
+    void cuentaInexistenteEnElCambioDeCorreoSeRespondeComoYaUsado() {
+        token = cambioCorreo(AHORA.plusSeconds(60), false);
+        aplicacionCorreo = ResultadoAplicacionCorreo.CUENTA_NO_ENCONTRADA;
+
+        assertThat(servicio.verificar("conocido", CONTEXTO)).isEqualTo(ResultadoVerificacion.YA_USADA);
+        assertThat(pasos).doesNotContain("consumir-cambio", "correo.cambiado");
+    }
+
     @Test
     void reenvioConCuotaYCuentaPendienteEmiteUnEnlaceNuevo() {
         cuentaPorCorreo = Optional.of(new CuentaPendiente(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.MARKETPLACE));
@@ -158,8 +236,12 @@ class VerificacionCorreoServiceTest {
         servicio = new VerificacionCorreoService(new TokensVerificacionPort() {
             @Override public Optional<TokenVerificacion> localizar(String tokenClaro) { return Optional.empty(); }
             @Override public boolean consumir(UUID tokenId, UUID usuarioId, Instant ahora) { return false; }
+            @Override public boolean consumirCambioCorreo(UUID tokenId, UUID usuarioId, Instant ahora) { return false; }
         }, new CuentasVerificacionPort() {
             @Override public boolean activarSiPendiente(UUID usuarioId, Instant ahora) { return false; }
+            @Override public ResultadoAplicacionCorreo aplicarCambioCorreo(UUID usuarioId, String correoNuevo, Instant ahora) {
+                return ResultadoAplicacionCorreo.CUENTA_NO_ENCONTRADA;
+            }
             @Override public Optional<CuentaPendiente> buscarPendiente(String correo) { return Optional.empty(); }
         }, (correo, ahora) -> { throw new CuotaNoDisponibleException(); },
                 (usuarioId, correo, nombres, canal) -> { }, new Efectos(), Clock.fixed(AHORA, ZoneOffset.UTC));
@@ -186,6 +268,12 @@ class VerificacionCorreoServiceTest {
         public void publicarUsuarioCreado(UUID usuarioId, Instant ahora) {
             assertThat(usuarioId).isEqualTo(USUARIO);
             pasos.add("usuario.creado");
+        }
+
+        @Override
+        public void registrarCorreoCambiado(UUID usuarioId, Instant ahora, ContextoPeticion contexto) {
+            assertThat(usuarioId).isEqualTo(USUARIO);
+            pasos.add("correo.cambiado");
         }
 
         @Override
