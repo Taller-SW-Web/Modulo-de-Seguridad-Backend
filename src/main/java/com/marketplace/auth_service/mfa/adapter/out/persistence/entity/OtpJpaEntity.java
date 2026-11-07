@@ -38,6 +38,15 @@ public class OtpJpaEntity {
     @Column(nullable = false) private boolean usado;
     @Column(nullable = false) private int intentos;
     @Column(name = "invalidado_en") private OffsetDateTime invalidadoEn;
+    @Column(name = "cambio_mfa_id") private UUID cambioMfaId;
+
+    /** Compatibilidad con productores y fixtures de LOGIN_MFA. */
+    public OtpJpaEntity(UUID id, UUID usuarioId, UUID desafioId, String hashCodigo, String hashKeyId,
+            String destino, CanalOtp canal, String motivo, OffsetDateTime creadoEn, OffsetDateTime expiraEn,
+            boolean usado, int intentos, OffsetDateTime invalidadoEn) {
+        this(id, usuarioId, desafioId, hashCodigo, hashKeyId, destino, canal, motivo, creadoEn,
+                expiraEn, usado, intentos, invalidadoEn, null);
+    }
 
     @Override public String toString() { return "OtpJpaEntity[id=" + id + ", canal=" + canal + "]"; }
 }

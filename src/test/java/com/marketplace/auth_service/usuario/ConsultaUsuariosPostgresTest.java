@@ -8,6 +8,10 @@ import com.marketplace.auth_service.autorizacion.adapter.out.persistence.Requier
 import com.marketplace.auth_service.autorizacion.domain.exception.AccesoDenegadoException;
 import com.marketplace.auth_service.configuration.AutorizacionConfig;
 import com.marketplace.auth_service.configuration.UsuarioConfiguration;
+import com.marketplace.auth_service.proteccion.adapter.out.persistence.ProteccionJpaAdapter;
+import com.marketplace.auth_service.proteccion.application.port.in.ConsultaBloqueosPort;
+import com.marketplace.auth_service.proteccion.application.port.out.PersistenciaProteccionPort;
+import com.marketplace.auth_service.proteccion.application.service.ConsultaBloqueosService;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
 import com.marketplace.auth_service.usuario.application.dto.UsuarioVista;
@@ -17,6 +21,7 @@ import com.marketplace.auth_service.usuario.domain.exception.CuentaNoEncontradaE
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.time.OffsetDateTime;
+import java.time.Clock;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -27,6 +32,8 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -53,13 +60,24 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConsultaUsuariosPostgresTest {
 
-    /** Solo las entidades que componen esta consulta: cuentas y autorización. */
+    /**
+     * Solo las entidades que componen esta consulta: cuentas, autorización y la lectura
+     * de bloqueos de protección (RF-15.6) con su adaptador JPA real.
+     */
     @TestConfiguration(proxyBeanMethods = false)
     @EntityScan({"com.marketplace.auth_service.usuario.adapter.out.persistence.entity",
-            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity"})
+            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.entity",
+            "com.marketplace.auth_service.proteccion.adapter.out.persistence.entity"})
     @EnableJpaRepositories({"com.marketplace.auth_service.usuario.adapter.out.persistence.repository",
-            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository"})
-    static class Persistencia { }
+            "com.marketplace.auth_service.autorizacion.adapter.out.persistence.repository",
+            "com.marketplace.auth_service.proteccion.adapter.out.persistence.repository"})
+    @Import(ProteccionJpaAdapter.class)
+    static class Persistencia {
+        @Bean
+        ConsultaBloqueosPort consultaBloqueosPort(PersistenciaProteccionPort persistencia) {
+            return new ConsultaBloqueosService(persistencia, Clock.systemUTC());
+        }
+    }
 
     private static PostgreSQLContainer<?> contenedor;
 
@@ -88,6 +106,8 @@ class ConsultaUsuariosPostgresTest {
         try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
             s.execute(leer("mfa/base-observada/schema.sql"));
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
+            // revision de bloqueo (V104) para leer bloqueos con el adaptador real de protección.
+            ScriptUtils.executeSqlScript(c, new ClassPathResource("db/migration/V104__proteccion_racha_huella_revision.sql"));
         }
         registro.add("spring.datasource.url", () -> propia);
         registro.add("spring.datasource.username", () -> usuario);
@@ -154,10 +174,31 @@ class ConsultaUsuariosPostgresTest {
         UsuarioVista vistaCaro = activosClientes.elementos().getFirst();
         assertThat(vistaCaro.estado()).isEqualTo("ACTIVO");
         assertThat(vistaCaro.roles()).containsExactly("CLIENTE", "VENDEDOR");
+        assertThat(vistaCaro.bloqueo()).as("bloqueo vencido no se informa").isNull();
 
         var bloqueados = consulta.listar(actor(admin), filtro("BLOQUEADO", null, null, null, null));
         assertThat(bloqueados.elementos()).extracting(UsuarioVista::id).containsExactly(dani);
         assertThat(bloqueados.elementos().getFirst().estado()).isEqualTo("BLOQUEADO");
+        // RF-15.6: el bloqueo vigente llega desde protección por su puerto exportado.
+        var bloqueo = bloqueados.elementos().getFirst().bloqueo();
+        assertThat(bloqueo.tipo()).isEqualTo("AUTOMATICO");
+        assertThat(bloqueo.hasta()).isNotNull();
+        assertThat(bloqueo.motivo()).isNull();
+        assertThat(consulta.obtener(actor(admin), dani.toString()).bloqueo()).isEqualTo(bloqueo);
+    }
+
+    @Test
+    void bloqueoManualSinVencimientoConMotivo() {
+        UUID eli = cuenta("eli@clientes.test", "ACTIVO", "CLIENTE");
+        jdbc.update("insert into bloqueo(usuario_id, tipo, motivo) "
+                + "values (?, 'MANUAL'::tipo_bloqueo, 'Actividad sospechosa')", eli);
+
+        UsuarioVista vista = consulta.obtener(actor(admin), eli.toString());
+
+        assertThat(vista.estado()).isEqualTo("BLOQUEADO");
+        assertThat(vista.bloqueo().tipo()).isEqualTo("MANUAL");
+        assertThat(vista.bloqueo().hasta()).isNull();
+        assertThat(vista.bloqueo().motivo()).isEqualTo("Actividad sospechosa");
     }
 
     @Test

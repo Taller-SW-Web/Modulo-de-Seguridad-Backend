@@ -1,20 +1,28 @@
 package com.marketplace.auth_service.usuario.adapter.in.web;
 
+import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ActorUsuario;
+import com.marketplace.auth_service.usuario.adapter.in.web.dto.LoteUsuariosRequest;
+import com.marketplace.auth_service.usuario.adapter.in.web.dto.LoteUsuariosResponse;
 import com.marketplace.auth_service.usuario.adapter.in.web.dto.PaginaUsuariosResponse;
-import com.marketplace.auth_service.usuario.adapter.in.web.dto.UsuarioResponse;
 import com.marketplace.auth_service.usuario.application.dto.ConsultaUsuariosQuery;
 import com.marketplace.auth_service.usuario.application.port.in.ConsultaUsuariosPort;
+import java.util.List;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Consulta administrativa de cuentas: {@code listarUsuarios} (EP-01-T003) y
- * {@code obtenerUsuario} con token de persona (EP-01-T004).
+ * {@code obtenerUsuario} con token de persona (EP-01-T004) o de servicio
+ * (SPEC-18 FEAT-06-T1): la regla de la ruta ya exigió {@code usuario.ver} o el
+ * scope {@code usuarios:leer} antes de llegar aquí.
  *
  * <p>El actor sale del acceso validado por el filtro. Los parámetros llegan como
  * texto y los valida el caso de uso después de autorizar. Los errores los traduce
@@ -41,7 +49,19 @@ public class UsuariosController {
     }
 
     @GetMapping(path = "/api/v1/usuarios/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public UsuarioResponse obtener(@AuthenticationPrincipal ActorUsuario actor, @PathVariable("id") String id) {
-        return UsuariosWebMapper.aRespuesta(consulta.obtener(actor, id));
+    public ResponseEntity<?> obtener(@AuthenticationPrincipal Object principal, @PathVariable("id") String id) {
+        if (principal instanceof ActorServicio servicio) {
+            return ResponseEntity.ok(UsuariosWebMapper.aRespuestaServicio(consulta.obtenerParaServicio(servicio, id)));
+        }
+        return ResponseEntity.ok(UsuariosWebMapper.aRespuesta(consulta.obtener((ActorUsuario) principal, id)));
+    }
+
+    /** SPEC-18 RF-18.2/FEAT-06-T2: solo token de servicio, la ruta ya exigió {@code usuarios:leer}. */
+    @PostMapping(path = "/api/v1/usuarios/lote", consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public LoteUsuariosResponse lote(@AuthenticationPrincipal ActorServicio actor,
+                                      @RequestBody(required = false) LoteUsuariosRequest cuerpo) {
+        List<String> ids = cuerpo == null || cuerpo.ids() == null ? List.of() : cuerpo.ids();
+        return UsuariosWebMapper.aRespuestaLote(consulta.obtenerLoteParaServicio(actor, ids));
     }
 }

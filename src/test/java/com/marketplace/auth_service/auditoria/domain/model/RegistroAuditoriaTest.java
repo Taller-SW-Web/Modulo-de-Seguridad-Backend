@@ -25,10 +25,11 @@ class RegistroAuditoriaTest {
 
     @Test
     void catalogoCerradoConCriticidadDeSpec12() {
-        assertThat(AccionAuditable.values()).hasSize(31);
+        assertThat(AccionAuditable.values()).hasSize(32);
         assertThat(AccionAuditable.ROL_ASIGNADO.esCritica()).isTrue();
         assertThat(AccionAuditable.CONTRASENA_CAMBIADA.esCritica()).isTrue();
         assertThat(AccionAuditable.MODULO_OBTUVO_DOCUMENTO.esCritica()).isTrue();
+        assertThat(AccionAuditable.MODULO_CONSULTO_DIRECCIONES.esCritica()).isFalse();
         assertThat(AccionAuditable.SESION_INICIADA.esCritica()).isFalse();
         assertThat(AccionAuditable.SESION_FALLIDA.esCritica()).isFalse();
         assertThat(AccionAuditable.AUDITORIA_CONSULTADA.esCritica()).isFalse();

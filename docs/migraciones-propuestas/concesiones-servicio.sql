@@ -53,6 +53,7 @@ SELECT v.client_id, v.scope
     ('modulo-retail',      'postventa:reclamos:escribir'),
     ('modulo-ventas',      'postventa:reembolsos:procesar'),
     -- api-productos
+    ('modulo-marketplace', 'catalogo:leer'),
     ('modulo-chatbot',     'catalogo:leer'),
     ('modulo-chatbot',     'precios:leer'),
     ('modulo-chatbot',     'promociones:leer'),
@@ -69,6 +70,7 @@ SELECT v.client_id, v.scope
   JOIN scope s ON s.codigo = v.scope
 ON CONFLICT (client_id, scope) DO NOTHING;
 
--- Pendientes, NO concedidos (matriz §Catálogo de Productos): los scopes de
--- api-productos para modulo-marketplace y productos:fisicos:leer para
--- modulo-despacho esperan la confirmación de G6 por cliente.
+-- Pendientes, NO concedidos (matriz §Catálogo de Productos): productos:fisicos:leer
+-- para modulo-despacho sigue esperando la confirmación de G6 por cliente.
+-- catalogo:leer para modulo-marketplace quedó confirmado por G6 el 26-oct (ver
+-- matriz-scopes.md) y ya está en la lista de arriba.

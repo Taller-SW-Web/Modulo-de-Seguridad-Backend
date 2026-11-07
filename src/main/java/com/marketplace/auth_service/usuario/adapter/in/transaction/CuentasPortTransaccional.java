@@ -7,6 +7,7 @@ import com.marketplace.auth_service.usuario.application.dto.PaginaResultado;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +29,8 @@ public class CuentasPortTransaccional implements CuentasPort {
     public CuentaSnapshot bloquear(UUID id) { return delegado.bloquear(id); }
     @Override
     public long contarActivos(Set<UUID> ids) { return delegado.contarActivos(ids); }
+    @Override
+    public Map<UUID, CuentaSnapshot> leerLote(Set<UUID> ids) { return delegado.leerLote(ids); }
     @Override
     public PaginaResultado<CuentaSnapshot> consultar(FiltroCuenta filtro, Paginacion paginacion) {
         return delegado.consultar(filtro, paginacion);

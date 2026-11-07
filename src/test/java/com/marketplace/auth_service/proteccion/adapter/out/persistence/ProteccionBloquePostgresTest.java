@@ -289,6 +289,9 @@ class ProteccionBloquePostgresTest {
         public void desbloqueada(CuentaSnapshot c,UUID revision,ContextoPeticion p,Instant ahora) {
             escribir(c,revision,"DESBLOQUEADA");
         }
+        public void desbloqueadaPorRestablecimiento(CuentaSnapshot c,UUID revision,ContextoPeticion p,Instant ahora) {
+            escribir(c,revision,"DESBLOQUEADA_RESTABLECIMIENTO");
+        }
         void escribir(CuentaSnapshot c,UUID r,String accion) {
             jdbc.update("insert into b04_efecto_doble values(?,?,?)",c.usuarioId(),r,accion);
             if(fallar) throw new IllegalStateException("Fallo crítico sintético");

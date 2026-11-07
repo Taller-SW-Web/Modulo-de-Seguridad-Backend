@@ -34,6 +34,7 @@ public enum AccionAuditable {
     CORREO_CAMBIADO(true),
     MODULO_CONSULTO_USUARIO(false),
     MODULO_OBTUVO_DOCUMENTO(true),
+    MODULO_CONSULTO_DIRECCIONES(false),
     ACCESO_DENEGADO(false),
     AUDITORIA_CONSULTADA(false),
     AUDITORIA_EXPORTADA(false),

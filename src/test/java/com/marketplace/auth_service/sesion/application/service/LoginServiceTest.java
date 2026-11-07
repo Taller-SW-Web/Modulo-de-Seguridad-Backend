@@ -258,7 +258,7 @@ class LoginServiceTest {
         }
         @Override public ContextoSesion resolverAcceso(AccesoVerificado acceso) { throw new UnsupportedOperationException(); }
         @Override public RenovacionResultado renovar(SecretoRefresco secreto) { throw new UnsupportedOperationException(); }
-        @Override public CierreResultado cerrar(SecretoRefresco secreto) { throw new UnsupportedOperationException(); }
+        @Override public CierreResultado cerrar(SecretoRefresco secreto, ContextoPeticion contexto) { throw new UnsupportedOperationException(); }
         @Override public void revocarTodas(UUID usuarioId) { throw new UnsupportedOperationException(); }
         @Override public void revocarOtras(UUID usuarioId, UUID familiaActual) { throw new UnsupportedOperationException(); }
     }

@@ -39,6 +39,8 @@ public class CuentaEscrituraAdapter implements CuentaEscrituraInterna {
     }
     @Override
     public void guardarMfaVoluntario(UUID id, boolean habilitado) {
-        throw new UnsupportedOperationException("guardarMfaVoluntario reservado para SPEC-10");
+        var entity = usuarios.findById(id).orElseThrow(() -> new IllegalArgumentException("Cuenta inexistente"));
+        entity.setMfaHabilitado(habilitado);
+        usuarios.saveAndFlush(entity);
     }
 }

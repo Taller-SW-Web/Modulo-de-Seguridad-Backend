@@ -20,6 +20,7 @@ import com.marketplace.auth_service.sesion.application.dto.DatosIdentidad;
 import com.marketplace.auth_service.sesion.application.dto.IdentidadAutorizada;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
+import com.marketplace.auth_service.sesion.application.port.out.EfectosCierrePort;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.shared.domain.ActorServicio;
 import com.marketplace.auth_service.shared.domain.ContextoPeticion;
@@ -107,7 +108,8 @@ class IntrospeccionSesionPostgresTest {
             SesionCryptoAdapter cripto = new SesionCryptoAdapter();
             return new SesionTransaccional(new SesionService(persistencia, cripto, new PuenteFirmaAcceso(firma),
                     u -> new DatosIdentidad(u, u + "@ejemplo.test", "Cliente Prueba", List.of("CLIENTE"), List.of(),
-                            true), RELOJ), persistencia, cripto, u -> { });
+                            true), (usuarioId, familiaId, contexto, ahora) -> { }, RELOJ),
+                    persistencia, cripto, u -> { });
         }
     }
 

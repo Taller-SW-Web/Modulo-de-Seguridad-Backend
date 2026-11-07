@@ -10,7 +10,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 final class ContratosExportados {
     private static final String RAIZ = "com.marketplace.auth_service.";
     private static final Set<String> CAPACIDADES = Set.of("usuario", "sesion", "credencial", "token",
-            "mfa", "proteccion", "autorizacion", "identidad", "auditoria", "mensajeria", "perfil");
+            "mfa", "proteccion", "autorizacion", "identidad", "auditoria", "mensajeria", "perfil", "direccion");
 
     private ContratosExportados() {}
 

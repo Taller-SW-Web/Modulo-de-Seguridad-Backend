@@ -10,4 +10,8 @@ public interface ProteccionPort {
     /** Solo autenticación completa; nunca al emitir un desafío. Cuenta ya bloqueada. */
     void completarLogin(UUID usuarioId);
     ResultadoDesbloqueo desbloquear(PruebaEnlace prueba, ContextoPeticion contexto);
+    /** El productor ya bloqueó la cuenta; fija el orden cuenta → bloqueo/racha → token. */
+    void prepararRestablecimiento(UUID usuarioId);
+    /** Levanta únicamente el bloqueo automático y reinicia los intentos fallidos. */
+    void restablecerPorRecuperacion(UUID usuarioId, ContextoPeticion contexto, Instant ahora);
 }

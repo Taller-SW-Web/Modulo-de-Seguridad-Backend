@@ -27,7 +27,7 @@ class MigracionesAlineadasTest {
         try (Stream<Path> s = Files.list(FLYWAY)) {
             enFlyway = s.map(p -> p.getFileName().toString()).sorted().toList();
         }
-        assertThat(propuestas).hasSize(7);
+        assertThat(propuestas).hasSize(8);
         assertThat(enFlyway).containsExactlyElementsOf(propuestas.stream().map(p -> p.getFileName().toString()).toList());
         for (Path propuesta : propuestas) {
             assertThat(Files.readString(FLYWAY.resolve(propuesta.getFileName())))

@@ -4,6 +4,22 @@ Repositorio de código independiente de `Modulo-de-Seguridad`, que conserva las
 fuentes SDD. Base nueva: Java 21, Spring Boot **3.5.16**, Gradle wrapper
 **8.14.3**, paquete `com.marketplace.auth_service`. El pom Maven antiguo no se usa.
 
+## Entorno desplegado (H3)
+
+| | URL |
+|---|---|
+| SPA | https://g7-seguridad-spa.onrender.com |
+| API | https://g7-auth-service.onrender.com/api/v1 |
+| Salud | https://g7-auth-service.onrender.com/actuator/health |
+| Issuer | `https://g7-auth-service.onrender.com/api/v1/auth` |
+| JWKS | https://g7-auth-service.onrender.com/api/v1/auth/.well-known/jwks.json |
+
+Render (Static Site y Web Service), PostgreSQL en Supabase y SMTP de Brevo.
+Revisiones, comprobaciones y lo que sigue pendiente (reinicio, reversión):
+[ficha del entorno](docs/despliegue/DESPLIEGUE-T005.md#entorno-real-h3) y
+[evidencia TEC-INFRA-T005](docs/evidencia/TEC-INFRA-T005.md). El plan gratuito
+duerme el servicio: despertarlo con `/actuator/health` antes de usarlo.
+
 ## Antes de implementar
 
 Abrir también el clon de [documentación G7](https://github.com/Taller-SW-Web/Modulo-de-Seguridad).

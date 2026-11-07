@@ -63,6 +63,12 @@ class MfaJpaPostgresTest {
             }
             ScriptUtils.executeSqlScript(conexion, new ClassPathResource("mfa/historicos-previos-v103.sql"));
             ScriptUtils.executeSqlScript(conexion, new FileSystemResource("docs/migraciones-propuestas/V103__mfa_desafio_otp.sql"));
+            conexion.setAutoCommit(false);
+            try(var sentencia = conexion.createStatement()) {
+                sentencia.execute(java.nio.file.Files.readString(java.nio.file.Path.of("docs/migraciones-propuestas/V102__sesion_familia_acceso.sql")));
+                sentencia.execute(java.nio.file.Files.readString(java.nio.file.Path.of("docs/migraciones-propuestas/V108__cambio_mfa.sql")));
+            }
+            conexion.commit();
         } catch (Exception e) {
             throw new IllegalStateException("No se pudo preparar el PostgreSQL de prueba MFA", e);
         }
@@ -180,7 +186,7 @@ class MfaJpaPostgresTest {
     @Test
     void baseCompletaConservaTablasVistaYConstraintsDeOtrosDuenos() {
         assertThat(jdbc.queryForObject("select count(*) from information_schema.tables "
-                + "where table_schema='public' and table_type='BASE TABLE'", Integer.class)).isEqualTo(22);
+                + "where table_schema='public' and table_type='BASE TABLE'", Integer.class)).isEqualTo(25);
         assertThat(jdbc.queryForObject("select estado::text from usuario_estado_efectivo where usuario_id=?",
                 String.class, usuario)).isEqualTo("ACTIVO");
         assertThat(jdbc.queryForObject("select count(*) from pg_trigger where tgname='tg_auditoria_solo_anexado'",
