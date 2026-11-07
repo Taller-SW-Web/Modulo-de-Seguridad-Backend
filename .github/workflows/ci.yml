@@ -165,9 +165,8 @@ jobs:
           needs.imagen.result == 'success' &&
           needs.pruebas-script-deploy.result == 'success' &&
           needs.pruebas-script-smoke.result == 'success' &&
-          ((github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
-            needs.deploy.result == 'success' && needs.smoke-test.result == 'success') ||
-           github.event_name == 'workflow_dispatch') }}
+          github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+          needs.deploy.result == 'success' && needs.smoke-test.result == 'success' }}
     env:
       E2E_BASE_URL: https://g7-seguridad-spa.onrender.com
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
@@ -227,3 +226,109 @@ jobs:
             echo "❌ No se generó el informe"
             exit 1
           fi
+
+  e2e-aislado:
+    name: E2E Playwright en entorno aislado
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: temporal-ci
+          POSTGRES_DB: g7_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g7_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.32
+        ports: ['1025:1025', '8025:8025']
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: temporal-ci
+      PGDATABASE: g7_e2e
+      DB_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/g7_e2e
+      DB_USERNAME: postgres
+      DB_PASSWORD: temporal-ci
+      SPRING_MAIL_HOST: 127.0.0.1
+      SPRING_MAIL_PORT: '1025'
+      G7_CORREO_REMITENTE: pruebas@fixtures.g7.test
+      G7_CORS_ORIGENES: http://localhost:5173
+      G7_FIXTURES_CUENTAS_HABILITADAS: 'true'
+      G7_EVENTOS_PUBLICAR: 'false'
+      AUTH_ISSUER: http://localhost:8080/api/v1/auth
+      AUTH_OTP_HMAC_KEY_ID: ci
+      AUTH_FALLOS_HMAC_KEY_ID: ci
+      AUTH_OUTBOX_AES_KEY_ID: ci
+      E2E_CORREO_API: http://127.0.0.1:8025
+      G7_BACKEND_URL: http://127.0.0.1:8080
+      E2E_CORREO_CLIENTE: cliente.a@fixtures.g7.test
+      E2E_CORREO_ADMIN: admin@fixtures.g7.test
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Checkout de la suite frontend
+        uses: actions/checkout@v6
+        with:
+          repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
+          ref: 227dbc97303a9289ecf68a8ee83dd1f569c7bd9f
+          path: frontend
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inicializar la base temporal
+        run: bash .github/scripts/e2e-init-db.sh
+      - name: Preparar claves temporales y backend
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/ci-firma.pem" 2>/dev/null
+          printf 'EjemploComun8!\n' > "$RUNNER_TEMP/ci-comunes.txt"
+          clave="Ci$(openssl rand -hex 16)9!"
+          echo "::add-mask::$clave"
+          {
+            echo "G7_FIXTURES_CUENTAS_CLAVE=$clave"
+            echo "E2E_CUENTAS_CLAVE=$clave"
+            echo "AUTH_CLAVE_PRIVADA_ARCHIVO=$RUNNER_TEMP/ci-firma.pem"
+            echo "G7_PASSWORD_COMUNES_ARCHIVO=$RUNNER_TEMP/ci-comunes.txt"
+            for variable in AUTH_OTP_HMAC_KEY AUTH_FALLOS_HMAC_KEY AUTH_OUTBOX_AES_KEY AUTH_SOLICITUD_LIMITADA_HMAC_KEY; do
+              valor=$(openssl rand -base64 32)
+              echo "::add-mask::$valor" >&2
+              echo "$variable=$valor"
+            done
+          } >> "$GITHUB_ENV"
+          bash ./gradlew --no-daemon bootJar -x test
+      - name: Iniciar backend aislado
+        run: |
+          set -euo pipefail
+          java -jar build/libs/*-SNAPSHOT.jar > "$RUNNER_TEMP/e2e-backend.log" 2>&1 &
+          for intento in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8080/actuator/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo '::error::El backend de pruebas no arrancó.'
+          tail -n 60 "$RUNNER_TEMP/e2e-backend.log"
+          exit 1
+      - name: Instalar y ejecutar Playwright
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --workers=1
+      - name: Guardar informe del entorno aislado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-aislado-${{ github.run_id }}
+          path: frontend/playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
