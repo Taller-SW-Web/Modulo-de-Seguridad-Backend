@@ -10,8 +10,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Matriz cerrada rol → permisos de este módulo (RF-11.9): los ocho de
- * administración son de {@code ADMIN_SISTEMA}; {@code cliente.registrar} y
+ * Matriz cerrada rol → permisos de este módulo (RF-11.9): los nueve de
+ * administración (ocho hasta SPEC-19) son de {@code ADMIN_SISTEMA}; {@code cliente.registrar} y
  * {@code cliente.buscar}, de {@code VENDEDOR}; el resto de roles no tiene
  * permisos de Seguridad.
  *
@@ -30,7 +30,8 @@ public final class CatalogoAutorizacion {
         }
         matriz.put(Rol.ADMIN_SISTEMA, Collections.unmodifiableSet(EnumSet.of(
                 Permiso.USUARIO_VER, Permiso.USUARIO_CREAR, Permiso.USUARIO_DESACTIVAR, Permiso.USUARIO_REACTIVAR,
-                Permiso.ROL_ASIGNAR, Permiso.AUDITORIA_VER, Permiso.CUENTA_BLOQUEAR, Permiso.ATRIBUTOS_EDITAR)));
+                Permiso.ROL_ASIGNAR, Permiso.AUDITORIA_VER, Permiso.CUENTA_BLOQUEAR, Permiso.ATRIBUTOS_EDITAR,
+                Permiso.INTEGRACION_GESTIONAR)));
         matriz.put(Rol.VENDEDOR, Collections.unmodifiableSet(EnumSet.of(
                 Permiso.CLIENTE_REGISTRAR, Permiso.CLIENTE_BUSCAR)));
         MATRIZ = Collections.unmodifiableMap(matriz);

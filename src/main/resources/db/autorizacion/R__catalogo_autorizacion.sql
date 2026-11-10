@@ -38,7 +38,8 @@ INSERT INTO permiso (codigo, modulo, descripcion) VALUES
     ('cuenta.bloquear',    'seguridad', 'Bloquear y desbloquear cuentas'),
     ('atributos.editar',   'seguridad', 'Editar los atributos de cualquier cuenta'),
     ('cliente.registrar',  'seguridad', 'Registrar a un cliente en tienda (A6)'),
-    ('cliente.buscar',     'seguridad', 'Encontrar a un cliente por su documento (A7)')
+    ('cliente.buscar',     'seguridad', 'Encontrar a un cliente por su documento (A7)'),
+    ('integracion.gestionar', 'seguridad', 'Gestionar clientes técnicos y sus scopes (SPEC-19)')
 ON CONFLICT (codigo) DO UPDATE
     SET modulo = EXCLUDED.modulo,
         descripcion = EXCLUDED.descripcion;
@@ -52,6 +53,7 @@ INSERT INTO rol_permiso (rol_codigo, permiso_codigo) VALUES
     ('ADMIN_SISTEMA', 'auditoria.ver'),
     ('ADMIN_SISTEMA', 'cuenta.bloquear'),
     ('ADMIN_SISTEMA', 'atributos.editar'),
+    ('ADMIN_SISTEMA', 'integracion.gestionar'),
     ('VENDEDOR',      'cliente.registrar'),
     ('VENDEDOR',      'cliente.buscar')
 ON CONFLICT (rol_codigo, permiso_codigo) DO NOTHING;

@@ -173,8 +173,8 @@ class ClientesServicioPostgresTest {
         assertThat(roles).extracting(RolCatalogado::codigo).containsExactly("CLIENTE", "VENDEDOR", "ADMIN_VENTAS",
                 "GESTOR_DESPACHO", "GESTOR_COMERCIAL", "ADMIN_SISTEMA");
         assertThat(roles.get(1).permisos()).containsExactly("cliente.buscar", "cliente.registrar");
-        assertThat(roles.get(5).permisos()).hasSize(8).contains("usuario.ver", "rol.asignar");
-        assertThat(catalogo.permisos("seguridad")).hasSize(10);
+        assertThat(roles.get(5).permisos()).hasSize(9).contains("usuario.ver", "rol.asignar", "integracion.gestionar");
+        assertThat(catalogo.permisos("seguridad")).hasSize(11);
         assertThat(catalogo.permisos("ventas")).isEmpty();
     }
 }

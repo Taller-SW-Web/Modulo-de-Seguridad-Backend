@@ -93,7 +93,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
         assertThat(jdbc().queryForList("SELECT DISTINCT modulo FROM permiso", String.class))
                 .containsExactly("seguridad");
         assertThat(jdbc().queryForList("SELECT codigo FROM permiso", String.class))
-                .hasSize(10)
+                .hasSize(11)
                 .allSatisfy(c -> assertThat(Permiso.desdeCodigo(c)).isPresent());
     }
 
@@ -111,7 +111,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
         assertThat(jdbc().queryForObject("SELECT nombre FROM rol WHERE codigo = 'CLIENTE'", String.class))
                 .isEqualTo("Cliente");
-        assertThat(jdbc().queryForObject("SELECT count(*) FROM rol_permiso", Integer.class)).isEqualTo(10);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM rol_permiso", Integer.class)).isEqualTo(11);
     }
 
     // ── Asociaciones ──────────────────────────────────────────
@@ -150,20 +150,20 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
     }
 
     @Test
-    void esc11_4_adminYVendedorSumanDiezPermisosSinDuplicados() {
+    void esc11_4_adminYVendedorSumanOncePermisosSinDuplicados() {
         PermisosResueltos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA, Rol.VENDEDOR));
 
         assertThat(efectivos.codigosRoles()).containsExactly("ADMIN_SISTEMA", "VENDEDOR");
-        assertThat(efectivos.codigosPermisos()).hasSize(10).doesNotHaveDuplicates()
+        assertThat(efectivos.codigosPermisos()).hasSize(11).doesNotHaveDuplicates()
                 .containsExactlyInAnyOrderElementsOf(
                         Set.of(Permiso.values()).stream().map(Permiso::codigo).toList());
     }
 
     @Test
-    void esc11_7_unAdministradorTieneLosOchoPermisosDeAdministracion() {
+    void esc11_7_unAdministradorTieneLosNuevePermisosDeAdministracion() {
         PermisosResueltos efectivos = autorizacion.resolver(personaCon(Rol.ADMIN_SISTEMA));
 
-        assertThat(efectivos.codigosPermisos()).hasSize(8)
+        assertThat(efectivos.codigosPermisos()).hasSize(9).contains("integracion.gestionar")
                 .doesNotContain("cliente.registrar", "cliente.buscar")
                 .allSatisfy(p -> assertThat(p).contains("."));
     }

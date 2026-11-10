@@ -13,11 +13,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermisosEfectivosTest {
 
     @Test
-    void esc11_4_adminYVendedorDanLosDiezPermisos() {
+    void esc11_4_adminYVendedorDanLosOncePermisos() {
         PermisosEfectivos efectivos = PermisosEfectivos.desdeCatalogo(List.of(Rol.VENDEDOR, Rol.ADMIN_SISTEMA));
 
         assertThat(efectivos.codigosRoles()).containsExactly("ADMIN_SISTEMA", "VENDEDOR");
-        assertThat(efectivos.codigosPermisos()).hasSize(10).doesNotHaveDuplicates().isSorted();
+        assertThat(efectivos.codigosPermisos()).hasSize(11).doesNotHaveDuplicates().isSorted();
     }
 
     @Test

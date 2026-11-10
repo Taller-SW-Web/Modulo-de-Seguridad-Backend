@@ -25,7 +25,8 @@ class RegistroAuditoriaTest {
 
     @Test
     void catalogoCerradoConCriticidadDeSpec12() {
-        assertThat(AccionAuditable.values()).hasSize(32);
+        assertThat(AccionAuditable.values()).hasSize(38);
+        assertThat(AccionAuditable.SECRETO_SERVICIO_ROTADO.esCritica()).isTrue();
         assertThat(AccionAuditable.ROL_ASIGNADO.esCritica()).isTrue();
         assertThat(AccionAuditable.CONTRASENA_CAMBIADA.esCritica()).isTrue();
         assertThat(AccionAuditable.MODULO_OBTUVO_DOCUMENTO.esCritica()).isTrue();
@@ -33,6 +34,16 @@ class RegistroAuditoriaTest {
         assertThat(AccionAuditable.SESION_INICIADA.esCritica()).isFalse();
         assertThat(AccionAuditable.SESION_FALLIDA.esCritica()).isFalse();
         assertThat(AccionAuditable.AUDITORIA_CONSULTADA.esCritica()).isFalse();
+    }
+
+    @Test
+    void spec19_lasAccionesDeClientesTecnicosAceptanSuDetalleSinSecreto() {
+        assertThat(nuevo("SCOPE_CONCEDIDO", Map.of("clientId", "modulo-x", "scope", "roles:leer")).detalle())
+                .containsEntry("scope", "roles:leer");
+        assertThat(nuevo("CLIENTE_SERVICIO_CREADO", Map.of("clientId", "modulo-x", "scopes", "a:b c:d")).accion())
+                .isEqualTo(AccionAuditable.CLIENTE_SERVICIO_CREADO);
+        assertThatThrownBy(() -> nuevo("SECRETO_SERVICIO_ROTADO", Map.of("clientSecret", "x")))
+                .isInstanceOf(DetalleInseguroException.class);
     }
 
     @Test

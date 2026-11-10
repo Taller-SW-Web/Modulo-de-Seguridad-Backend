@@ -52,8 +52,8 @@ class CatalogoYRolesTest {
     }
 
     @Test
-    void hayDiezPermisosTodosRecursoPuntoAccion() {
-        assertThat(Permiso.values()).hasSize(10);
+    void hayOncePermisosTodosRecursoPuntoAccion() {
+        assertThat(Permiso.values()).hasSize(11);
         assertThat(Arrays.stream(Permiso.values()).map(Permiso::codigo))
                 .allSatisfy(c -> assertThat(c).matches("^[a-z_]+\\.[a-z_]+$"));
     }
@@ -66,8 +66,8 @@ class CatalogoYRolesTest {
     }
 
     @Test
-    void rf11_9_adminTieneOchoVendedorDosYElRestoNinguno() {
-        assertThat(CatalogoAutorizacion.permisosDe(Rol.ADMIN_SISTEMA)).hasSize(8)
+    void rf11_9_adminTieneNueveVendedorDosYElRestoNinguno() {
+        assertThat(CatalogoAutorizacion.permisosDe(Rol.ADMIN_SISTEMA)).hasSize(9).contains(Permiso.INTEGRACION_GESTIONAR)
                 .doesNotContain(Permiso.CLIENTE_REGISTRAR, Permiso.CLIENTE_BUSCAR);
         assertThat(CatalogoAutorizacion.permisosDe(Rol.VENDEDOR))
                 .containsExactlyInAnyOrder(Permiso.CLIENTE_REGISTRAR, Permiso.CLIENTE_BUSCAR);
