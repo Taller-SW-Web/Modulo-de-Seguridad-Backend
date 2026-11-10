@@ -38,7 +38,14 @@ public enum AccionAuditable {
     ACCESO_DENEGADO(false),
     AUDITORIA_CONSULTADA(false),
     AUDITORIA_EXPORTADA(false),
-    AUDITORIA_PURGADA(false);
+    AUDITORIA_PURGADA(false),
+    // SPEC-19 (FEAT-14): gestión de clientes técnicos, todas críticas.
+    CLIENTE_SERVICIO_CREADO(true),
+    CLIENTE_SERVICIO_DESACTIVADO(true),
+    CLIENTE_SERVICIO_REACTIVADO(true),
+    SECRETO_SERVICIO_ROTADO(true),
+    SCOPE_CONCEDIDO(true),
+    SCOPE_REVOCADO(true);
 
     private final boolean critica;
 

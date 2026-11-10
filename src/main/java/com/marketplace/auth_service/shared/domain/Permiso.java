@@ -21,7 +21,9 @@ public enum Permiso {
     CUENTA_BLOQUEAR("cuenta.bloquear"),
     ATRIBUTOS_EDITAR("atributos.editar"),
     CLIENTE_REGISTRAR("cliente.registrar"),
-    CLIENTE_BUSCAR("cliente.buscar");
+    CLIENTE_BUSCAR("cliente.buscar"),
+    /** Gestión de clientes técnicos y sus scopes (SPEC-19, FEAT-14). */
+    INTEGRACION_GESTIONAR("integracion.gestionar");
 
     private final String codigo;
 

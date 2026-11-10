@@ -120,10 +120,10 @@ class NimbusFirmadorJwsTest {
     }
 
     @Test
-    void unAccesoConDiezPermisosPesaMenosDe4Kb() {
+    void unAccesoConOncePermisosPesaMenosDe4Kb() {
         List<String> diez = List.of("usuario.ver", "usuario.crear", "usuario.desactivar", "usuario.reactivar",
                 "cuenta.bloquear", "rol.asignar", "atributos.editar", "auditoria.ver", "cliente.registrar",
-                "cliente.buscar");
+                "cliente.buscar", "integracion.gestionar");
 
         String token = firmar(List.of("ADMIN_SISTEMA", "VENDEDOR"), diez).token();
 
