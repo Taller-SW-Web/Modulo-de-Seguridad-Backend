@@ -277,7 +277,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
-          ref: 227dbc97303a9289ecf68a8ee83dd1f569c7bd9f
+          # develop con FEAT-16 (la SPA pide el access cifrado y toma los permisos de la respuesta).
+          ref: 3c3aef1603b3d9dfe8474643b24504be421cbb2d
           path: frontend
           persist-credentials: false
       - uses: actions/setup-java@v4
@@ -301,7 +302,7 @@ jobs:
             echo "E2E_CUENTAS_CLAVE=$clave"
             echo "AUTH_CLAVE_PRIVADA_ARCHIVO=$RUNNER_TEMP/ci-firma.pem"
             echo "G7_PASSWORD_COMUNES_ARCHIVO=$RUNNER_TEMP/ci-comunes.txt"
-            for variable in AUTH_OTP_HMAC_KEY AUTH_FALLOS_HMAC_KEY AUTH_OUTBOX_AES_KEY AUTH_SOLICITUD_LIMITADA_HMAC_KEY; do
+            for variable in AUTH_OTP_HMAC_KEY AUTH_FALLOS_HMAC_KEY AUTH_OUTBOX_AES_KEY AUTH_SOLICITUD_LIMITADA_HMAC_KEY AUTH_CLAVE_CIFRADO_ACCESO; do
               valor=$(openssl rand -base64 32)
               echo "::add-mask::$valor" >&2
               echo "$variable=$valor"
