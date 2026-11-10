@@ -111,7 +111,7 @@ class AutorizacionPersistenciaTest extends PostgresDePrueba {
 
         assertThat(jdbc().queryForObject("SELECT nombre FROM rol WHERE codigo = 'CLIENTE'", String.class))
                 .isEqualTo("Cliente");
-        assertThat(jdbc().queryForObject("SELECT count(*) FROM rol_permiso", Integer.class)).isEqualTo(10);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM rol_permiso", Integer.class)).isEqualTo(11);
     }
 
     // ── Asociaciones ──────────────────────────────────────────
