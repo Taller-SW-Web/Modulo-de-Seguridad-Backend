@@ -8,8 +8,10 @@ import com.marketplace.auth_service.sesion.adapter.out.capacidad.EfectosCierreAd
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteCuentasSesion;
 import com.marketplace.auth_service.sesion.adapter.out.capacidad.PuenteFirmaAcceso;
 import com.marketplace.auth_service.sesion.adapter.out.crypto.SesionCryptoAdapter;
+import com.marketplace.auth_service.sesion.application.port.in.CifradoAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
 import com.marketplace.auth_service.sesion.application.port.out.*;
+import com.marketplace.auth_service.sesion.application.service.CifradoAccesoService;
 import com.marketplace.auth_service.sesion.application.service.SesionService;
 import com.marketplace.auth_service.usuario.application.port.in.CuentasPort;
 import com.marketplace.auth_service.proteccion.application.port.in.ProteccionPort;
@@ -36,6 +38,9 @@ public class SesionConfig {
             EfectosCierrePort efectosCierre, ObjectProvider<Clock> clock) {
         return new SesionTransaccional(new SesionService(persistencia, criptografia, firmador, identidad,
                 efectosCierre, clock.getIfAvailable(Clock::systemUTC)), persistencia, criptografia, cuentas);
+    }
+    @Bean CifradoAccesoPort cifradoAccesoPort(FirmadorAccesoPort firmador) {
+        return new CifradoAccesoService(firmador);
     }
 
 }

@@ -29,4 +29,9 @@ public class PuenteFirmaAcceso implements FirmadorAccesoPort {
         return new TokenAccesoFirmado(firmado.token(), firmado.jti(), firmado.emitidoEn(),
                 firmado.expiraEn());
     }
+
+    @Override
+    public String cifrar(String accessToken) {
+        return firma.cifrarAcceso(accessToken);
+    }
 }

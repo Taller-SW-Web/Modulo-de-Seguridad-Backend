@@ -55,16 +55,24 @@ public class NimbusFirmadorJws implements FirmadorJws {
     private final String kid;
     private final List<ClavePublica> publicas;
     private final Map<String, NimbusJwtDecoder> decoders;
+    private final CifradorAccesoJwe cifrador;
 
     public NimbusFirmadorJws(ClaveFirmaRsa clave) {
         this(clave, List.of());
     }
 
+    public NimbusFirmadorJws(ClaveFirmaRsa clave, List<RSAKey> anteriores) {
+        this(clave, anteriores, null);
+    }
+
     /**
      * @param anteriores públicas de claves retiradas que se siguen publicando y
      *                   aceptando durante la rotación; nunca firman
+     * @param cifrador   envoltura JWE opcional del acceso (FEAT-16); {@code null}
+     *                   si el entorno no tiene clave de cifrado
      */
-    public NimbusFirmadorJws(ClaveFirmaRsa clave, List<RSAKey> anteriores) {
+    public NimbusFirmadorJws(ClaveFirmaRsa clave, List<RSAKey> anteriores, CifradorAccesoJwe cifrador) {
+        this.cifrador = cifrador;
         this.encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(clave.jwkPrivada())));
         this.kid = clave.kid();
         List<RSAKey> verificables = new ArrayList<>();
@@ -143,8 +151,29 @@ public class NimbusFirmadorJws implements FirmadorJws {
         return publicas;
     }
 
+    /**
+     * Envuelve el acceso en JWE si el entorno tiene clave de cifrado; si no, lo
+     * devuelve igual para que el login siga funcionando.
+     */
     @Override
-    public ClaimsVerificados verificar(String token) {
+    public String cifrar(String jws) {
+        return cifrador == null ? jws : cifrador.cifrar(jws);
+    }
+
+    /**
+     * Un acceso cifrado se descifra primero y después se verifica su JWS interno
+     * con las mismas reglas que uno sin cifrar. Sin clave de cifrado, un JWE es
+     * un token inválido.
+     */
+    @Override
+    public ClaimsVerificados verificar(String presentado) {
+        String token = presentado;
+        if (CifradorAccesoJwe.esCifrado(presentado)) {
+            if (cifrador == null) {
+                throw new TokenInvalidoException("acceso cifrado sin clave de cifrado configurada");
+            }
+            token = cifrador.descifrar(presentado);
+        }
         String kidPresentado = kidDeCabecera(token);
         NimbusJwtDecoder decoder = kidPresentado == null ? null : decoders.get(kidPresentado);
         if (decoder == null) {

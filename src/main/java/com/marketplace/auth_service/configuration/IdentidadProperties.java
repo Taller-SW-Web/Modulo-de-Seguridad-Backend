@@ -11,16 +11,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param clavePrivadaArchivo  ruta a un archivo PEM PKCS8, alternativa a la anterior ({@code AUTH_CLAVE_PRIVADA_ARCHIVO})
  * @param clavePublicaAnterior PEM X.509 de la clave retirada que se sigue publicando y aceptando
  *                             durante una rotación, al menos 24 h (RF-17.3; {@code AUTH_CLAVE_PUBLICA_ANTERIOR})
+ * @param claveCifradoAcceso   clave AES de 256 bits en Base64 para el acceso cifrado opcional
+ *                             (FEAT-16; {@code AUTH_CLAVE_CIFRADO_ACCESO}). Si falta, se emite el JWS
  */
 @ConfigurationProperties("identidad")
 public record IdentidadProperties(String issuer, String clavePrivada, String clavePrivadaArchivo,
-                                  String clavePublicaAnterior) {
+                                  String clavePublicaAnterior, String claveCifradoAcceso) {
 
     @Override
     public String toString() {
         return "IdentidadProperties[issuer=" + issuer + ", clavePrivada=" + (vacio(clavePrivada) ? "no" : "[REDACTADA]")
                 + ", clavePrivadaArchivo=" + clavePrivadaArchivo
-                + ", clavePublicaAnterior=" + (vacio(clavePublicaAnterior) ? "no" : "sí") + "]";
+                + ", clavePublicaAnterior=" + (vacio(clavePublicaAnterior) ? "no" : "sí")
+                + ", claveCifradoAcceso=" + (vacio(claveCifradoAcceso) ? "no" : "[REDACTADA]") + "]";
     }
 
     static boolean vacio(String valor) {

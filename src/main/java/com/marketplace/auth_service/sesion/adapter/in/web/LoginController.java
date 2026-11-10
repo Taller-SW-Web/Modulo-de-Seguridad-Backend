@@ -3,7 +3,9 @@ package com.marketplace.auth_service.sesion.adapter.in.web;
 import com.marketplace.auth_service.sesion.adapter.in.web.dto.DesafioMfaResponse;
 import com.marketplace.auth_service.sesion.adapter.in.web.dto.LoginRequest;
 import com.marketplace.auth_service.sesion.application.dto.ResultadoLogin;
+import com.marketplace.auth_service.sesion.application.port.in.CifradoAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.in.LoginPort;
+import org.springframework.beans.factory.ObjectProvider;
 import com.marketplace.auth_service.shared.adapter.web.ContextoPeticiones;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,9 +34,12 @@ public class LoginController {
     private static final Logger log = LoggerFactory.getLogger(LoginController.class);
 
     private final LoginPort login;
+    private final CifradoAccesoPort cifrado;
 
-    public LoginController(LoginPort login) {
+    /** El cifrado del acceso (FEAT-16) es opcional: sin el bean se entrega el JWS de siempre. */
+    public LoginController(LoginPort login, ObjectProvider<CifradoAccesoPort> cifrado) {
         this.login = login;
+        this.cifrado = cifrado.getIfAvailable();
     }
 
     @PostMapping(path = "/api/v1/auth/login", consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -42,11 +47,13 @@ public class LoginController {
     public ResponseEntity<?> iniciar(@RequestBody(required = false) LoginRequest cuerpo, HttpServletRequest peticion) {
         String correo = cuerpo == null ? null : cuerpo.correo();
         String contrasena = cuerpo == null ? null : cuerpo.contrasena();
+        String formato = cuerpo == null ? null : cuerpo.formatoAcceso();
         ResultadoLogin resultado = login.iniciar(correo, contrasena, ContextoPeticiones.desde(peticion));
         return switch (resultado) {
             case ResultadoLogin.Iniciada iniciada -> {
                 log.info("sesión iniciada: usuario={}", iniciada.sesion().usuario().id());
-                yield ResponseEntity.ok(SesionWebMapper.aRespuesta(iniciada.sesion()));
+                yield ResponseEntity.ok(SesionWebMapper.aRespuesta(
+                        SesionWebMapper.conFormato(iniciada.sesion(), formato, cifrado)));
             }
             case ResultadoLogin.DesafioRequerido desafio -> ResponseEntity.ok(new DesafioMfaResponse(true,
                     desafio.desafio().challengeToken(), desafio.desafio().expiraEn(), desafio.desafio().canal()));
@@ -61,6 +68,7 @@ public class LoginController {
                                        HttpServletRequest peticion) {
         String token = cuerpo == null ? null : cuerpo.challengeToken();
         String codigo = cuerpo == null ? null : cuerpo.codigo();
+        String formato = cuerpo == null ? null : cuerpo.formatoAcceso();
         if (codigo == null || !codigo.matches("[0-9]{6}")) {
             ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION",
                     "Datos de entrada inválidos", null);
@@ -70,7 +78,8 @@ public class LoginController {
         ResultadoLogin resultado = login.completarMfa(token, codigo, ContextoPeticiones.desde(peticion));
         if (resultado instanceof ResultadoLogin.Iniciada iniciada) {
             log.info("sesión iniciada con MFA: usuario={}", iniciada.sesion().usuario().id());
-            return ResponseEntity.ok(SesionWebMapper.aRespuesta(iniciada.sesion()));
+            return ResponseEntity.ok(SesionWebMapper.aRespuesta(
+                    SesionWebMapper.conFormato(iniciada.sesion(), formato, cifrado)));
         }
         return respuesta(resultado);
     }

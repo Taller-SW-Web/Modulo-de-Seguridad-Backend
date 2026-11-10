@@ -80,7 +80,7 @@ public class SesionService implements SesionesPort {
         return new SesionIniciada(firmado.token(), refresco.secreto(), firmado.expiresIn(),
                 firmado.expiraEn(), token.expiracion(),
                 new UsuarioAutenticado(usuarioId, identidad.nombreCompleto(), identidad.correo(),
-                        identidad.roles()));
+                        identidad.roles(), identidad.permisos()));
     }
 
     @Override
@@ -152,7 +152,7 @@ public class SesionService implements SesionesPort {
         return new RenovacionResultado.Renovada(new SesionIniciada(firmado.token(), siguiente.secreto(),
                 firmado.expiresIn(), firmado.expiraEn(), nuevo.expiracion(),
                 new UsuarioAutenticado(actual.usuarioId(), datos.nombreCompleto(), datos.email(),
-                        datos.roles())));
+                        datos.roles(), datos.permisos())));
     }
 
     @Override

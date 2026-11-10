@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.identidad.adapter.out.crypto.CifradorAccesoJwe;
 import com.marketplace.auth_service.identidad.adapter.out.crypto.ClaveFirmaRsa;
 import com.marketplace.auth_service.identidad.adapter.out.crypto.ClaveFirmaRsa.ClaveInvalidaException;
 import com.marketplace.auth_service.identidad.adapter.out.crypto.NimbusFirmadorJws;
@@ -55,8 +56,28 @@ public class IdentidadConfig {
         }
         log.info("identidad: firma RS256 habilitada; issuer={}, kid={}, anteriores publicadas={}",
                 propiedades.issuer(), clave.kid(), anteriores.stream().map(RSAKey::getKeyID).toList());
-        return new FirmarAccesoService(new NimbusFirmadorJws(clave, anteriores), propiedades.issuer(),
-                clock.getIfAvailable(Clock::systemUTC));
+        return new FirmarAccesoService(new NimbusFirmadorJws(clave, anteriores, cifrador(propiedades)),
+                propiedades.issuer(), clock.getIfAvailable(Clock::systemUTC));
+    }
+
+    /**
+     * FEAT-16: el cifrado del acceso es opcional. Sin clave, o con una inválida,
+     * se sigue emitiendo el JWS de siempre y se avisa en el log; nunca se bloquea
+     * el login por esta envoltura.
+     */
+    static CifradorAccesoJwe cifrador(IdentidadProperties propiedades) {
+        if (IdentidadProperties.vacio(propiedades.claveCifradoAcceso())) {
+            log.warn("identidad: sin AUTH_CLAVE_CIFRADO_ACCESO; los accesos se emiten sin cifrar");
+            return null;
+        }
+        try {
+            CifradorAccesoJwe cifrador = CifradorAccesoJwe.desdeBase64(propiedades.claveCifradoAcceso());
+            log.info("identidad: cifrado opcional de accesos habilitado (dir/A256GCM)");
+            return cifrador;
+        } catch (ClaveInvalidaException e) {
+            log.error("identidad: cifrado de accesos DESACTIVADO: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static FirmaPort denegar(String motivo) {

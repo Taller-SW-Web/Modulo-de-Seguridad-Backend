@@ -2,7 +2,9 @@ package com.marketplace.auth_service.sesion.adapter.in.web;
 
 import com.marketplace.auth_service.sesion.adapter.in.web.dto.RenovarSesionRequest;
 import com.marketplace.auth_service.sesion.application.dto.RenovacionResultado;
+import com.marketplace.auth_service.sesion.application.port.in.CifradoAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.in.SesionesPort;
+import org.springframework.beans.factory.ObjectProvider;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +31,12 @@ public class RefrescoController {
     private static final Logger log = LoggerFactory.getLogger(RefrescoController.class);
 
     private final SesionesPort sesiones;
+    private final CifradoAccesoPort cifrado;
 
-    public RefrescoController(SesionesPort sesiones) {
+    /** El cifrado del acceso (FEAT-16) es opcional: sin el bean se entrega el JWS de siempre. */
+    public RefrescoController(SesionesPort sesiones, ObjectProvider<CifradoAccesoPort> cifrado) {
         this.sesiones = sesiones;
+        this.cifrado = cifrado.getIfAvailable();
     }
 
     @PostMapping(path = "/api/v1/auth/refresh", consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -39,8 +44,8 @@ public class RefrescoController {
     public ResponseEntity<?> renovar(@RequestBody(required = false) RenovarSesionRequest cuerpo) {
         RenovacionResultado resultado = sesiones.renovar(SesionWebMapper.aSecreto(cuerpo));
         return switch (resultado) {
-            case RenovacionResultado.Renovada renovada ->
-                    ResponseEntity.ok(SesionWebMapper.aRespuesta(renovada.sesion()));
+            case RenovacionResultado.Renovada renovada -> ResponseEntity.ok(SesionWebMapper.aRespuesta(
+                    SesionWebMapper.conFormato(renovada.sesion(), cuerpo.formatoAcceso(), cifrado)));
             case RenovacionResultado.Rechazada rechazada -> {
                 if (rechazada.revocoFamilia()) {
                     log.warn("refresco reutilizado: usuario={} familia={}", rechazada.usuarioId(),
