@@ -24,6 +24,14 @@ public interface FirmadorJws {
     List<ClavePublica> clavesPublicas();
 
     /**
+     * Envuelve un acceso firmado en JWE (FEAT-16). Sin clave de cifrado en el
+     * entorno devuelve el mismo JWS.
+     */
+    default String cifrar(String jws) {
+        return jws;
+    }
+
+    /**
      * Comprueba firma RS256 con una clave pública local publicada y que el
      * {@code kid} sea uno de los nuestros. No mira issuer, vigencia ni perfil:
      * eso lo decide el caso de uso.

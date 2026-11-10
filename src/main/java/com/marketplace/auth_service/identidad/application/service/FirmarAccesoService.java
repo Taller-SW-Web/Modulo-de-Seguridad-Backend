@@ -71,6 +71,11 @@ public class FirmarAccesoService implements FirmaPort {
     }
 
     @Override
+    public String cifrarAcceso(String token) {
+        return firmador.cifrar(Objects.requireNonNull(token, "token"));
+    }
+
+    @Override
     public AccesoFirmado firmar(ClaimsAcceso claims) {
         Objects.requireNonNull(claims, "claims");
         Instant iat = clock.instant().truncatedTo(ChronoUnit.SECONDS);

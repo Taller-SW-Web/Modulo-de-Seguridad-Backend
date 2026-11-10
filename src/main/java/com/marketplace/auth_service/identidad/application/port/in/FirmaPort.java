@@ -56,6 +56,16 @@ public interface FirmaPort {
     ServicioValidado validarServicio(String token);
 
     /**
+     * Devuelve el acceso de persona envuelto en JWE para que el navegador no
+     * pueda leer sus claims (FEAT-16). Lo pide el cliente; sin clave de cifrado
+     * en el entorno devuelve el mismo token. {@link #validar} e
+     * {@link #inspeccionar} aceptan ambos formatos.
+     */
+    default String cifrarAcceso(String token) {
+        return token;
+    }
+
+    /**
      * Inspecciona el acceso de persona que un módulo pide introspeccionar
      * (RF-17.6): distingue vencido de inválido sin lanzar. No consulta sesión ni
      * cuenta: eso lo decide la introspección.

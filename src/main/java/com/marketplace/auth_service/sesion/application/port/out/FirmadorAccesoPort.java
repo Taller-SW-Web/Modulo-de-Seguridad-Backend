@@ -10,4 +10,9 @@ import com.marketplace.auth_service.sesion.application.dto.TokenAccesoFirmado;
  */
 public interface FirmadorAccesoPort {
     TokenAccesoFirmado firmar(DatosAcceso datos);
+
+    /** Envuelve un acceso ya firmado en JWE (FEAT-16); sin clave de cifrado lo devuelve igual. */
+    default String cifrar(String accessToken) {
+        return accessToken;
+    }
 }

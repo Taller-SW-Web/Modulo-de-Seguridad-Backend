@@ -11,6 +11,7 @@ import com.marketplace.auth_service.sesion.application.dto.DesafioEmitido;
 import com.marketplace.auth_service.sesion.application.dto.ResultadoLogin;
 import com.marketplace.auth_service.sesion.application.dto.SesionIniciada;
 import com.marketplace.auth_service.sesion.application.dto.UsuarioAutenticado;
+import com.marketplace.auth_service.sesion.application.port.in.CifradoAccesoPort;
 import com.marketplace.auth_service.sesion.application.port.in.LoginPort;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -70,6 +71,13 @@ class LoginHttpTest {
                 }
             };
         }
+
+        /** Marca el acceso para comprobar que el controlador solo lo envuelve cuando se pide (FEAT-16). */
+        @Bean
+        CifradoAccesoPort cifradoAccesoPort() {
+            return sesion -> new SesionIniciada("cifrado:" + sesion.accessToken(), sesion.refreshToken(),
+                    sesion.expiresIn(), sesion.expiraAccesoEn(), sesion.expiraRefrescoEn(), sesion.usuario());
+        }
     }
 
     @DynamicPropertySource
@@ -116,6 +124,31 @@ class LoginHttpTest {
         assertThat(cuerpo.get("usuario").get("roles").get(0).asText()).isEqualTo("CLIENTE");
         assertThat(respuesta.body()).doesNotContain("Secreta-2026!");
         assertThat(CORREO_RECIBIDO.get()).isEqualTo("Ana@G7.test");
+    }
+
+    @Test
+    void formatoCifradoSoloSiSePideYLosPermisosVanEnElUsuario() throws Exception {
+        Instant ahora = Instant.now();
+        RESULTADO.set(() -> new ResultadoLogin.Iniciada(new SesionIniciada("acceso.jwt", "refresco", 900,
+                ahora.plusSeconds(900), ahora.plusSeconds(3600),
+                new UsuarioAutenticado(UUID.randomUUID(), "Admin", "admin@g7.test", List.of("ADMIN_SISTEMA"),
+                        List.of("usuario.ver", "rol.asignar")))));
+
+        JsonNode porDefecto = json.readTree(login("{\"correo\":\"a@g7.test\",\"contrasena\":\"x\"}", null).body());
+        JsonNode otroValor = json.readTree(
+                login("{\"correo\":\"a@g7.test\",\"contrasena\":\"x\",\"formatoAcceso\":\"JWS\"}", null).body());
+        JsonNode cifrado = json.readTree(
+                login("{\"correo\":\"a@g7.test\",\"contrasena\":\"x\",\"formatoAcceso\":\"CIFRADO\"}", null).body());
+        JsonNode otpCifrado = json.readTree(post("/api/v1/auth/otp/verificar",
+                "{\"challengeToken\":\"d\",\"codigo\":\"123456\",\"formatoAcceso\":\"CIFRADO\"}", null).body());
+
+        assertThat(porDefecto.get("accessToken").asText()).isEqualTo("acceso.jwt");
+        assertThat(otroValor.get("accessToken").asText()).isEqualTo("acceso.jwt");
+        assertThat(cifrado.get("accessToken").asText()).isEqualTo("cifrado:acceso.jwt");
+        assertThat(otpCifrado.get("accessToken").asText()).isEqualTo("cifrado:acceso.jwt");
+        assertThat(cifrado.get("refreshToken").asText()).isEqualTo("refresco");
+        assertThat(cifrado.get("usuario").get("permisos")).hasSize(2);
+        assertThat(porDefecto.get("usuario").get("permisos").get(0).asText()).isEqualTo("usuario.ver");
     }
 
     @Test
