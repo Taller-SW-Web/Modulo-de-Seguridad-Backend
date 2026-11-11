@@ -277,8 +277,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
-          # develop con FEAT-16 (la SPA pide el access cifrado y toma los permisos de la respuesta).
-          ref: 3c3aef1603b3d9dfe8474643b24504be421cbb2d
+          # develop con FEAT-16 (acceso cifrado) y el filtro corregido del E2E del guard de administración (frontend #25).
+          ref: f434c0f83ab11b1851e1ed8dbc04b635e5ae9248
           path: frontend
           persist-credentials: false
       - uses: actions/setup-java@v4
