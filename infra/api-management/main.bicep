@@ -3,14 +3,14 @@
 // subconjunto publicado del contrato, aplica la política de acceso y de límite,
 // y deja una suscripción de demostración.
 //
-// SIN VALIDAR: esta plantilla se escribió sin acceso a una cuenta de Azure y
-// no se ejecutó `az bicep build`. El primer paso de FEAT-19-T2 es validarla
-// (ver README.md de esta carpeta).
+// Validada y desplegada el 10-nov-2026 en South Central US (despliegue
+// «feat19-apim», 1 min 45 s). La suscripción de estudiante de la UNMSM solo
+// admite las regiones listadas en README.md.
 
 @description('Nombre de la instancia. Debe ser único en Azure, por ejemplo g7-seguridad-apim.')
 param nombre string
 
-@description('Región. El plan Consumption no está en todas; East US lo tiene.')
+@description('Región. La suscripción de estudiante de la UNMSM solo admite southcentralus, northcentralus, canadacentral, westus y chilecentral.')
 param ubicacion string = resourceGroup().location
 
 @description('Correo de quien administra la instancia. Azure le envía los avisos.')
