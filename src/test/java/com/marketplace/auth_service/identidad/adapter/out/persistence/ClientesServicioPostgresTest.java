@@ -118,7 +118,7 @@ class ClientesServicioPostgresTest {
 
     @Test
     void elCatalogoDeScopesCumpleLasRestriccionesYAsignaLaAudienciaDeSuDueno() {
-        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(28);
+        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(31);
         assertThat(jdbc.queryForList("select distinct audiencia from scope order by 1", String.class))
                 .containsExactly("api-despacho", "api-postventa", "api-productos", "api-seguridad", "api-ventas");
         assertThat(jdbc.queryForObject("select audiencia from scope where codigo = 'inventario:reservar'", String.class))
@@ -136,12 +136,14 @@ class ClientesServicioPostgresTest {
         assertThat(jdbc.queryForObject("select count(*) from cliente_servicio_scope where client_id = 'modulo-chatbot'",
                 Integer.class)).as("cliente aún no creado").isZero();
         ClienteServicio despacho = clientes.buscar("modulo-despacho").orElseThrow();
-        assertThat(despacho.codigosScopes()).containsExactly("direcciones:leer", "usuarios:leer", "ventas:pedidos:estado");
-        assertThat(despacho.audiencias()).containsExactly("api-seguridad", "api-ventas");
+        assertThat(despacho.codigosScopes()).containsExactly("direcciones:leer", "productos:fisicos:leer",
+                "usuarios:leer", "ventas:pedidos:estado");
+        assertThat(despacho.audiencias()).containsExactly("api-productos", "api-seguridad", "api-ventas");
         assertThat(clientes.buscar("modulo-marketplace").orElseThrow().codigosScopes())
-                .contains("catalogo:leer")
-                .doesNotContain("precios:leer")
-                .as("catalogo:leer aprobado por G6 el 26-oct; precios:leer sigue pendiente");
+                .as("G6 permite catálogo, precios y disponibilidad a Marketplace (OpenAPI 0.6.0-rc.3)")
+                .contains("catalogo:leer", "precios:leer", "inventario:disponibilidad:leer")
+                .as("promociones:leer no está aprobado para Marketplace en la matriz")
+                .doesNotContain("promociones:leer");
     }
 
     @Test

@@ -172,8 +172,6 @@ jobs:
       E2E_BASE_URL: https://g7-seguridad-spa.onrender.com
       E2E_CUENTAS_CLAVE: ${{ secrets.E2E_CUENTAS_CLAVE }}
       E2E_CORREO_CLIENTE: ${{ secrets.E2E_CORREO_CLIENTE }}
-      E2E_CORREO_ADMIN: ${{ secrets.E2E_CORREO_ADMIN }}
-      E2E_CORREO_API: ${{ secrets.E2E_CORREO_API }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -182,7 +180,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
-          ref: feat/EP-02-seguridad-e2e
+          # La suite de develop, la misma versión que la SPA desplegada en Render.
+          ref: develop
           path: frontend
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Node 22
@@ -192,7 +191,9 @@ jobs:
       - name: Comprobar configuración de la prueba
         shell: bash
         run: |
-          for variable in E2E_CUENTAS_CLAVE E2E_CORREO_CLIENTE E2E_CORREO_ADMIN E2E_CORREO_API; do
+          # Contra Render no hay receptor de correo: la suite omite el caso del
+          # segundo factor del admin (lo cubre e2e-aislado) y basta la cuenta CLIENTE.
+          for variable in E2E_CUENTAS_CLAVE E2E_CORREO_CLIENTE; do
             if [ -z "${!variable}" ]; then
               echo "::error::Falta configurar $variable para ejecutar la suite completa."
               exit 1
@@ -210,8 +211,7 @@ jobs:
           E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
           E2E_CUENTAS_CLAVE: ${{ env.E2E_CUENTAS_CLAVE }}
           E2E_CORREO_CLIENTE: ${{ env.E2E_CORREO_CLIENTE }}
-          E2E_CORREO_ADMIN: ${{ env.E2E_CORREO_ADMIN }}
-        run: npx playwright test
+        run: npx playwright test --workers=1
       - name: Subir reporte HTML de Playwright (siempre, incluso si falla)
         if: always()
         uses: actions/upload-artifact@v4
@@ -277,8 +277,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Taller-SW-Web/G7-Modulo-de-Seguridad-Frontend
-          # develop con FEAT-16 (la SPA pide el access cifrado y toma los permisos de la respuesta).
-          ref: 3c3aef1603b3d9dfe8474643b24504be421cbb2d
+          # develop con FEAT-16 (acceso cifrado) y el filtro corregido del E2E del guard de administración (frontend #25).
+          ref: f434c0f83ab11b1851e1ed8dbc04b635e5ae9248
           path: frontend
           persist-credentials: false
       - uses: actions/setup-java@v4
