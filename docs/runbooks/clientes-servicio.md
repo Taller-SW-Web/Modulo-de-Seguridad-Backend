@@ -12,6 +12,21 @@ Nada de este runbook va a git con valores reales: ni secretos, ni hashes, ni PEM
 idempotente. Se aplica con el migrador (perfil `migration`) junto con
 `R__catalogo_autorizacion`. Solo siembra la tabla `scope`; no crea clientes.
 
+En Render el runtime no ejecuta Flyway. Después de cambiar este archivo, quien
+opera Supabase:
+
+1. Consulta qué códigos faltan, sin escribir nada:
+
+   ```sql
+   SELECT v.codigo FROM (VALUES ('usuarios:leer:documento'), ('ventas:pedidos:anular'),
+     ('postventa:devoluciones:escribir'), ('postventa:reclamos:escribir')) AS v(codigo)
+   LEFT JOIN scope s ON s.codigo = v.codigo WHERE s.codigo IS NULL;
+   ```
+
+   La lista de `VALUES` son los códigos nuevos del cambio; la de arriba es la del 10-nov.
+2. Ejecuta el archivo completo. Es idempotente: no borra filas ni duplica.
+3. Comprueba que `SELECT count(*) FROM scope` coincide con las filas del archivo.
+
 ## 2. Crear un cliente
 
 Por cada `client_id` de la matriz (ocho previstos: `modulo-marketplace`,

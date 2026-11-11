@@ -14,20 +14,16 @@
 -- configuración (SPEC-19, FEAT-14), que la audita con autor y fecha. Este archivo
 -- se actualiza después, para que el repositorio refleje la base.
 --
--- Las filas marcadas «no concedida al 10-nov» están aprobadas en la matriz, pero
--- la consulta Q2 del 10-nov no las encontró en la base desplegada: ningún módulo
--- las ha pedido todavía.
+-- El INSERT refleja la base desplegada al 10-nov (consulta Q2). Las concesiones
+-- aprobadas en la matriz que la base todavía no tiene están al final, comentadas:
+-- ejecutar este archivo no las concede.
 -- ============================================================================
 
 INSERT INTO cliente_servicio_scope (client_id, scope)
 SELECT v.client_id, v.scope
   FROM (VALUES
     -- api-seguridad
-    ('modulo-marketplace', 'usuarios:leer'),                  -- no concedida al 10-nov
-    ('modulo-chatbot',     'usuarios:leer'),                  -- no concedida al 10-nov
     ('modulo-chatbot',     'tokens:introspeccion'),
-    ('modulo-retail',      'usuarios:leer'),                  -- no concedida al 10-nov
-    ('modulo-retail',      'roles:leer'),                     -- no concedida al 10-nov
     ('modulo-ventas',      'usuarios:leer'),
     ('modulo-postventa',   'usuarios:leer'),
     ('modulo-despacho',    'usuarios:leer'),
@@ -43,23 +39,13 @@ SELECT v.client_id, v.scope
     ('modulo-ventas',      'despachos:cancelar'),
     -- api-ventas
     ('modulo-marketplace', 'ventas:pedidos:crear'),
-    ('modulo-marketplace', 'ventas:pedidos:anular'),          -- no concedida al 10-nov
     ('modulo-chatbot',     'ventas:pedidos:crear'),
-    ('modulo-chatbot',     'ventas:pedidos:anular'),          -- no concedida al 10-nov
-    ('modulo-chatbot',     'ventas:pagos:webhook'),           -- no concedida al 10-nov
     ('modulo-retail',      'ventas:pedidos:crear'),
-    ('modulo-retail',      'ventas:pedidos:anular'),          -- no concedida al 10-nov
     ('modulo-despacho',    'ventas:pedidos:estado'),
     ('simulador-pasarela', 'ventas:pagos:webhook'),
     ('modulo-postventa',   'ventas:pedidos:consultar'),
     ('modulo-postventa',   'ventas:pedidos:reemplazar'),
     -- api-postventa
-    ('modulo-marketplace', 'postventa:devoluciones:escribir'), -- no concedida al 10-nov
-    ('modulo-marketplace', 'postventa:reclamos:escribir'),    -- no concedida al 10-nov
-    ('modulo-chatbot',     'postventa:devoluciones:escribir'), -- no concedida al 10-nov
-    ('modulo-chatbot',     'postventa:reclamos:escribir'),    -- no concedida al 10-nov
-    ('modulo-retail',      'postventa:devoluciones:escribir'), -- no concedida al 10-nov
-    ('modulo-retail',      'postventa:reclamos:escribir'),    -- no concedida al 10-nov
     ('modulo-ventas',      'postventa:reembolsos:procesar'),
     -- api-productos
     ('modulo-marketplace', 'catalogo:leer'),
@@ -85,6 +71,24 @@ SELECT v.client_id, v.scope
   JOIN cliente_servicio c ON c.client_id = v.client_id
   JOIN scope s ON s.codigo = v.scope
 ON CONFLICT (client_id, scope) DO NOTHING;
+
+-- Aprobadas en la matriz y NO concedidas al 10-nov: ningún módulo las ha pedido.
+-- Se conceden desde el módulo de configuración cuando el módulo las pida, y
+-- entonces se mueven al INSERT de arriba.
+--   ('modulo-marketplace', 'usuarios:leer'),
+--   ('modulo-chatbot',     'usuarios:leer'),
+--   ('modulo-retail',      'usuarios:leer'),
+--   ('modulo-retail',      'roles:leer'),
+--   ('modulo-marketplace', 'ventas:pedidos:anular'),
+--   ('modulo-chatbot',     'ventas:pedidos:anular'),
+--   ('modulo-chatbot',     'ventas:pagos:webhook'),
+--   ('modulo-retail',      'ventas:pedidos:anular'),
+--   ('modulo-marketplace', 'postventa:devoluciones:escribir'),
+--   ('modulo-marketplace', 'postventa:reclamos:escribir'),
+--   ('modulo-chatbot',     'postventa:devoluciones:escribir'),
+--   ('modulo-chatbot',     'postventa:reclamos:escribir'),
+--   ('modulo-retail',      'postventa:devoluciones:escribir'),
+--   ('modulo-retail',      'postventa:reclamos:escribir'),
 
 -- Concedidas en la base sin respaldo en la matriz (Q2 del 10-nov), NO incluidas aquí:
 -- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail. El contrato de
