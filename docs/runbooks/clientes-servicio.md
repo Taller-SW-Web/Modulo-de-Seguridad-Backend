@@ -12,6 +12,21 @@ Nada de este runbook va a git con valores reales: ni secretos, ni hashes, ni PEM
 idempotente. Se aplica con el migrador (perfil `migration`) junto con
 `R__catalogo_autorizacion`. Solo siembra la tabla `scope`; no crea clientes.
 
+En Render el runtime no ejecuta Flyway. Después de cambiar este archivo, quien
+opera Supabase:
+
+1. Consulta qué códigos faltan, sin escribir nada:
+
+   ```sql
+   SELECT v.codigo FROM (VALUES ('usuarios:leer:documento'), ('ventas:pedidos:anular'),
+     ('postventa:devoluciones:escribir'), ('postventa:reclamos:escribir')) AS v(codigo)
+   LEFT JOIN scope s ON s.codigo = v.codigo WHERE s.codigo IS NULL;
+   ```
+
+   La lista de `VALUES` son los códigos nuevos del cambio; la de arriba es la del 10-nov.
+2. Ejecuta el archivo completo. Es idempotente: no borra filas ni duplica.
+3. Comprueba que `SELECT count(*) FROM scope` coincide con las filas del archivo.
+
 ## 2. Crear un cliente
 
 Por cada `client_id` de la matriz (ocho previstos: `modulo-marketplace`,
@@ -46,6 +61,12 @@ Por cada `client_id` de la matriz (ocho previstos: `modulo-marketplace`,
 Con los clientes creados, ejecutar `docs/migraciones-propuestas/concesiones-servicio.sql`.
 Es idempotente y solo concede a clientes existentes. Un scope nuevo exige antes
 una fila «Aprobada» en la matriz y en `R__catalogo_scopes.sql`.
+
+Desde H5 (10-nov-2026), en la base desplegada los clientes, los secretos y las
+concesiones se gestionan desde el módulo de configuración (SPEC-19, `/api/v2/clientes-servicio`),
+que audita cada cambio con autor y fecha. El SQL de este runbook queda para una base
+nueva o para una contingencia, y `concesiones-servicio.sql` se actualiza después de
+cada concesión para que el repositorio refleje la base.
 
 ## 4. Comprobar
 
