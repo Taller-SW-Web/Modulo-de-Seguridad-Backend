@@ -1,0 +1,32 @@
+<!--
+  Política de la API «g7-seguridad» en Azure API Management (FEAT-19-T3, ADR-010).
+
+  Acceso:  la API exige clave de suscripción (subscriptionRequired en main.bicep).
+           Sin clave, la pasarela responde 401 y la petición no llega a Render.
+  Límite:  30 peticiones por minuto por suscripción. La 31 responde 429 con Retry-After.
+  Tokens:  la cabecera Authorization pasa sin cambios. El backend de G7 sigue
+           validando el token, el scope y el permiso; la pasarela no lo reemplaza.
+-->
+<policies>
+  <inbound>
+    <base />
+    <rate-limit calls="30" renewal-period="60" />
+    <!-- La clave identifica al consumidor ante la pasarela; el backend no la necesita. -->
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-header name="X-G7-Pasarela" exists-action="override">
+      <value>azure-apim</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="X-G7-Pasarela" exists-action="override">
+      <value>azure-apim</value>
+    </set-header>
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
