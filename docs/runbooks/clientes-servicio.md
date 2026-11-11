@@ -47,6 +47,12 @@ Con los clientes creados, ejecutar `docs/migraciones-propuestas/concesiones-serv
 Es idempotente y solo concede a clientes existentes. Un scope nuevo exige antes
 una fila «Aprobada» en la matriz y en `R__catalogo_scopes.sql`.
 
+Desde H5 (10-nov-2026), en la base desplegada los clientes, los secretos y las
+concesiones se gestionan desde el módulo de configuración (SPEC-19, `/api/v2/clientes-servicio`),
+que audita cada cambio con autor y fecha. El SQL de este runbook queda para una base
+nueva o para una contingencia, y `concesiones-servicio.sql` se actualiza después de
+cada concesión para que el repositorio refleje la base.
+
 ## 4. Comprobar
 
 ```bash
