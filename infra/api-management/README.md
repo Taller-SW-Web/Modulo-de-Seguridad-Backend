@@ -100,9 +100,9 @@ directa. Lo comprueba la primera tabla de `probar_pasarela.py`.
    peticiones, como mucho 30 con `200` y el resto con `429`.
 
    En el plan Consumption el contador de `rate-limit` es aproximado: el 10-nov
-   cortó en la petición 27, no en la 31. Microsoft documenta que el límite
-   puede aplicarse antes por la forma en que reparte las peticiones entre
-   nodos. La prueba acepta cualquier corte en 30 o menos.
+   cortó en la petición 27, no en la 31. Microsoft advierte que, por la
+   arquitectura distribuida de la pasarela, el límite nunca es del todo exacto.
+   La prueba acepta cualquier corte en 30 o menos.
 
 2. Abre el recurso en el portal de Azure, sección **Métricas**, métrica
    **Requests**, y divide por código de respuesta. Debe verse el tráfico de la
