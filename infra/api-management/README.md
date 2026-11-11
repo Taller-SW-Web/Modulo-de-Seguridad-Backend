@@ -54,7 +54,8 @@ Necesitas la CLI de Azure (`az`) y una suscripción Azure for Students.
    El comando imprime la URL de la pasarela. Si el nombre ya existe en Azure,
    elige otro.
 
-4. Lee la clave de suscripción y guárdala solo en tu sesión:
+4. Lee la clave de suscripción y guárdala solo en tu sesión. Al asignarla con
+   `$(…)`, la clave no queda en el historial de la terminal:
 
    ```bash
    export G7_PASARELA_URL=<URL del paso 3>

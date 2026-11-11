@@ -8,6 +8,9 @@ Variables de entorno:
     G7_BASE_URL        por defecto https://g7-auth-service.onrender.com/api/v1
     G7_TOKEN_ANTERIOR  opcional: un accessToken de usuario emitido ANTES de rotar.
                        No se imprime; solo se lee su `kid` y se usa en /auth/me.
+                       Debe ser un JWS de 3 partes, de un POST /auth/login SIN
+                       `formatoAcceso`. El de la SPA es un JWE (ADR-009): su
+                       cabecera no lleva `kid` y no sirve para esta prueba.
 
 Uso:
     python infra/verificacion/comprobar_rotacion.py [--esperadas 2]
@@ -35,8 +38,14 @@ def pedir(url, cabeceras=None):
 
 
 def kid_del_token(token):
-    """Lee el `kid` de la cabecera del JWT sin validar nada."""
-    cabecera = token.split('.')[0]
+    """Lee el `kid` de la cabecera del JWS sin validar nada."""
+    partes = token.split('.')
+    if len(partes) == 5:
+        raise ValueError('El token es un JWE de 5 partes (acceso cifrado, ADR-009) y su cabecera no '
+                         'lleva `kid`. Inicia sesión con POST /auth/login sin `formatoAcceso`.')
+    if len(partes) != 3:
+        raise ValueError(f'El token tiene {len(partes)} partes; se esperaba un JWS de 3.')
+    cabecera = partes[0]
     cabecera += '=' * (-len(cabecera) % 4)
     return json.loads(base64.urlsafe_b64decode(cabecera)).get('kid')
 
@@ -66,7 +75,11 @@ def main():
         print(f'| `kid` | `{kid}` · {clave.get("alg")} · {clave.get("use")} |')
 
     if token:
-        kid = kid_del_token(token)
+        try:
+            kid = kid_del_token(token)
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 2
         estado_me, _ = pedir(base + '/auth/me', {'Authorization': 'Bearer ' + token})
         print(f'| `kid` del token anterior | `{kid}` ({"publicado" if kid in kids else "NO publicado"}) |')
         print(f'| `GET /auth/me` con el token anterior | {estado_me} |')
@@ -78,4 +91,5 @@ def main():
 
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')  # la tabla se pega en la evidencia
+    sys.stderr.reconfigure(encoding='utf-8')
     sys.exit(main())
