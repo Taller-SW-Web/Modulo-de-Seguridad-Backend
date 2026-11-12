@@ -14,7 +14,8 @@
 -- configuración (SPEC-19, FEAT-14), que la audita con autor y fecha. Este archivo
 -- se actualiza después, para que el repositorio refleje la base.
 --
--- El INSERT refleja la base desplegada al 10-nov (consulta Q2). Las concesiones
+-- El INSERT refleja la base desplegada al 10-nov (consulta Q2), más la concesión
+-- del 12-nov a modulo-productos hecha desde el módulo de configuración. Las concesiones
 -- aprobadas en la matriz que la base todavía no tiene están al final, comentadas:
 -- ejecutar este archivo no las concede.
 -- ============================================================================
@@ -66,6 +67,7 @@ SELECT v.client_id, v.scope
     ('modulo-postventa',   'inventario:disponibilidad:leer'),
     ('modulo-productos',   'catalogo:leer'),
     ('modulo-productos',   'precios:leer'),
+    ('modulo-productos',   'inventario:disponibilidad:leer'),  -- 12-nov, desde Clientes técnicos (#78)
     ('modulo-despacho',    'productos:fisicos:leer')
   ) AS v(client_id, scope)
   JOIN cliente_servicio c ON c.client_id = v.client_id
