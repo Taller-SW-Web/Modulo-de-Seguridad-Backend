@@ -79,11 +79,15 @@ public class SeguridadConfig {
     /** Solo token de servicio, sin alternativa de persona (SPEC-18 RF-18.2, FEAT-06-T2). */
     static final String USUARIOS_LOTE = "/api/v1/usuarios/lote";
 
-    /** Rutas públicas de sesión (EP-02-T004/T005; login las amplía), registro y verificación (FEAT-01). */
+    /**
+     * Rutas públicas de sesión (EP-02-T004/T005; login las amplía), registro y verificación (FEAT-01) y
+     * activación de una cuenta creada por otra persona (FEAT-13).
+     */
     static final String[] PUBLICAS_SESION_POST = {
             "/api/v1/auth/registro",
             "/api/v1/auth/verificar-correo",
             "/api/v1/auth/verificar-correo/reenviar",
+            "/api/v1/auth/activar-cuenta",
             "/api/v1/auth/login",
             "/api/v1/auth/otp/solicitar",
             "/api/v1/auth/otp/verificar",
