@@ -1,5 +1,6 @@
 package com.marketplace.auth_service.configuration;
 
+import com.marketplace.auth_service.shared.adapter.web.CapturaLlamante;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketplace.auth_service.identidad.adapter.in.security.AccesoAuthenticationManager;
 import com.marketplace.auth_service.identidad.adapter.in.security.IntegracionAuthenticationManager;
@@ -21,6 +22,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
 import java.time.Clock;
 import java.util.Set;
@@ -136,7 +138,9 @@ public class SeguridadConfig {
                         .accessDeniedHandler(respuestas))
                 .exceptionHandling(errores -> errores
                         .authenticationEntryPoint(respuestas)
-                        .accessDeniedHandler(respuestas));
+                        .accessDeniedHandler(respuestas))
+                // Registro de peticiones: anota quién llama apenas se valida el token (docs/operacion/LOGS.md).
+                .addFilterAfter(new CapturaLlamante(), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 
