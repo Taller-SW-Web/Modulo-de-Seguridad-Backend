@@ -12,9 +12,9 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
- * Base desechable para las pruebas de EP-08-T007: esquema observado + V101-V108 (registro_id de auditoría,
- * columnas de reclamo del outbox, documento_hmac del perfil y cambio_mfa, ya aprobadas) + semilla real del
- * catálogo de autorización. El contexto completo (PerfilPropioHttpPostgresTest) valida TODAS las entidades
+ * Base desechable para las pruebas de EP-08-T007: esquema observado + V101-V106 y V108 + semilla real del
+ * catálogo de autorización. V107 (documento_hmac del perfil) no se aplica: el esquema observado ya trae esa
+ * columna y su índice, y aplicarla de nuevo falla con "column already exists". El contexto completo (PerfilPropioHttpPostgresTest) valida TODAS las entidades
  * de la aplicación contra el esquema (ddl-auto=validate), así que esta lista debe seguir el último V__
  * de db/migration/, no solo lo que toca EP-08-T007.
  * Usa {@code PRUEBAS_POSTGRES_URL} (nunca Supabase) o Docker; sin ninguno devuelve {@code false}.
@@ -27,7 +27,6 @@ final class BasePerfilPostgres {
             "V104__proteccion_racha_huella_revision.sql",
             "V105__token_un_uso_contexto_id.sql",
             "V106__auditoria_registro_id_y_outbox_reintento.sql",
-            "V107__perfil_documento_hmac.sql",
             "V108__cambio_mfa.sql");
 
     private static PostgreSQLContainer<?> contenedor;
