@@ -19,8 +19,12 @@ public interface PerfilPort {
     /** Proyección para titular o quien tenga usuario.ver (revalidado). */
     PerfilProyectado proyectarPara(ActorUsuario actor, UUID usuarioId);
 
-    /** Edita solo nombres/apellidos/celular propios; los omitidos se conservan. Devuelve el perfil actualizado. */
-    PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio);
+    /**
+     * Edita solo nombres/apellidos/celular propios; los omitidos se conservan. Deja el evento
+     * {@code usuario.atributos_actualizados} y la auditoría con los campos que cambiaron de verdad.
+     * Devuelve el perfil actualizado.
+     */
+    PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio, ContextoPeticion contexto);
 
     /**
      * Edición administrativa (FEAT-04-T6): exige {@code atributos.editar} revalidado contra la base,

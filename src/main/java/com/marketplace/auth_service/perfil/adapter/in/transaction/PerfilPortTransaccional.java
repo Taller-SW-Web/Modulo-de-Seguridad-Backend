@@ -31,8 +31,8 @@ public class PerfilPortTransaccional implements PerfilPort {
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
-        return delegado.actualizarPropio(actor, cambio);
+    public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio, ContextoPeticion contexto) {
+        return delegado.actualizarPropio(actor, cambio, contexto);
     }
 
     @Override
