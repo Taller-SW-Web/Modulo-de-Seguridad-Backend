@@ -29,8 +29,9 @@ public class CorsConfig {
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(origenesAcordados(origenes));
         cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE"));
-        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        cors.setExposedHeaders(List.of("Retry-After", "Location"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Request-Id"));
+        // X-Request-Id: número de seguimiento del registro de peticiones (docs/operacion/LOGS.md).
+        cors.setExposedHeaders(List.of("Retry-After", "Location", "X-Request-Id"));
         cors.setAllowCredentials(false);
         cors.setMaxAge(Duration.ofMinutes(10));
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();

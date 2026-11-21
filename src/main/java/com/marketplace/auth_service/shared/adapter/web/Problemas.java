@@ -33,6 +33,9 @@ public final class Problemas {
         if (detalle != null) {
             problema.setDetail(detalle);
         }
+        // Registro de peticiones (docs/operacion/LOGS.md): el error para la línea de log y el
+        // número de seguimiento en instance.
+        RegistroPeticiones.anotar(problema);
         return problema;
     }
 
