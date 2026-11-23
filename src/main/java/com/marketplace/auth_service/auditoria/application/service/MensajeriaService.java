@@ -1,6 +1,8 @@
 package com.marketplace.auth_service.auditoria.application.service;
 
 import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.Plantilla;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.TipoPlantilla;
 import com.marketplace.auth_service.auditoria.application.dto.EventoUsuario;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
 import com.marketplace.auth_service.auditoria.application.port.out.CifradoMensajesPort;
@@ -55,8 +57,14 @@ public final class MensajeriaService implements MensajeriaPort {
     @Override
     public UUID guardarCorreo(EntregaCorreo correo) {
         String topico = correo.topico().startsWith(PREFIJO_CORREO) ? correo.topico() : PREFIJO_CORREO + correo.topico();
-        outbox.guardar(new OutboxPort.Mensaje(correo.mensajeId(), topico,
-                Map.of("destino", cifrado.cifrar(correo.destino()), "contenido", cifrado.cifrar(correo.contenido())), 0));
+        Map<String, String> payload = new HashMap<>();
+        payload.put("destino", cifrado.cifrar(correo.destino()));
+        payload.put("contenido", cifrado.cifrar(correo.contenido()));
+        if (correo.plantilla() != null) {
+            payload.put("plantilla", correo.plantilla().tipo().name());
+            payload.put("enlace", cifrado.cifrar(correo.plantilla().enlace()));
+        }
+        outbox.guardar(new OutboxPort.Mensaje(correo.mensajeId(), topico, payload, 0));
         return correo.mensajeId();
     }
 
@@ -66,8 +74,15 @@ public final class MensajeriaService implements MensajeriaPort {
         int entregados = 0;
         for (OutboxPort.Mensaje m : outbox.reclamarCorreos(LOTE, ahora, ahora.plus(LEASE))) {
             try {
-                envio.enviar(cifrado.descifrar(m.payload().get("destino")), asunto(m.topico()),
-                        cifrado.descifrar(m.payload().get("contenido")));
+                String destino = cifrado.descifrar(m.payload().get("destino"));
+                String contenido = cifrado.descifrar(m.payload().get("contenido"));
+                String plantilla = m.payload().get("plantilla");
+                if (plantilla == null) {
+                    envio.enviar(destino, asunto(m.topico()), contenido);
+                } else {
+                    envio.enviarConPlantilla(destino, asunto(m.topico()), contenido,
+                            new Plantilla(TipoPlantilla.valueOf(plantilla), cifrado.descifrar(m.payload().get("enlace"))));
+                }
                 outbox.marcarEnviado(m.id(), reloj.instant());
                 entregados++;
             } catch (RuntimeException e) {

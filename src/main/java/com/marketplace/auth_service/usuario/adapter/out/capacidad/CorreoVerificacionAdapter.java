@@ -1,6 +1,8 @@
 package com.marketplace.auth_service.usuario.adapter.out.capacidad;
 
 import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.Plantilla;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.TipoPlantilla;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
 import com.marketplace.auth_service.credencial.application.dto.PropositoToken;
 import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPort;
@@ -47,11 +49,13 @@ public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
         String enlace = urlSpa + "/verificar-correo?token="
                 + URLEncoder.encode(token.tokenClaro(), StandardCharsets.UTF_8)
                 + (canalOrigen == CanalOrigen.WEB ? "" : "&canal=" + canalOrigen.name());
+        Plantilla plantilla = canalOrigen == CanalOrigen.MARKETPLACE
+                ? new Plantilla(TipoPlantilla.VERIFICACION_MARKETPLACE, enlace) : null;
         try {
             mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "correo.verificacion_correo", correo,
                     "Hola, " + nombres + ":\n\nGracias por registrarte. Confirma tu correo con este enlace "
                             + "(vence en 24 horas):\n" + enlace
-                            + "\n\nSi no creaste esta cuenta, ignora este mensaje.\n"));
+                            + "\n\nSi no creaste esta cuenta, ignora este mensaje.\n", plantilla));
         } catch (RuntimeException colaCaida) {
             // Único registro del fallo cuando el reenvío lo absorbe con 202 para no delatar la cuenta.
             log.warn("No se pudo encolar el correo de verificación de la cuenta {}", usuarioId, colaCaida);

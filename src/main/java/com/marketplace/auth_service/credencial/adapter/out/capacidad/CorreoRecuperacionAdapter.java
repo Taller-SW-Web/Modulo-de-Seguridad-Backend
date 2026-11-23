@@ -1,6 +1,8 @@
 package com.marketplace.auth_service.credencial.adapter.out.capacidad;
 
 import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.Plantilla;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.TipoPlantilla;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
 import com.marketplace.auth_service.credencial.application.dto.CanalOrigenRecuperacion;
 import com.marketplace.auth_service.credencial.application.dto.CuentaRecuperacion;
@@ -40,8 +42,11 @@ public final class CorreoRecuperacionAdapter implements CorreoRecuperacionPort {
                 + "Abre este enlace para crear una contraseña nueva (vence en 30 minutos):\n"
                 + enlace + "\n\nSi no solicitaste este cambio, ignora este mensaje. "
                 + "Si solicitas otro enlace, este dejará de funcionar.";
+        Plantilla plantilla = canalOrigen == CanalOrigenRecuperacion.MARKETPLACE
+                ? new Plantilla(TipoPlantilla.RECUPERACION_MARKETPLACE, enlace) : null;
         try {
-            mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "recuperacion", cuenta.correo(), contenido));
+            mensajeria.guardarCorreo(new EntregaCorreo(
+                    UUID.randomUUID(), "recuperacion", cuenta.correo(), contenido, plantilla));
         } catch (RuntimeException indisponible) {
             throw new SolicitudRecuperacionNoDisponibleException();
         }
