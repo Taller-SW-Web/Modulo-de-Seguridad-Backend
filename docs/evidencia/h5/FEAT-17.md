@@ -64,8 +64,8 @@ timeout, un 429 o un bloqueo, el script detiene la ronda y se deja el resultado 
 | Introspección | < 200 ms | — | — | _(pendiente del scope)_ |
 | Token de servicio | sin umbral | — | — | _(pendiente del scope)_ |
 
-Los umbrales están definidos para 50 concurrentes. Con 5 ya no se cumplen, así que **no se cumplirán
-con 50** en el despliegue actual. Se declara.
+Los umbrales están definidos para 50 concurrentes: **pendiente de medir con 50**. Con 5 concurrentes
+los p95 de login y refresh ya superan los valores objetivo; se declara.
 
 ## Causas probables
 

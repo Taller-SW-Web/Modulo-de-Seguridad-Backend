@@ -55,7 +55,11 @@ tiene la suya y se suma la latencia de red. Los resultados no son directamente c
 | R1 corta | 5 | 5 | 1 | 20 | Comprobar que nada se bloquea y que los 4 escenarios responden 200 |
 | R2 escalonada | según `G7_CUENTAS_CARGA` | 10 → 25 → 50 | 10 | 200 / 500 / 1000 por escenario | Medición contra umbrales, subiendo de tramo solo si el anterior terminó sin paradas |
 
-- Cada iteración de un hilo hace E1 → E2 → E4 con la sesión obtenida, más un E3.
+- Cada iteración de un hilo hace E1 → E2 → E4 con la sesión obtenida, más un E3. Al final cierra la
+  sesión con `POST /auth/logout` y el refresco vigente (sin medirlo), así no quedan sesiones vivas; el
+  calentamiento también cierra las suyas.
+- E4 solo cuenta como éxito con `activo: true`; un 200 con `activo: false` se reporta como error
+  (`200-inactivo`), para no medir el camino del rechazo.
 - R2 se corre de forma escalonada (acuerdo con David, 23-nov): 10, 25 y 50 concurrentes, en una ventana
   sin demo ni pruebas de otros grupos, revisando cada tramo antes de subir.
 - **Parada:** si aparece un timeout o sin respuesta, un 423 (bloqueo) o un 429, el script detiene la

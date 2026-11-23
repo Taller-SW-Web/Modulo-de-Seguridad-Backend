@@ -2,8 +2,10 @@
 
 Reutiliza el enfoque de EP-02-T007 (H3, docs/evidencia/carga/carga.py) y lo amplía:
 - número de cuentas configurable (5 para validar el flujo, 50 para la ronda final);
-- calentamiento con carga.0 (nunca con las cuentas de la demo);
-- escenarios de token de servicio (client_credentials) e introspección.
+- calentamiento con cada cuenta (nunca con las de la demo), solo si se mide el login;
+- escenarios de token de servicio (client_credentials) e introspección (éxito solo con activo=true);
+- cierre de cada sesión con /auth/logout, fuera de las métricas;
+- parada automática ante timeout, 423 o 429, comprobada antes de cada petición.
 
 Secretos y cuentas SOLO por entorno, nunca en git ni en la evidencia:
   G7_CLAVE_CARGA      contraseña común de las cuentas de carga
@@ -77,6 +79,12 @@ def enmascarar(c):
     return f"{usuario[:1]}***@{dominio}"
 
 
+def cerrar_sesion(base, refresco):
+    """POST /auth/logout con el refresco vigente. No se mide; un fallo aquí no afecta la ronda."""
+    if refresco:
+        peticion(base, "/auth/logout", {"refreshToken": refresco})
+
+
 def token_servicio(base):
     _, s, d = peticion(base, "/auth/token", formulario={
         "grant_type": "client_credentials",
@@ -117,15 +125,15 @@ def main():
     cuentas = lista_cuentas(a.cuentas)
     correo = lambda i: cuentas[i % len(cuentas)]
 
-    # Calentamiento con una cuenta de carga (no de la demo) y, si aplica, token de servicio.
-    # Si este login falla, se aborta: seguir con una clave mala activaría el bloqueo automático.
-    # Se prueba cada cuenta una vez: si una falla, se aborta antes de repetir intentos con ella.
+    # Calentamiento: solo si se mide el login. Se prueba cada cuenta una vez y se cierra esa sesión; si
+    # una falla, se aborta antes de repetir intentos con ella (una clave mala activaría el bloqueo).
     if "login" in esc:
         for n, c in enumerate(cuentas, 1):
-            _, s, _ = peticion(base, "/auth/login", {"correo": c, "contrasena": clave})
+            _, s, d = peticion(base, "/auth/login", {"correo": c, "contrasena": clave})
             if s != 200:
                 sys.exit(f"El login de calentamiento de la cuenta {n} ({enmascarar(c)}) falló (HTTP {s}); "
                          "se aborta para no bloquear cuentas.")
+            cerrar_sesion(base, (d or {}).get("refreshToken"))
     bearer_servicio = None
     if {"token", "introspeccion"} & esc:
         s, bearer_servicio = token_servicio(base)
@@ -146,25 +154,41 @@ def main():
         for _ in range(a.por_hilo):
             if parada.is_set():
                 break
-            if "login" in esc:
-                t, s, d = peticion(base, "/auth/login", {"correo": correo(i), "contrasena": clave})
-                m["login"].append(t); st["login"][s] += 1
-                vigilar(s, "login")
-                if s == 200 and d:
-                    if "refresh" in esc:
-                        t, s2, _ = peticion(base, "/auth/refresh", {"refreshToken": d.get("refreshToken")})
+            refresco = None
+            try:
+                if "login" in esc:
+                    t, s, d = peticion(base, "/auth/login", {"correo": correo(i), "contrasena": clave})
+                    m["login"].append(t); st["login"][s] += 1
+                    vigilar(s, "login")
+                    if s != 200 or not d:
+                        continue
+                    refresco, acceso = d.get("refreshToken"), d.get("accessToken")
+                    if "refresh" in esc and not parada.is_set():
+                        t, s2, d2 = peticion(base, "/auth/refresh", {"refreshToken": refresco})
                         m["refresh"].append(t); st["refresh"][s2] += 1
                         vigilar(s2, "refresh")
-                    if "introspeccion" in esc:
-                        t, s3, _ = peticion(base, "/auth/introspeccion", {"token": d.get("accessToken")},
-                                            bearer=bearer_servicio)
-                        m["introspeccion"].append(t); st["introspeccion"][s3] += 1
+                        if s2 == 200 and d2:
+                            # La renovación rota el refresco: el que sigue vivo es el nuevo.
+                            refresco = d2.get("refreshToken") or refresco
+                            acceso = d2.get("accessToken") or acceso
+                    if "introspeccion" in esc and not parada.is_set():
+                        t, s3, d3 = peticion(base, "/auth/introspeccion", {"token": acceso},
+                                             bearer=bearer_servicio)
+                        m["introspeccion"].append(t)
+                        # Siempre responde 200; solo cuenta como éxito si el token sale activo.
+                        if s3 == 200 and not (d3 or {}).get("activo"):
+                            st["introspeccion"]["200-inactivo"] += 1
+                        else:
+                            st["introspeccion"][s3] += 1
                         vigilar(s3, "introspeccion")
-            if "token" in esc:
-                t0 = time.perf_counter()
-                s4, _ = token_servicio(base)
-                m["token"].append(time.perf_counter() - t0); st["token"][s4] += 1
-                vigilar(s4, "token")
+                if "token" in esc and not parada.is_set():
+                    t0 = time.perf_counter()
+                    s4, _ = token_servicio(base)
+                    m["token"].append(time.perf_counter() - t0); st["token"][s4] += 1
+                    vigilar(s4, "token")
+            finally:
+                # Cierra la sesión de la iteración (fuera de las métricas) para no dejar sesiones vivas.
+                cerrar_sesion(base, refresco)
         return m, st
 
     inicio = time.perf_counter()
