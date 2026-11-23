@@ -36,13 +36,16 @@ tiene la suya y se suma la latencia de red. Los resultados no son directamente c
 
 ## 4. Datos de prueba
 
-- **Cuentas:** `carga.0` … `carga.49@fixtures.g7.test`, rol CLIENTE, sin MFA, creadas por
-  David (OPS-T2). **No se usan las cuentas de la demo**, porque el bloqueo automático
-  podría dejarlas inutilizables. Primero 5 cuentas para validar el flujo y luego las 50.
+- **Cuentas:** rol CLIENTE, verificadas y sin MFA. **No se usan las cuentas de la demo**, porque el
+  bloqueo automático podría dejarlas inutilizables.
+  - Ronda corta: 5 cuentas creadas por Valery desde la SPA con correos o alias que controla
+    (acuerdo con David), pasadas al script por `G7_CUENTAS_CARGA`.
+  - Ronda final: `carga.0` … `carga.49@fixtures.g7.test` (David, OPS-T2), o la lista que se acuerde.
 - **Cliente técnico de prueba:** `client_id` y `client_secret` con el scope
   `tokens:introspeccion` (confirmación de Sergio).
 - **Secretos:** solo por variables de entorno (`G7_CLAVE_CARGA`, `G7_CLIENT_ID`,
-  `G7_CLIENT_SECRET`). Nunca en git, capturas ni informe.
+  `G7_CLIENT_SECRET`) y la lista de correos en `G7_CUENTAS_CARGA`. Nunca en git, capturas ni
+  informe; el script solo imprime correos enmascarados.
 
 ## 5. Rondas
 
@@ -60,8 +63,8 @@ tiene la suya y se suma la latencia de red. Los resultados no son directamente c
 Comandos:
 
 ```powershell
-# R1
-python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --cuentas 5 --concurrencia 5 --por-hilo 1
+# R1 (cuentas por G7_CUENTAS_CARGA; introspección y token se agregan cuando se confirme el scope)
+python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 5 --por-hilo 1 --escenarios login,refresh
 # R2 (repetir 3 veces)
 python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --cuentas 50 --concurrencia 50 --por-hilo 10
 ```

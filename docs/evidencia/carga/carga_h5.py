@@ -5,13 +5,17 @@ Reutiliza el enfoque de EP-02-T007 (H3, docs/evidencia/carga/carga.py) y lo ampl
 - calentamiento con carga.0 (nunca con las cuentas de la demo);
 - escenarios de token de servicio (client_credentials) e introspección.
 
-Secretos SOLO por entorno, nunca en git ni en la evidencia:
-  G7_CLAVE_CARGA      contraseña común de las cuentas carga.N@fixtures.g7.test
+Secretos y cuentas SOLO por entorno, nunca en git ni en la evidencia:
+  G7_CLAVE_CARGA      contraseña común de las cuentas de carga
+  G7_CUENTAS_CARGA    (opcional) correos de las cuentas, separados por comas. Si falta, se usan
+                      carga.0 … carga.N-1@fixtures.g7.test según --cuentas
   G7_CLIENT_ID        cliente técnico de prueba
   G7_CLIENT_SECRET    secreto del cliente técnico
   G7_SCOPE_SERVICIO   scope pedido al emitir el token (por defecto tokens:introspeccion)
 
 Ejemplos:
+  # Ronda corta con las cuentas de G7_CUENTAS_CARGA, solo ingreso y renovación
+  python carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 5 --escenarios login,refresh
   python carga_h5.py https://g7-auth-service.onrender.com/api/v1 --cuentas 5 --concurrencia 5 --por-hilo 1
   python carga_h5.py https://g7-auth-service.onrender.com/api/v1 --cuentas 50 --concurrencia 50 --por-hilo 10
 """
@@ -54,8 +58,19 @@ def peticion(base, ruta, cuerpo=None, formulario=None, bearer=None):
         return time.perf_counter() - t0, 0, None
 
 
-def correo(i, cuentas):
-    return f"carga.{i % cuentas}{DOMINIO}"
+def lista_cuentas(cantidad):
+    """Correos de G7_CUENTAS_CARGA (separados por comas) o, si no está, carga.N@fixtures.g7.test."""
+    crudo = os.environ.get("G7_CUENTAS_CARGA", "")
+    correos = [c.strip() for c in crudo.split(",") if c.strip()]
+    if correos:
+        return correos
+    return [f"carga.{i}{DOMINIO}" for i in range(cantidad)]
+
+
+def enmascarar(c):
+    """Para imprimir sin exponer el correo: primera letra y dominio."""
+    usuario, _, dominio = c.partition("@")
+    return f"{usuario[:1]}***@{dominio}"
 
 
 def token_servicio(base):
@@ -83,7 +98,8 @@ def resumen(nombre, muestras, estados):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("base", help="URL base hasta /api/v1, sin barra final")
-    ap.add_argument("--cuentas", type=int, default=5)
+    ap.add_argument("--cuentas", type=int, default=5,
+                    help="cuántas cuentas carga.N usar; se ignora si existe G7_CUENTAS_CARGA")
     ap.add_argument("--concurrencia", type=int, default=5)
     ap.add_argument("--por-hilo", type=int, default=1, help="iteraciones por hilo")
     ap.add_argument("--escenarios", default="login,refresh,token,introspeccion",
@@ -94,12 +110,18 @@ def main():
     if {"refresh", "introspeccion"} & esc:
         esc.add("login")
     clave = os.environ["G7_CLAVE_CARGA"]
+    cuentas = lista_cuentas(a.cuentas)
+    correo = lambda i: cuentas[i % len(cuentas)]
 
     # Calentamiento con una cuenta de carga (no de la demo) y, si aplica, token de servicio.
     # Si este login falla, se aborta: seguir con una clave mala activaría el bloqueo automático.
-    _, s, _ = peticion(base, "/auth/login", {"correo": correo(0, a.cuentas), "contrasena": clave})
-    if "login" in esc and s != 200:
-        sys.exit(f"El login de calentamiento con carga.0 falló (HTTP {s}); se aborta para no bloquear cuentas.")
+    # Se prueba cada cuenta una vez: si una falla, se aborta antes de repetir intentos con ella.
+    if "login" in esc:
+        for n, c in enumerate(cuentas, 1):
+            _, s, _ = peticion(base, "/auth/login", {"correo": c, "contrasena": clave})
+            if s != 200:
+                sys.exit(f"El login de calentamiento de la cuenta {n} ({enmascarar(c)}) falló (HTTP {s}); "
+                         "se aborta para no bloquear cuentas.")
     bearer_servicio = None
     if {"token", "introspeccion"} & esc:
         s, bearer_servicio = token_servicio(base)
@@ -111,7 +133,7 @@ def main():
         st = {k: Counter() for k in m}
         for _ in range(a.por_hilo):
             if "login" in esc:
-                t, s, d = peticion(base, "/auth/login", {"correo": correo(i, a.cuentas), "contrasena": clave})
+                t, s, d = peticion(base, "/auth/login", {"correo": correo(i), "contrasena": clave})
                 m["login"].append(t); st["login"][s] += 1
                 if s == 200 and d:
                     if "refresh" in esc:
@@ -132,7 +154,7 @@ def main():
         resultados = list(ex.map(trabajo, range(a.concurrencia)))
     duracion = time.perf_counter() - inicio
 
-    print(f"base={base} cuentas={a.cuentas} concurrencia={a.concurrencia} por_hilo={a.por_hilo} "
+    print(f"base={base} cuentas={len(cuentas)} concurrencia={a.concurrencia} por_hilo={a.por_hilo} "
           f"duración={duracion:.1f} s")
     for nombre in ("login", "refresh", "token", "introspeccion"):
         if nombre not in esc:
