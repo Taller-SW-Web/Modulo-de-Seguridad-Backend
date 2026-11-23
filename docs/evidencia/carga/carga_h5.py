@@ -24,6 +24,7 @@ import json
 import os
 import statistics
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -32,6 +33,9 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 UMBRALES_P95_MS = {"login": 800, "refresh": 300, "introspeccion": 200}
+# Respuestas que detienen la ronda (acuerdo con el equipo): sin respuesta o tiempo agotado (0),
+# bloqueo de cuenta (423) y límite de peticiones (429). Seguir con ellas solo empeoraría el servicio.
+ESTADOS_DE_PARADA = {0, 423, 429}
 DOMINIO = "@fixtures.g7.test"
 
 
@@ -128,25 +132,39 @@ def main():
         if not bearer_servicio:
             sys.exit(f"No se obtuvo token de servicio (HTTP {s}); revisa G7_CLIENT_ID/SECRET y el scope.")
 
+    parada = threading.Event()
+    motivo = []
+
+    def vigilar(s, escenario):
+        if s in ESTADOS_DE_PARADA and not parada.is_set():
+            motivo.append(f"{escenario} respondió {'sin respuesta / timeout' if s == 0 else s}")
+            parada.set()
+
     def trabajo(i):
         m = {k: [] for k in ("login", "refresh", "token", "introspeccion")}
         st = {k: Counter() for k in m}
         for _ in range(a.por_hilo):
+            if parada.is_set():
+                break
             if "login" in esc:
                 t, s, d = peticion(base, "/auth/login", {"correo": correo(i), "contrasena": clave})
                 m["login"].append(t); st["login"][s] += 1
+                vigilar(s, "login")
                 if s == 200 and d:
                     if "refresh" in esc:
                         t, s2, _ = peticion(base, "/auth/refresh", {"refreshToken": d.get("refreshToken")})
                         m["refresh"].append(t); st["refresh"][s2] += 1
+                        vigilar(s2, "refresh")
                     if "introspeccion" in esc:
                         t, s3, _ = peticion(base, "/auth/introspeccion", {"token": d.get("accessToken")},
                                             bearer=bearer_servicio)
                         m["introspeccion"].append(t); st["introspeccion"][s3] += 1
+                        vigilar(s3, "introspeccion")
             if "token" in esc:
                 t0 = time.perf_counter()
                 s4, _ = token_servicio(base)
                 m["token"].append(time.perf_counter() - t0); st["token"][s4] += 1
+                vigilar(s4, "token")
         return m, st
 
     inicio = time.perf_counter()
@@ -154,6 +172,9 @@ def main():
         resultados = list(ex.map(trabajo, range(a.concurrencia)))
     duracion = time.perf_counter() - inicio
 
+    if parada.is_set():
+        print(f"RONDA DETENIDA: {motivo[0]}. Se reportan las muestras tomadas hasta ese momento; "
+              "no subir al siguiente tramo.")
     print(f"base={base} cuentas={len(cuentas)} concurrencia={a.concurrencia} por_hilo={a.por_hilo} "
           f"duración={duracion:.1f} s")
     for nombre in ("login", "refresh", "token", "introspeccion"):

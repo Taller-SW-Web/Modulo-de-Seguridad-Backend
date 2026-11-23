@@ -53,11 +53,13 @@ tiene la suya y se suma la latencia de red. Los resultados no son directamente c
 |---|---|---|---|---|---|
 | R0 calentamiento | 1 (`carga.0`) | 1 | 1 | 2 | Despertar el servicio de Render y validar la clave |
 | R1 corta | 5 | 5 | 1 | 20 | Comprobar que nada se bloquea y que los 4 escenarios responden 200 |
-| R2 final (×3) | 50 | 50 | 10 | ~2000 por ronda | Medición contra umbrales |
+| R2 escalonada | según `G7_CUENTAS_CARGA` | 10 → 25 → 50 | 10 | 200 / 500 / 1000 por escenario | Medición contra umbrales, subiendo de tramo solo si el anterior terminó sin paradas |
 
 - Cada iteración de un hilo hace E1 → E2 → E4 con la sesión obtenida, más un E3.
-- Entre rondas de R2 hay una pausa de 1 minuto. Se reportan las tres; la primera puede salir
-  peor por el arranque en frío (como en H3).
+- R2 se corre de forma escalonada (acuerdo con David, 23-nov): 10, 25 y 50 concurrentes, en una ventana
+  sin demo ni pruebas de otros grupos, revisando cada tramo antes de subir.
+- **Parada:** si aparece un timeout o sin respuesta, un 423 (bloqueo) o un 429, el script detiene la
+  ronda («RONDA DETENIDA») y no se sube al siguiente tramo; se reporta el último tramo completo.
 - Si R1 tiene cualquier error 401/423/429 en el login, **no se ejecuta R2** hasta revisar la causa.
 
 Comandos:
@@ -65,8 +67,10 @@ Comandos:
 ```powershell
 # R1 (cuentas por G7_CUENTAS_CARGA; introspección y token se agregan cuando se confirme el scope)
 python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 5 --por-hilo 1 --escenarios login,refresh
-# R2 (repetir 3 veces)
-python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --cuentas 50 --concurrencia 50 --por-hilo 10
+# R2 escalonada: un tramo por vez, revisando la salida antes de subir
+python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 10 --por-hilo 10 --escenarios login,refresh
+python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 25 --por-hilo 10 --escenarios login,refresh
+python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 50 --por-hilo 10 --escenarios login,refresh
 ```
 
 ## 6. Métricas

@@ -12,7 +12,7 @@ de la ventana que acuerde el equipo, por el riesgo de afectar la demo (ver «Cau
 |---|---|
 | Fecha y hora | 23-nov-2026, entre 14:25 y 14:26 (America/Lima) |
 | Backend | `https://g7-auth-service.onrender.com/api/v1` |
-| Versión desplegada (SHA) | _(la que muestre Render; anotarla con David)_ |
+| Versión desplegada (SHA) | `05ad567d16d1323c1b13711aeb83f6ee5f041254` (último confirmado en Render por David, 23-nov) |
 | Generador | Equipo de Valery (Windows, Python 3.14), red doméstica, fuera de Render |
 | Cuentas | 5 cuentas CLIENTE creadas desde la SPA con alias de un correo de Valery, verificadas y sin MFA (acuerdo con David); pasadas por `G7_CUENTAS_CARGA`. No son cuentas de la demo |
 | Escenarios | Ingreso y renovación (`--escenarios login,refresh`). Token de servicio e introspección esperan la confirmación del scope `tokens:introspeccion` del cliente técnico |
@@ -47,8 +47,9 @@ Duración de la ronda: 5,1 s.
 ## R2 — Ronda final (50 concurrentes, 10 iteraciones por hilo)
 
 _Pendiente._ Con 5 concurrentes el login ya tarda ~5 s; con 50 podría superar el tiempo de espera de
-30 s del script y degradar el servicio para la demo mientras dura la ronda. Se propuso al equipo
-correrla en una ventana sin demo o subir de forma escalonada (10, 25, 50).
+30 s del script y degradar el servicio para la demo. Acordado con David (23-nov): tramos de 10, 25 y 50
+en una ventana sin demo ni pruebas de otros grupos, revisando cada tramo antes de subir. Si aparece un
+timeout, un 429 o un bloqueo, el script detiene la ronda y se deja el resultado del último tramo.
 
 | Ronda | Concurrencia | Login p50 / p95 / p99 | Refresh p50 / p95 / p99 | Errores |
 |---|---|---|---|---|
