@@ -4,9 +4,11 @@ Ejecutó: Valery Cristin Gutierrez Bendezu · Revisó: _(Eva)_
 Plan: [FEAT-17-plan.md](FEAT-17-plan.md) · Script: [`carga_h5.py`](../carga/carga_h5.py)
 Nivel de evidencia: **propia desplegada**.
 Estado: **R1 (ronda corta) y ronda de referencia completadas el 23-nov. R2: el tramo de 10 concurrentes se
-ejecutó a las 22:01 y se detuvo solo por un 429 de la verificación anti-bots de Cloudflare de Render, no de
-nuestro servicio. Los tramos de 25 y 50 quedan pendientes por ese límite; el token de servicio y la
-introspección no se midieron** (acuerdo con David y Alejandro, 22:14).
+ejecutó a las 22:01 y quedó interrumpido: tras varios 502 y 503, un 429 en `POST /api/v1/auth/login` disparó
+la parada automática.** Después, desde la misma conexión, se observó la verificación anti-bots de Cloudflare
+de Render, lo que apunta a la protección perimetral como origen del 429; sin las cabeceras de ese 429 no se
+puede confirmar. El origen de los 502 y 503 está sin confirmar. **Los tramos de 25 y 50 quedan pendientes;
+la latencia del token de servicio y de la introspección quedó sin medir** (acuerdo con David y Alejandro).
 **Último tramo completado: R1 (5 concurrentes).**
 
 ## Condiciones
@@ -18,7 +20,7 @@ introspección no se midieron** (acuerdo con David y Alejandro, 22:14).
 | Versión desplegada (SHA) | `05ad567d16d1323c1b13711aeb83f6ee5f041254` (último confirmado en Render por David, 23-nov) |
 | Generador | Equipo de Valery (Windows, Python 3.14), red doméstica, fuera de Render |
 | Cuentas | 5 cuentas CLIENTE creadas desde la SPA con alias de un correo de Valery, verificadas y sin MFA (acuerdo con David); pasadas por `G7_CUENTAS_CARGA`. No son cuentas de la demo |
-| Escenarios | Ingreso y renovación (`--escenarios login,refresh`). Token de servicio e introspección esperan la confirmación del scope `tokens:introspeccion` del cliente técnico |
+| Escenarios | Ingreso y renovación (`--escenarios login,refresh`). Token de servicio e introspección: el scope temporal `tokens:introspeccion` para `modulo-prueba-h5` se concedió, David lo validó con una sesión de prueba (`activo: true`) y se revocó el 23-nov; su latencia quedó sin medir |
 
 Antes de cada ronda, el script hace un login de calentamiento con cada cuenta (no se mide) y aborta
 si alguno falla, para no activar el bloqueo automático. Ninguno falló.
@@ -53,7 +55,7 @@ Acordada con David: 10, 25 y 50 concurrentes en una ventana sin demo ni pruebas 
 de tramo solo si el anterior termina sin timeouts, 429 ni bloqueos. Valery corre ingreso y renovación; David,
 después y por separado, token de servicio e introspección con el secreto del cliente técnico.
 
-### Tramo de 10 concurrentes — detenido
+### Tramo de 10 concurrentes — interrumpido
 
 23-nov-2026, 22:01 (America/Lima). 5 cuentas (2 hilos por cuenta), 10 iteraciones por hilo, `login,refresh`.
 
@@ -65,35 +67,38 @@ después y por separado, token de servicio e introspección con el secreto del c
 Duración: 9,2 s. El script detuvo la ronda al recibir el primer 429 en `POST /api/v1/auth/login`
 («RONDA DETENIDA: login respondió 429»); de las 100 iteraciones previstas se hicieron 56.
 
-**Origen del 429.** Minutos después, desde la misma conexión, `GET /actuator/health` mostró la página de
-verificación anti-bots de Cloudflare («Verificación de seguridad en curso», HTTP 429) delante del servicio:
-el corte vino de la protección perimetral de Render y no del backend de G7. David comprobó desde otra
-conexión que el servicio respondía `200 UP` a las 22:12, así que el bloqueo afectó solo al origen de la carga.
-**CF-Ray:** no registrado. El script de ese momento no guardaba cabeceras y, al revisar, la verificación ya
-había pasado. Desde esta versión el script imprime el CF-Ray de cada 429 o 5xx.
+**Secuencia.** Primero llegaron varios 502 y 503; después, el 429 en `POST /api/v1/auth/login` que disparó
+la parada (la versión del script de ese momento solo se detenía ante timeout, 423 o 429).
 
-**502 y 503.** Llegaron antes del 429 y son respuestas del borde de Render (el servicio no contestó a
-tiempo o estaba saturado). Con los datos del script no se puede separar si los produjo el backend
-saturado o la propia protección. Esta versión del script también se detiene ante cualquier 5xx.
+**Origen del 429 (sin confirmar).** Minutos después, desde la misma conexión, `GET /actuator/health`
+mostró la página de verificación anti-bots de Cloudflare («Verificación de seguridad en curso», HTTP 429).
+Es un indicio de que el 429 vino de la protección perimetral de Render, pero no tenemos las cabeceras del 429
+original para confirmarlo. **CF-Ray:** no registrado; el script no guardaba cabeceras y, al revisar, la
+verificación ya había pasado. Desde esta versión imprime el CF-Ray de cada 429 o 5xx.
+
+**200 UP de las 22:12.** David consultó `/actuator/health` desde su conexión y respondió `200 UP`. Solo
+confirma que G7 respondía desde ese origen a esa hora.
+
+**502 y 503 (origen sin confirmar).** Con los datos del script no se puede saber si los produjo el backend
+saturado o el borde de Render. Esta versión del script también se detiene ante cualquier 5xx.
 
 ### Tramos de 25 y 50 — pendientes
 
-No se ejecutaron. Quedan pendientes por el límite de la protección perimetral de Render: el tramo de 10 ya
-fue cortado por la verificación anti-bots de Cloudflare (429), así que subir la concurrencia desde el mismo
-origen solo repetiría el corte. Además, solo hay 5 cuentas de carga.
+No se ejecutaron: el tramo de 10 no terminó, y la regla acordada es subir solo si el anterior termina sin
+timeouts, 429 ni bloqueos. Además, solo hay 5 cuentas de carga.
 
-**Token de servicio e introspección: no medidos.** La concesión temporal de `tokens:introspeccion` para
-`modulo-prueba-h5` se cerró el 23-nov al terminar la ventana (David quitó el scope y Alejandro la revocó en la
-matriz). David había validado antes una sesión de prueba con `activo: true`.
+**Token de servicio e introspección: latencia sin medir.** El scope temporal `tokens:introspeccion` para
+`modulo-prueba-h5` se concedió, David lo validó con una sesión de prueba (`activo: true`) y se revocó el
+23-nov al terminar la ventana (David quitó el scope y Alejandro cerró la concesión en la matriz).
 
 ## Comparación con los umbrales
 
-| Escenario | Umbral p95 | Sin concurrencia | 5 concurrentes | 10 concurrentes (detenido) | 50 concurrentes |
+| Escenario | Umbral p95 | Sin concurrencia | 5 concurrentes | 10 concurrentes | 50 concurrentes |
 |---|---|---|---|---|---|
-| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** | 8348 ms; 54 de 56 con error · **No cumple** | _(pendiente)_ |
-| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** | 2 muestras, ambas 502 · no medible | _(pendiente)_ |
-| Introspección | < 200 ms | — | — | — | no medido (concesión revocada el 23-nov) |
-| Token de servicio | sin umbral | — | — | — | no medido (concesión revocada el 23-nov) |
+| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** **Tramo interrumpido**: p95 8348 ms con 54 errores en 56 peticiones; mezcla éxitos y fallos, no califica la latencia del login exitoso | _(pendiente)_ |
+| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** **Tramo interrumpido**: 2 muestras, ambas 502 | _(pendiente)_ |
+| Introspección | < 200 ms | — | — | — | sin medir (scope concedido, validado con `activo: true` y revocado) |
+| Token de servicio | sin umbral | — | — | — | sin medir (scope concedido, validado y revocado) |
 
 Los umbrales están definidos para 50 concurrentes: **pendiente de medir con 50**. Con 5 concurrentes
 los p95 de login y refresh ya superan los valores objetivo; se declara.
@@ -111,10 +116,10 @@ los p95 de login y refresh ya superan los valores objetivo; se declara.
 3. **Valor aislado en la referencia.** El máximo de login sin concurrencia (1666 ms) es un único valor
    entre cinco, y la mediana es 581 ms. Puede deberse a la red o al arranque del servicio.
 
-4. **Protección perimetral de Render (Cloudflare) ante la ráfaga de un solo origen.** Con 10 concurrentes
-   desde una misma conexión, el borde de Render devolvió 502/503 y luego una verificación anti-bots (429),
-   que cortó la ronda. Sin cambiar ese límite (o sin generar la carga desde varios orígenes) no se puede
-   medir el despliegue actual con 25 o 50 concurrentes.
+4. **Posible límite de la protección perimetral de Render (Cloudflare) ante la ráfaga de un solo origen
+   (sin confirmar).** Con 10 concurrentes desde una misma conexión llegaron 502/503 y luego un 429, y después
+   se observó la verificación anti-bots. Si se confirma, no se podría medir el despliegue actual con 25 o 50
+   concurrentes desde un solo origen sin ajustar ese límite.
 
 Por verificar con las métricas de Render: uso de CPU y memoria del servicio a las 22:01 del 23-nov, para
 saber si los 502/503 vinieron del backend saturado o del borde.
