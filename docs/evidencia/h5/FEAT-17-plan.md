@@ -62,8 +62,9 @@ tiene la suya y se suma la latencia de red. Los resultados no son directamente c
   (`200-inactivo`), para no medir el camino del rechazo.
 - R2 se corre de forma escalonada (acuerdo con David, 23-nov): 10, 25 y 50 concurrentes, en una ventana
   sin demo ni pruebas de otros grupos, revisando cada tramo antes de subir.
-- **Parada:** si aparece un timeout o sin respuesta, un 423 (bloqueo) o un 429, el script detiene la
-  ronda («RONDA DETENIDA») y no se sube al siguiente tramo; se reporta el último tramo completo.
+- **Parada:** si aparece un timeout o sin respuesta, un 423 (bloqueo), un 429 o un 5xx, el script detiene la
+  ronda («RONDA DETENIDA»), imprime el CF-Ray de esas respuestas y no se sube al siguiente tramo; se reporta
+  el último tramo completo.
 - Si R1 tiene cualquier error 401/423/429 en el login, **no se ejecuta R2** hasta revisar la causa.
 
 Comandos:

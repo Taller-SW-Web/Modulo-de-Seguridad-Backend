@@ -5,7 +5,7 @@ Reutiliza el enfoque de EP-02-T007 (H3, docs/evidencia/carga/carga.py) y lo ampl
 - calentamiento con cada cuenta (nunca con las de la demo), solo si se mide el login;
 - escenarios de token de servicio (client_credentials) e introspección (éxito solo con activo=true);
 - cierre de cada sesión con /auth/logout, fuera de las métricas;
-- parada automática ante timeout, 423 o 429, comprobada antes de cada petición.
+- parada automática ante timeout, 423, 429 o 5xx, comprobada antes de cada petición.
 
 Secretos y cuentas SOLO por entorno, nunca en git ni en la evidencia:
   G7_CLAVE_CARGA      contraseña común de las cuentas de carga
@@ -36,9 +36,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 UMBRALES_P95_MS = {"login": 800, "refresh": 300, "introspeccion": 200}
 # Respuestas que detienen la ronda (acuerdo con el equipo): sin respuesta o tiempo agotado (0),
-# bloqueo de cuenta (423) y límite de peticiones (429). Seguir con ellas solo empeoraría el servicio.
-ESTADOS_DE_PARADA = {0, 423, 429}
+# bloqueo de cuenta (423), límite de peticiones (429) y servicio caído o saturado (500, 502, 503, 504).
+# Seguir con ellas solo empeoraría el servicio.
+ESTADOS_DE_PARADA = {0, 423, 429, 500, 502, 503, 504}
 DOMINIO = "@fixtures.g7.test"
+
+
+# CF-Ray de las respuestas de parada (429 o 5xx), para rastrearlas con Render/Cloudflare.
+RAYOS = []
 
 
 def peticion(base, ruta, cuerpo=None, formulario=None, bearer=None):
@@ -59,6 +64,10 @@ def peticion(base, ruta, cuerpo=None, formulario=None, bearer=None):
             crudo = r.read()
             return time.perf_counter() - t0, r.status, json.loads(crudo) if crudo else None
     except urllib.error.HTTPError as e:
+        if e.code == 429 or e.code >= 500:
+            RAYOS.append(f"{ruta} {e.code} cf-ray={e.headers.get('CF-Ray', '—')} "
+                         f"servidor={e.headers.get('Server', '—')} "
+                         f"hora={time.strftime('%H:%M:%S')}")
         return time.perf_counter() - t0, e.code, None
     except Exception:
         return time.perf_counter() - t0, 0, None
@@ -199,6 +208,10 @@ def main():
     if parada.is_set():
         print(f"RONDA DETENIDA: {motivo[0]}. Se reportan las muestras tomadas hasta ese momento; "
               "no subir al siguiente tramo.")
+    if RAYOS:
+        print("Respuestas de parada (primeras 5):")
+        for r in RAYOS[:5]:
+            print("  " + r)
     print(f"base={base} cuentas={len(cuentas)} concurrencia={a.concurrencia} por_hilo={a.por_hilo} "
           f"duración={duracion:.1f} s")
     for nombre in ("login", "refresh", "token", "introspeccion"):

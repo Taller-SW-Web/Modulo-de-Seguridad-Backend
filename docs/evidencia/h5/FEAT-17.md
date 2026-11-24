@@ -3,8 +3,11 @@
 Ejecutó: Valery Cristin Gutierrez Bendezu · Revisó: _(Eva)_
 Plan: [FEAT-17-plan.md](FEAT-17-plan.md) · Script: [`carga_h5.py`](../carga/carga_h5.py)
 Nivel de evidencia: **propia desplegada**.
-Estado: **R1 (ronda corta) y ronda de referencia ejecutadas el 23-nov; R2 (50 concurrentes) pendiente**
-de la ventana que acuerde el equipo, por el riesgo de afectar la demo (ver «Causas probables»).
+Estado: **R1 (ronda corta) y ronda de referencia completadas el 23-nov. R2: el tramo de 10 concurrentes se
+ejecutó a las 22:01 y se detuvo solo por un 429 de la verificación anti-bots de Cloudflare de Render, no de
+nuestro servicio. Los tramos de 25 y 50 quedan pendientes por ese límite; el token de servicio y la
+introspección no se midieron** (acuerdo con David y Alejandro, 22:14).
+**Último tramo completado: R1 (5 concurrentes).**
 
 ## Condiciones
 
@@ -44,25 +47,53 @@ latencia propia de una petición del efecto de la concurrencia.
 
 Duración de la ronda: 5,1 s.
 
-## R2 — Ronda final (50 concurrentes, 10 iteraciones por hilo)
+## R2 — Ronda escalonada (10 → 25 → 50)
 
-_Pendiente._ Con 5 concurrentes el login ya tarda ~5 s; con 50 podría superar el tiempo de espera de
-30 s del script y degradar el servicio para la demo. Acordado con David (23-nov): tramos de 10, 25 y 50
-en una ventana sin demo ni pruebas de otros grupos, revisando cada tramo antes de subir. Si aparece un
-timeout, un 429 o un bloqueo, el script detiene la ronda y se deja el resultado del último tramo.
+Acordada con David: 10, 25 y 50 concurrentes en una ventana sin demo ni pruebas de otros grupos, subiendo
+de tramo solo si el anterior termina sin timeouts, 429 ni bloqueos. Valery corre ingreso y renovación; David,
+después y por separado, token de servicio e introspección con el secreto del cliente técnico.
 
-| Ronda | Concurrencia | Login p50 / p95 / p99 | Refresh p50 / p95 / p99 | Errores |
-|---|---|---|---|---|
-| _(pendiente)_ | | | | |
+### Tramo de 10 concurrentes — detenido
+
+23-nov-2026, 22:01 (America/Lima). 5 cuentas (2 hilos por cuenta), 10 iteraciones por hilo, `login,refresh`.
+
+| Escenario | n | p50 | p95 | p99 | media | máx. | Errores | Estados |
+|---|---|---|---|---|---|---|---|---|
+| Login | 56 | 176 | 8348 | 8354 | 1470 | 8360 | 54 | 200 ×2, 502 ×38, 503 ×8, 429 ×8 |
+| Refresh | 2 | 4075 | 4590 | 4590 | 4332 | 4590 | 2 | 502 ×2 |
+
+Duración: 9,2 s. El script detuvo la ronda al recibir el primer 429 en `POST /api/v1/auth/login`
+(«RONDA DETENIDA: login respondió 429»); de las 100 iteraciones previstas se hicieron 56.
+
+**Origen del 429.** Minutos después, desde la misma conexión, `GET /actuator/health` mostró la página de
+verificación anti-bots de Cloudflare («Verificación de seguridad en curso», HTTP 429) delante del servicio:
+el corte vino de la protección perimetral de Render y no del backend de G7. David comprobó desde otra
+conexión que el servicio respondía `200 UP` a las 22:12, así que el bloqueo afectó solo al origen de la carga.
+**CF-Ray:** no registrado. El script de ese momento no guardaba cabeceras y, al revisar, la verificación ya
+había pasado. Desde esta versión el script imprime el CF-Ray de cada 429 o 5xx.
+
+**502 y 503.** Llegaron antes del 429 y son respuestas del borde de Render (el servicio no contestó a
+tiempo o estaba saturado). Con los datos del script no se puede separar si los produjo el backend
+saturado o la propia protección. Esta versión del script también se detiene ante cualquier 5xx.
+
+### Tramos de 25 y 50 — pendientes
+
+No se ejecutaron. Quedan pendientes por el límite de la protección perimetral de Render: el tramo de 10 ya
+fue cortado por la verificación anti-bots de Cloudflare (429), así que subir la concurrencia desde el mismo
+origen solo repetiría el corte. Además, solo hay 5 cuentas de carga.
+
+**Token de servicio e introspección: no medidos.** La concesión temporal de `tokens:introspeccion` para
+`modulo-prueba-h5` se cerró el 23-nov al terminar la ventana (David quitó el scope y Alejandro la revocó en la
+matriz). David había validado antes una sesión de prueba con `activo: true`.
 
 ## Comparación con los umbrales
 
-| Escenario | Umbral p95 | Sin concurrencia | 5 concurrentes | 50 concurrentes |
-|---|---|---|---|---|
-| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** | _(pendiente)_ |
-| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** | _(pendiente)_ |
-| Introspección | < 200 ms | — | — | _(pendiente del scope)_ |
-| Token de servicio | sin umbral | — | — | _(pendiente del scope)_ |
+| Escenario | Umbral p95 | Sin concurrencia | 5 concurrentes | 10 concurrentes (detenido) | 50 concurrentes |
+|---|---|---|---|---|---|
+| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** | 8348 ms; 54 de 56 con error · **No cumple** | _(pendiente)_ |
+| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** | 2 muestras, ambas 502 · no medible | _(pendiente)_ |
+| Introspección | < 200 ms | — | — | — | no medido (concesión revocada el 23-nov) |
+| Token de servicio | sin umbral | — | — | — | no medido (concesión revocada el 23-nov) |
 
 Los umbrales están definidos para 50 concurrentes: **pendiente de medir con 50**. Con 5 concurrentes
 los p95 de login y refresh ya superan los valores objetivo; se declara.
@@ -80,7 +111,13 @@ los p95 de login y refresh ya superan los valores objetivo; se declara.
 3. **Valor aislado en la referencia.** El máximo de login sin concurrencia (1666 ms) es un único valor
    entre cinco, y la mediana es 581 ms. Puede deberse a la red o al arranque del servicio.
 
-Por verificar con R2 o con las métricas de Render: uso de CPU y memoria del servicio durante la ronda.
+4. **Protección perimetral de Render (Cloudflare) ante la ráfaga de un solo origen.** Con 10 concurrentes
+   desde una misma conexión, el borde de Render devolvió 502/503 y luego una verificación anti-bots (429),
+   que cortó la ronda. Sin cambiar ese límite (o sin generar la carga desde varios orígenes) no se puede
+   medir el despliegue actual con 25 o 50 concurrentes.
+
+Por verificar con las métricas de Render: uso de CPU y memoria del servicio a las 22:01 del 23-nov, para
+saber si los 502/503 vinieron del backend saturado o del borde.
 
 ## Comparación con H3 (local)
 
@@ -94,7 +131,9 @@ de su plan y se suma la latencia de red hacia Supabase y desde el generador.
 
 ## Limitaciones
 
-- Muestras pequeñas (5 por escenario y ronda): los percentiles son orientativos. R2 aporta ~500 por escenario.
+- Muestras pequeñas (5 por escenario en R1 y la referencia): los percentiles son orientativos.
+- El tramo de 10 se cortó a las 56 iteraciones y con casi todo en error: sus percentiles describen el
+  servicio saturado o bloqueado, no su latencia normal.
 - Generador en una red doméstica: la latencia incluye esa red.
 - No se midió el login con MFA ni, por ahora, el token de servicio y la introspección.
 
@@ -109,6 +148,15 @@ base=https://g7-auth-service.onrender.com/api/v1 cuentas=5 concurrencia=5 por_hi
 login         n=5 p50=4769 p95=5661 p99=5661 media=4765 max=5661 ms | errores=0 estados={200: 5}
               objetivo p95<800 ms: NO CUMPLE
 refresh       n=5 p50=695 p95=1408 p99=1408 media=842 max=1408 ms | errores=0 estados={200: 5}
+              objetivo p95<300 ms: NO CUMPLE
+
+# R2, tramo de 10 — 23-nov 22:01, detenido
+> python docs/evidencia/carga/carga_h5.py https://g7-auth-service.onrender.com/api/v1 --concurrencia 10 --por-hilo 10 --escenarios login,refresh
+RONDA DETENIDA: login respondió 429. Se reportan las muestras tomadas hasta ese momento; no subir al siguiente tramo.
+base=https://g7-auth-service.onrender.com/api/v1 cuentas=5 concurrencia=10 por_hilo=10 duración=9.2 s
+login         n=56 p50=176 p95=8348 p99=8354 media=1470 max=8360 ms | errores=54 estados={200: 2, 502: 38, 503: 8, 429: 8}
+              objetivo p95<800 ms: NO CUMPLE
+refresh       n=2 p50=4075 p95=4590 p99=4590 media=4332 max=4590 ms | errores=2 estados={502: 2}
               objetivo p95<300 ms: NO CUMPLE
 
 # Referencia — 1 concurrente, 5 iteraciones
