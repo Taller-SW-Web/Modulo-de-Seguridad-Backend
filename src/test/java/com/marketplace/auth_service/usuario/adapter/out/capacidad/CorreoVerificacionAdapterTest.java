@@ -52,6 +52,7 @@ class CorreoVerificacionAdapterTest {
         verify(tokens).emitir(USUARIO, PropositoToken.VERIFICAR_CORREO, Duration.ofHours(24));
         assertThat(correo.topico()).isEqualTo("correo.verificacion_correo");
         assertThat(correo.destino()).isEqualTo("maria@ejemplo.com");
+        assertThat(correo.plantilla()).isNull();
         assertThat(correo.contenido())
                 .contains("Hola, María")
                 .contains("https://g7-seguridad-spa.onrender.com/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f")
@@ -63,7 +64,9 @@ class CorreoVerificacionAdapterTest {
     void fueraDeWebElEnlaceLlevaElCanalYNuncaUnaUrl() {
         for (CanalOrigen canal : List.of(CanalOrigen.MARKETPLACE, CanalOrigen.RETAIL, CanalOrigen.CHATBOT)) {
             org.mockito.Mockito.clearInvocations(mensajeria);
-            assertThat(enviar("https://spa.example.test", canal).contenido())
+            var correo = enviar("https://spa.example.test", canal);
+            assertThat(correo.plantilla() != null).isEqualTo(canal == CanalOrigen.MARKETPLACE);
+            assertThat(correo.contenido())
                     .contains("/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f&canal=" + canal.name() + "\n")
                     .doesNotContain("retorno", "http://", "vercel");
         }

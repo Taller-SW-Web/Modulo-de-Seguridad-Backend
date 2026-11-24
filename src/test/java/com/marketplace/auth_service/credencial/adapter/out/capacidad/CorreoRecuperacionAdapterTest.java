@@ -40,6 +40,7 @@ class CorreoRecuperacionAdapterTest {
     void canalWebUsaElDestinoPredeterminadoSinParametroCanal() {
         var correo = emitir(CanalOrigenRecuperacion.WEB);
 
+        assertThat(correo.plantilla()).isNull();
         assertThat(correo.contenido())
                 .contains("/recuperar-contrasena?token=a%2Bb%2Fc%3Dd_e-f")
                 .doesNotContain("&canal=");
@@ -50,7 +51,9 @@ class CorreoRecuperacionAdapterTest {
         for (CanalOrigenRecuperacion canal : new CanalOrigenRecuperacion[]{
                 CanalOrigenRecuperacion.CHATBOT, CanalOrigenRecuperacion.RETAIL}) {
             org.mockito.Mockito.clearInvocations(mensajeria);
-            assertThat(emitir(canal).contenido()).contains("&canal=" + canal.name());
+            var correo = emitir(canal);
+            assertThat(correo.plantilla()).isNull();
+            assertThat(correo.contenido()).contains("&canal=" + canal.name());
         }
     }
 
