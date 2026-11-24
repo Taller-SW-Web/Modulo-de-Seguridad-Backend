@@ -95,8 +95,8 @@ timeouts, 429 ni bloqueos. Además, solo hay 5 cuentas de carga.
 
 | Escenario | Umbral p95 | Sin concurrencia | 5 concurrentes | 10 concurrentes | 50 concurrentes |
 |---|---|---|---|---|---|
-| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** **Tramo interrumpido**: p95 8348 ms con 54 errores en 56 peticiones; mezcla éxitos y fallos, no califica la latencia del login exitoso | _(pendiente)_ |
-| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** **Tramo interrumpido**: 2 muestras, ambas 502 | _(pendiente)_ |
+| Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** | **Tramo interrumpido**: p95 8348 ms con 54 errores en 56 peticiones; mezcla éxitos y fallos, no califica la latencia del login exitoso | _(pendiente)_ |
+| Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** | **Tramo interrumpido**: 2 muestras, ambas 502 | _(pendiente)_ |
 | Introspección | < 200 ms | — | — | — | sin medir (scope concedido, validado con `activo: true` y revocado) |
 | Token de servicio | sin umbral | — | — | — | sin medir (scope concedido, validado y revocado) |
 
