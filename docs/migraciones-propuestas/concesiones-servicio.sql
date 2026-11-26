@@ -14,7 +14,8 @@
 -- configuración (SPEC-19, FEAT-14), que la audita con autor y fecha. Este archivo
 -- se actualiza después, para que el repositorio refleje la base.
 --
--- El INSERT refleja la base desplegada al 10-nov (consulta Q2). Las concesiones
+-- El INSERT refleja la base desplegada al 10-nov (consulta Q2), más las concesiones
+-- del 23-nov hechas desde el módulo de configuración. Las concesiones
 -- aprobadas en la matriz que la base todavía no tiene están al final, comentadas:
 -- ejecutar este archivo no las concede.
 -- ============================================================================
@@ -40,6 +41,8 @@ SELECT v.client_id, v.scope
     -- api-ventas
     ('modulo-marketplace', 'ventas:pedidos:crear'),
     ('modulo-chatbot',     'ventas:pedidos:crear'),
+    ('modulo-chatbot',     'ventas:pagos:webhook'),    -- 23-nov, #108
+    ('modulo-chatbot',     'ventas:pedidos:anular'),   -- 23-nov, #108
     ('modulo-retail',      'ventas:pedidos:crear'),
     ('modulo-despacho',    'ventas:pedidos:estado'),
     ('simulador-pasarela', 'ventas:pagos:webhook'),
@@ -62,6 +65,13 @@ SELECT v.client_id, v.scope
     ('modulo-ventas',      'inventario:consumir'),
     ('modulo-ventas',      'inventario:liberar'),
     ('modulo-ventas',      'inventario:operaciones:leer'),
+    -- Aplicadas en la base desplegada (23 y 25-nov, confirmadas por David en #107 y #108):
+    ('modulo-ventas',      'cupones:consumir'),
+    ('modulo-ventas',      'cupones:restaurar'),
+    ('modulo-ventas',      'cupones:operaciones:leer'),
+    ('modulo-ventas',      'inventario:reservas:estado:leer'),
+    ('modulo-ventas',      'inventario:disponibilidad:leer'),  -- #107
+    ('promotions-svc',     'inventario:reservas:estado:leer'), -- #107, cliente nuevo de G6
     ('modulo-postventa',   'inventario:reintegrar'),
     ('modulo-postventa',   'inventario:disponibilidad:leer'),
     ('modulo-productos',   'catalogo:leer'),
@@ -80,8 +90,6 @@ ON CONFLICT (client_id, scope) DO NOTHING;
 --   ('modulo-retail',      'usuarios:leer'),
 --   ('modulo-retail',      'roles:leer'),
 --   ('modulo-marketplace', 'ventas:pedidos:anular'),
---   ('modulo-chatbot',     'ventas:pedidos:anular'),
---   ('modulo-chatbot',     'ventas:pagos:webhook'),
 --   ('modulo-retail',      'ventas:pedidos:anular'),
 --   ('modulo-marketplace', 'postventa:devoluciones:escribir'),
 --   ('modulo-marketplace', 'postventa:reclamos:escribir'),
@@ -89,6 +97,9 @@ ON CONFLICT (client_id, scope) DO NOTHING;
 --   ('modulo-chatbot',     'postventa:reclamos:escribir'),
 --   ('modulo-retail',      'postventa:devoluciones:escribir'),
 --   ('modulo-retail',      'postventa:reclamos:escribir'),
+
+-- En espera de G5: ventas:pedidos:evidencia-cupon:leer para promotions-svc (#107) y
+-- postventa:devoluciones:escribir / postventa:reclamos:escribir para modulo-chatbot (#108).
 
 -- Concedidas en la base sin respaldo en la matriz (Q2 del 10-nov), NO incluidas aquí:
 -- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail. El contrato de
