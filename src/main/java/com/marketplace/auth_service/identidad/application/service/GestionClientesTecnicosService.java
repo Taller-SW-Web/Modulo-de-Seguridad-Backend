@@ -94,6 +94,31 @@ public final class GestionClientesTecnicosService implements ClientesTecnicosPor
     }
 
     @Override
+    public ResultadoGestionCliente<ScopeDisponible> crearScope(ActorUsuario actor, String codigo, String audiencia,
+                                                               String descripcion, ContextoPeticion contexto) {
+        if (!autorizado(actor, contexto)) {
+            return rechazo(ResultadoGestionCliente.SCOPE_INSUFICIENTE);
+        }
+        if (codigo == null || codigo.length() > SCOPE_MAXIMO || !codigo.matches("^[a-z_]+(:[a-z_]+)+$")) {
+            return invalido("codigo");
+        }
+        if (audiencia == null || !Set.of("api-seguridad", "api-ventas", "api-postventa",
+                "api-productos", "api-despacho").contains(audiencia)) {
+            return invalido("audiencia");
+        }
+        if (descripcion == null || descripcion.isBlank() || descripcion.strip().length() > 255) {
+            return invalido("descripcion");
+        }
+        ScopeDisponible scope = new ScopeDisponible(codigo, audiencia, descripcion.strip());
+        if (!registro.insertarScope(scope)) {
+            return rechazo(ResultadoGestionCliente.SCOPE_CATALOGO_EXISTENTE);
+        }
+        gobierno.registrar("SCOPE_CATALOGO_CREADO", actor, contexto, reloj.instant(),
+                Map.of("codigo", codigo, "audiencia", audiencia));
+        return correcto(scope);
+    }
+
+    @Override
     public ResultadoGestionCliente<SecretoEntregado> crear(ActorUsuario actor, String clientId, String nombre,
                                                           List<String> scopes, ContextoPeticion contexto) {
         if (!autorizado(actor, contexto)) {
