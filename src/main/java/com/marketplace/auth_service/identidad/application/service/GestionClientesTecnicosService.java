@@ -99,7 +99,7 @@ public final class GestionClientesTecnicosService implements ClientesTecnicosPor
         if (!autorizado(actor, contexto)) {
             return rechazo(ResultadoGestionCliente.SCOPE_INSUFICIENTE);
         }
-        if (codigo == null || codigo.length() > SCOPE_MAXIMO || !codigo.matches("^[a-z_]+(:[a-z_]+)+$")) {
+        if (codigo == null || codigo.length() > SCOPE_MAXIMO || !codigo.matches("^[a-z_]+(-[a-z_]+)*(:[a-z_]+(-[a-z_]+)*)+$")) {
             return invalido("codigo");
         }
         if (audiencia == null || !Set.of("api-seguridad", "api-ventas", "api-postventa",
