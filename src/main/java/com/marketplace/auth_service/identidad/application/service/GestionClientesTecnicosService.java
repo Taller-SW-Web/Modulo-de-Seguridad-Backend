@@ -114,7 +114,7 @@ public final class GestionClientesTecnicosService implements ClientesTecnicosPor
             return rechazo(ResultadoGestionCliente.SCOPE_CATALOGO_EXISTENTE);
         }
         gobierno.registrar("SCOPE_CATALOGO_CREADO", actor, contexto, reloj.instant(),
-                Map.of("codigo", codigo, "audiencia", audiencia));
+                Map.of("scope", codigo, "audiencia", audiencia));
         return correcto(scope);
     }
 
