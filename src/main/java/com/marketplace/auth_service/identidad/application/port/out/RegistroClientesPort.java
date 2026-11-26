@@ -20,6 +20,8 @@ public interface RegistroClientesPort {
 
     List<ScopeDisponible> catalogo();
 
+    boolean insertarScope(ScopeDisponible scope);
+
     /** De los códigos dados, los que están en el catálogo. */
     Set<String> catalogados(Collection<String> codigos);
 

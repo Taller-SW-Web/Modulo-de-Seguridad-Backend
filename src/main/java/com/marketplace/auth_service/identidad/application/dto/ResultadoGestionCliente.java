@@ -13,6 +13,7 @@ public sealed interface ResultadoGestionCliente<T>
     String NO_ENCONTRADO = "NO_ENCONTRADO";
     String SCOPE_INSUFICIENTE = "SCOPE_INSUFICIENTE";
     String CLIENTE_SERVICIO_EXISTENTE = "CLIENTE_SERVICIO_EXISTENTE";
+    String SCOPE_CATALOGO_EXISTENTE = "SCOPE_CATALOGO_EXISTENTE";
 
     record Correcto<T>(T valor) implements ResultadoGestionCliente<T> {
     }

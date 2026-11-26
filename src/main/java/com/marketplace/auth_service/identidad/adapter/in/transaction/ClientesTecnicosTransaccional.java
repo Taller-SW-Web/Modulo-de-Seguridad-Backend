@@ -39,6 +39,13 @@ public class ClientesTecnicosTransaccional implements ClientesTecnicosPort {
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ResultadoGestionCliente<ScopeDisponible> crearScope(ActorUsuario actor, String codigo, String audiencia,
+                                                               String descripcion, ContextoPeticion contexto) {
+        return delegado.crearScope(actor, codigo, audiencia, descripcion, contexto);
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ResultadoGestionCliente<SecretoEntregado> crear(ActorUsuario actor, String clientId, String nombre,
                                                           List<String> scopes, ContextoPeticion contexto) {
         return delegado.crear(actor, clientId, nombre, scopes, contexto);

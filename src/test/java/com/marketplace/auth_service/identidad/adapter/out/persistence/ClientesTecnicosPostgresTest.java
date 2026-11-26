@@ -127,6 +127,7 @@ class ClientesTecnicosPostgresTest {
     @BeforeEach
     void preparar() {
         jdbc.execute("truncate cliente_servicio_scope, cliente_servicio");
+        jdbc.update("delete from scope where codigo = ?", "inventario:prueba");
         gobierno = new Gobierno();
         servicio = new GestionClientesTecnicosService(new RegistroClientesJdbcAdapter(jdbc), gobierno, Clock.systemUTC());
         emision = new ClientesServicioJdbcAdapter(jdbc);
@@ -230,9 +231,26 @@ class ClientesTecnicosPostgresTest {
     }
 
     @Test
+    void registraScopeSinConcederloYConservaLaEntradaAnteUnDuplicado() {
+        String codigo = "inventario:prueba";
+        var creado = valor(enTx(() -> servicio.crearScope(ADMIN, codigo, "api-productos", "  Prueba  ", CONTEXTO)));
+        assertThat(creado.descripcion()).isEqualTo("Prueba");
+        var duplicado = enTx(() -> servicio.crearScope(ADMIN, codigo, "api-ventas", "Otro", CONTEXTO));
+        assertThat(duplicado).isEqualTo(ResultadoGestionCliente.rechazo("SCOPE_CATALOGO_EXISTENTE"));
+        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).contains(creado);
+        assertThat(jdbc.queryForObject("select count(*) from cliente_servicio_scope where scope = ?",
+                Integer.class, codigo)).isZero();
+        assertThat(gobierno.acciones).containsExactly("SCOPE_CATALOGO_CREADO");
+    }
+
+    @Test
     void esc19_10_siLaAuditoriaFallaNadaCambia() {
         SecretoEntregado alta = valor(enTx(() -> servicio.crear(ADMIN, "modulo-prueba", "Prueba", List.of(), CONTEXTO)));
         gobierno.fallar = true;
+        assertThatThrownBy(() -> enTx(() -> servicio.crearScope(ADMIN, "inventario:prueba",
+                "api-productos", "Prueba", CONTEXTO))).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("select count(*) from scope where codigo = ?",
+                Integer.class, "inventario:prueba")).isZero();
 
         assertThatThrownBy(() -> enTx(() -> servicio.rotarSecreto(ADMIN, "modulo-prueba", CONTEXTO)))
                 .isInstanceOf(IllegalStateException.class);

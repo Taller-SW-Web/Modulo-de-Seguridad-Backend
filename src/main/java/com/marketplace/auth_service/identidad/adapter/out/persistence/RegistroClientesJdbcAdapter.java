@@ -56,6 +56,14 @@ public class RegistroClientesJdbcAdapter implements RegistroClientesPort {
     }
 
     @Override
+    public boolean insertarScope(ScopeDisponible scope) {
+        return jdbc.update("""
+                INSERT INTO scope (codigo, audiencia, descripcion) VALUES (?, ?, ?)
+                ON CONFLICT (codigo) DO NOTHING
+                """, scope.codigo(), scope.audiencia(), scope.descripcion()) == 1;
+    }
+
+    @Override
     public Set<String> catalogados(Collection<String> codigos) {
         if (codigos.isEmpty()) {
             return Set.of();
