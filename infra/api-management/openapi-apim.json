@@ -1,0 +1,200 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "G7 Seguridad — identidad",
+    "version": "1.2.0",
+    "description": "Subconjunto del contrato de G7 publicado por la pasarela de API Management (ADR-010). El contrato completo está en el repo de documentación."
+  },
+  "servers": [
+    {
+      "url": "https://g7-auth-service.onrender.com/api/v1"
+    }
+  ],
+  "paths": {
+    "/auth/.well-known/jwks.json": {
+      "get": {
+        "operationId": "obtenerJwks",
+        "summary": "Clave pública de verificación de firma",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/.well-known/openid-configuration": {
+      "get": {
+        "operationId": "obtenerConfiguracionOpenid",
+        "summary": "Documento de descubrimiento",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/token": {
+      "post": {
+        "operationId": "emitirTokenServicio",
+        "summary": "Emite el token de servicio de un módulo consumidor",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/introspeccion": {
+      "post": {
+        "operationId": "introspeccionarToken",
+        "summary": "Estado actual de un token de usuario",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/usuarios/{id}": {
+      "get": {
+        "operationId": "obtenerUsuario",
+        "summary": "Datos básicos de un usuario",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/usuarios/lote": {
+      "post": {
+        "operationId": "consultarUsuariosPorLote",
+        "summary": "Consulta hasta 100 usuarios en una llamada",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/usuarios/{id}/direcciones": {
+      "get": {
+        "operationId": "obtenerDireccionesUsuario",
+        "summary": "Direcciones de entrega de un cliente",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/roles": {
+      "get": {
+        "operationId": "listarRoles",
+        "summary": "Catálogo de roles y sus permisos",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/permisos": {
+      "get": {
+        "operationId": "listarPermisos",
+        "summary": "Catálogo de permisos por módulo",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "iniciarSesion",
+        "summary": "Inicio de sesión con correo y contraseña",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/otp/solicitar": {
+      "post": {
+        "operationId": "solicitarCodigoOtp",
+        "summary": "Envía un código de un solo uso",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/otp/verificar": {
+      "post": {
+        "operationId": "verificarCodigoOtp",
+        "summary": "Canjea el código por el par de tokens",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "renovarSesion",
+        "summary": "Renueva la sesión rotando el token de refresco",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "cerrarSesion",
+        "summary": "Cierra la sesión y revoca el token de refresco",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "obtenerPerfilPropio",
+        "summary": "Datos del usuario del token actual",
+        "responses": {
+          "200": {
+            "description": "Respuesta del backend de G7, sin modificar"
+          }
+        }
+      }
+    }
+  }
+}
