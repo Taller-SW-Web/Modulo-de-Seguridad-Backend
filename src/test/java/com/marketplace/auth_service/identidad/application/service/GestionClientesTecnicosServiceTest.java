@@ -144,6 +144,16 @@ class GestionClientesTecnicosServiceTest {
     }
 
     @Test
+    void crearScopeAuditaConLaClaveDeDetalleUsadaParaScopes() {
+        assertThat(servicio.crearScope(ADMIN, "ventas:pedidos:buscar-documento",
+                "api-ventas", "Buscar pedidos de tienda", CONTEXTO))
+                .isInstanceOf(ResultadoGestionCliente.Correcto.class);
+        assertThat(gobierno.acciones).containsExactly("SCOPE_CATALOGO_CREADO");
+        assertThat(gobierno.detalles).containsExactly(
+                Map.of("scope", "ventas:pedidos:buscar-documento", "audiencia", "api-ventas"));
+    }
+
+    @Test
     void rf19_10_concederUnScopeFueraDelCatalogoEsValidacion() {
         registro.agregar("modulo-prueba", true);
 

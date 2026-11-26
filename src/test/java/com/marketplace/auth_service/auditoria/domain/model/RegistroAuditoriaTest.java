@@ -39,6 +39,10 @@ class RegistroAuditoriaTest {
 
     @Test
     void spec19_lasAccionesDeClientesTecnicosAceptanSuDetalleSinSecreto() {
+        assertThat(nuevo("SCOPE_CATALOGO_CREADO",
+                Map.of("scope", "ventas:pedidos:buscar-documento", "audiencia", "api-ventas")).detalle())
+                .containsEntry("scope", "ventas:pedidos:buscar-documento")
+                .containsEntry("audiencia", "api-ventas");
         assertThat(nuevo("SCOPE_CONCEDIDO", Map.of("clientId", "modulo-x", "scope", "roles:leer")).detalle())
                 .containsEntry("scope", "roles:leer");
         assertThat(nuevo("CLIENTE_SERVICIO_CREADO", Map.of("clientId", "modulo-x", "scopes", "a:b c:d")).accion())
