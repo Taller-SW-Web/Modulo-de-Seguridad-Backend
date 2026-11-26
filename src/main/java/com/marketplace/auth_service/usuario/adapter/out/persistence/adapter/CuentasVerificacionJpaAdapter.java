@@ -26,7 +26,8 @@ public class CuentasVerificacionJpaAdapter implements CuentasVerificacionPort {
     @Override
     public boolean activarSiPendiente(UUID usuarioId, Instant ahora) {
         var cuenta = usuarios.lockById(usuarioId).orElse(null);
-        if (cuenta == null || cuenta.getEstado() != EstadoCuenta.PENDIENTE_VERIFICACION) {
+        // Sin términos aceptados la creó otra persona (SPEC-03): solo se activa con su enlace de activación.
+        if (cuenta == null || cuenta.getEstado() != EstadoCuenta.PENDIENTE_VERIFICACION || !cuenta.isAceptaTerminos()) {
             return false;
         }
         cuenta.setEstado(EstadoCuenta.ACTIVO);
@@ -63,6 +64,9 @@ public class CuentasVerificacionJpaAdapter implements CuentasVerificacionPort {
     public Optional<CuentaPendiente> buscarPendiente(String correoNormalizado) {
         return usuarios.findByCorreo(correoNormalizado)
                 .filter(cuenta -> cuenta.getEstado() == EstadoCuenta.PENDIENTE_VERIFICACION)
+                // Una cuenta creada por otra persona (sin términos aceptados) no recibe el enlace de verificación:
+                // la activaría sin contraseña ni consentimiento. Responde igual, 202, y no envía nada.
+                .filter(cuenta -> cuenta.isAceptaTerminos())
                 .map(cuenta -> new CuentaPendiente(cuenta.getId(), cuenta.getCorreo(), cuenta.getNombres(),
                         cuenta.getCanalOrigen()));
     }

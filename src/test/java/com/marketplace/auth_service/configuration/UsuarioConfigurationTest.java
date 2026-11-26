@@ -30,7 +30,10 @@ class UsuarioConfigurationTest {
             // Registro y verificación se cablean en sus propias Config; aquí solo los piden sus controladores.
             .withBean(RegistroClientePort.class,()->mock(RegistroClientePort.class))
             .withBean(VerificacionCorreoPort.class,()->mock(VerificacionCorreoPort.class))
-            .withBean(BajaReactivacionPort.class,()->mock(BajaReactivacionPort.class));
+            .withBean(BajaReactivacionPort.class,()->mock(BajaReactivacionPort.class))
+            // FEAT-13: el alta y la activación se cablean en AltaAdministrativaConfig.
+            .withBean(AltaPersonalPort.class,()->mock(AltaPersonalPort.class))
+            .withBean(ActivacionCuentaPort.class,()->mock(ActivacionCuentaPort.class));
     @Test void unSoloBeanPorPuertoYUnicoCuentasPortDecoradoConEscaneoReal() {
         runner.run(c->{
             assertThat(c).hasNotFailed().hasSingleBean(CuentasPort.class)
