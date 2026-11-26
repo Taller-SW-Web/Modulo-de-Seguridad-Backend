@@ -103,6 +103,7 @@ class ClientesTecnicosPostgresTest {
         try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
             s.execute(leer("mfa/base-observada/schema.sql"));
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
+            s.execute(leer("db/migration/V109__scope_codigo_guiones.sql"));
             s.execute(leer("db/identidad/R__catalogo_scopes.sql"));
         }
         registro.add("spring.datasource.url", () -> propia);
@@ -127,7 +128,7 @@ class ClientesTecnicosPostgresTest {
     @BeforeEach
     void preparar() {
         jdbc.execute("truncate cliente_servicio_scope, cliente_servicio");
-        jdbc.update("delete from scope where codigo = ?", "inventario:prueba");
+        jdbc.update("delete from scope where codigo = ?", "inventario:prueba-local");
         gobierno = new Gobierno();
         servicio = new GestionClientesTecnicosService(new RegistroClientesJdbcAdapter(jdbc), gobierno, Clock.systemUTC());
         emision = new ClientesServicioJdbcAdapter(jdbc);
@@ -232,7 +233,7 @@ class ClientesTecnicosPostgresTest {
 
     @Test
     void registraScopeSinConcederloYConservaLaEntradaAnteUnDuplicado() {
-        String codigo = "inventario:prueba";
+        String codigo = "inventario:prueba-local";
         var creado = valor(enTx(() -> servicio.crearScope(ADMIN, codigo, "api-productos", "  Prueba  ", CONTEXTO)));
         assertThat(creado.descripcion()).isEqualTo("Prueba");
         var duplicado = enTx(() -> servicio.crearScope(ADMIN, codigo, "api-ventas", "Otro", CONTEXTO));
@@ -247,10 +248,10 @@ class ClientesTecnicosPostgresTest {
     void esc19_10_siLaAuditoriaFallaNadaCambia() {
         SecretoEntregado alta = valor(enTx(() -> servicio.crear(ADMIN, "modulo-prueba", "Prueba", List.of(), CONTEXTO)));
         gobierno.fallar = true;
-        assertThatThrownBy(() -> enTx(() -> servicio.crearScope(ADMIN, "inventario:prueba",
+        assertThatThrownBy(() -> enTx(() -> servicio.crearScope(ADMIN, "inventario:prueba-local",
                 "api-productos", "Prueba", CONTEXTO))).isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("select count(*) from scope where codigo = ?",
-                Integer.class, "inventario:prueba")).isZero();
+                Integer.class, "inventario:prueba-local")).isZero();
 
         assertThatThrownBy(() -> enTx(() -> servicio.rotarSecreto(ADMIN, "modulo-prueba", CONTEXTO)))
                 .isInstanceOf(IllegalStateException.class);
