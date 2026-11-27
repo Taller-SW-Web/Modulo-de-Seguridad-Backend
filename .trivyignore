@@ -1,0 +1,4 @@
+# Excepciones temporales de T4: condiciones de explotación ausentes en este backend.
+# Revisar y volver a escanear antes del 2027-02-27.
+CVE-2026-47884 exp:2027-02-27
+CVE-2026-47890 exp:2027-02-27

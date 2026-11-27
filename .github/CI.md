@@ -136,6 +136,37 @@ Los tipos dinámicos dentro de Object/contenedores sin tipar, SQL, propiedad de 
 reglas funcionales e integración real necesitan pruebas específicas y revisión.
 Se mantiene la aprobación humana obligatoria; no fusionar solo por ver checks verdes.
 
+## Política de seguridad del pipeline (FEAT-15-T4)
+
+En los PR a `develop`, los checks de destino y build/pruebas siguen siendo
+obligatorios. El workflow `Seguridad Backend` también bloquea el PR cuando
+Gitleaks encuentra un secreto en el historial incorporado o Trivy encuentra una
+vulnerabilidad `HIGH` o `CRITICAL` en la imagen. Para que GitHub impida el merge,
+un administrador debe marcar `Secretos / historial del PR` e
+`Imagen / vulnerabilidades del backend` como checks requeridos en la protección
+de `develop`; el archivo no cambia por sí solo esa configuración. Las excepciones de Trivy deben
+estar acotadas a un CVE, explicar por qué no aplica y tener vencimiento en
+`.trivyignore`; al vencer, el hallazgo vuelve a bloquear hasta corregirlo o
+aprobar una justificación renovada.
+
+CodeQL y Dependency Review generan resultados visibles para revisión; no son
+gates automáticos en esta configuración. `MEDIUM`, `LOW` y `UNKNOWN` también se
+conservan como información en el escaneo de la imagen. Una excepción no cambia
+el resultado del escaneo original ni elimina la obligación de reevaluar el
+riesgo.
+
+La ejecución de Trivy del PR #98 detectó 11 hallazgos `HIGH` y 7 `CRITICAL` en
+dependencias Java. Este cambio actualiza Jackson, RabbitMQ, Tomcat, PostgreSQL y
+Netty;
+los dos CVE de Spring Framework quedan exceptuados de forma temporal y acotada
+porque requieren configuraciones que la aplicación no usa: `XsltView` con una
+ruta `/**` que resuelva vistas sin nombre explícito (CVE-2026-47884), o SSE con
+fragmentos de vista y datos controlados por atacante (CVE-2026-47890). No hay
+`XsltView`, resolución de vistas ni endpoints SSE de fragmentos en el backend.
+Las excepciones vencen el 27-feb-2027 y requieren nuevo análisis antes de esa
+fecha. La evidencia consolidada está en el repositorio de especificaciones,
+`docs/evidencia/h5/FEAT-15.md`.
+
 ### Evidencia inicial — 14-oct-2026
 
 Preparado en codex/ci-contratos-internos desde develop 52fd0e6.

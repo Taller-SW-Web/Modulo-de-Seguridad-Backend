@@ -54,7 +54,7 @@ jobs:
           "$RUNNER_TEMP/gitleaks/gitleaks" git \
             --no-banner \
             --redact=100 \
-            --exit-code=0 \
+            --exit-code=1 \
             --report-format=sarif \
             --report-path="$GITHUB_WORKSPACE/gitleaks-results.sarif" \
             --log-opts="$BASE_SHA..$HEAD_SHA" \
@@ -90,12 +90,13 @@ jobs:
         with:
           image-ref: auth-service:security
           version: v0.76.2
+          trivyignores: .trivyignore
           format: table
           output: ${{ runner.temp }}/trivy-image-results.txt
-          exit-code: '0'
+          exit-code: '1'
           cache: true
           vuln-type: os,library
-          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          severity: HIGH,CRITICAL
           timeout: 15m
 
       - name: Conservar reporte de la imagen
