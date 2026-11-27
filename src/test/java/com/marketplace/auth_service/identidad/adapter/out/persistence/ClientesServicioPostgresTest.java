@@ -118,7 +118,13 @@ class ClientesServicioPostgresTest {
 
     @Test
     void elCatalogoDeScopesCumpleLasRestriccionesYAsignaLaAudienciaDeSuDueno() {
-        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(31);
+        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(33);
+        assertThat(jdbc.queryForList("""
+                select codigo from scope
+                where audiencia = 'api-productos' and codigo like 'inventario:incidencias:%'
+                order by codigo
+                """, String.class)).containsExactly("inventario:incidencias:reportar",
+                "inventario:incidencias:resolver");
         assertThat(jdbc.queryForList("select distinct audiencia from scope order by 1", String.class))
                 .containsExactly("api-despacho", "api-postventa", "api-productos", "api-seguridad", "api-ventas");
         assertThat(jdbc.queryForObject("select audiencia from scope where codigo = 'inventario:reservar'", String.class))

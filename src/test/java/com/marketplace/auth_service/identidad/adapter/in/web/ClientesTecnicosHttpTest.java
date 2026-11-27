@@ -95,6 +95,24 @@ class ClientesTecnicosHttpTest {
     }
 
     @Test
+    void altaDeScopeDevuelve201YUnDuplicadoDevuelve409() throws Exception {
+        var scope = new ScopeDisponible("inventario:prueba", "api-productos", "Prueba");
+        when(clientes.crearScope(any(), eq(scope.codigo()), eq(scope.audiencia()), eq(scope.descripcion()), any()))
+                .thenReturn(ResultadoGestionCliente.correcto(scope))
+                .thenReturn(ResultadoGestionCliente.rechazo("SCOPE_CATALOGO_EXISTENTE"));
+        String cuerpo = """
+                {"codigo":"inventario:prueba","audiencia":"api-productos","descripcion":"Prueba"}
+                """;
+
+        http.perform(post("/api/v2/scopes").header("Authorization", "Bearer acceso")
+                        .contentType("application/json").content(cuerpo))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.codigo").value(scope.codigo()));
+        http.perform(post("/api/v2/scopes").header("Authorization", "Bearer acceso")
+                        .contentType("application/json").content(cuerpo))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCOPE_CATALOGO_EXISTENTE"));
+    }
+
+    @Test
     void altaResponde201ConElSecretoYNoStore() throws Exception {
         when(clientes.crear(any(), eq("modulo-prueba-h5"), eq("Cliente de prueba H5"), eq(List.of("usuarios:leer")),
                 any())).thenReturn(ResultadoGestionCliente.correcto(new SecretoEntregado(CLIENTE, "s3cr3t-una-vez")));

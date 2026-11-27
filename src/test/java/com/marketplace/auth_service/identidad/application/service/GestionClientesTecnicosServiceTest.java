@@ -144,6 +144,16 @@ class GestionClientesTecnicosServiceTest {
     }
 
     @Test
+    void crearScopeAuditaConLaClaveDeDetalleUsadaParaScopes() {
+        assertThat(servicio.crearScope(ADMIN, "ventas:pedidos:buscar-documento",
+                "api-ventas", "Buscar pedidos de tienda", CONTEXTO))
+                .isInstanceOf(ResultadoGestionCliente.Correcto.class);
+        assertThat(gobierno.acciones).containsExactly("SCOPE_CATALOGO_CREADO");
+        assertThat(gobierno.detalles).containsExactly(
+                Map.of("scope", "ventas:pedidos:buscar-documento", "audiencia", "api-ventas"));
+    }
+
+    @Test
     void rf19_10_concederUnScopeFueraDelCatalogoEsValidacion() {
         registro.agregar("modulo-prueba", true);
 
@@ -250,6 +260,7 @@ class GestionClientesTecnicosServiceTest {
         final Map<String, String> nombres = new HashMap<>();
         final Map<String, String> hashes = new HashMap<>();
         final Map<String, Set<String>> scopes = new HashMap<>();
+        final Map<String, ScopeDisponible> scopesRegistrados = new HashMap<>();
         int consultas;
 
         void agregar(String clientId, boolean activo) {
@@ -274,6 +285,12 @@ class GestionClientesTecnicosServiceTest {
         @Override public List<ScopeDisponible> catalogo() {
             consultas++;
             return CATALOGO.entrySet().stream().map(e -> new ScopeDisponible(e.getKey(), e.getValue(), null)).toList();
+        }
+
+        @Override public boolean insertarScope(ScopeDisponible scope) {
+            consultas++;
+            return !CATALOGO.containsKey(scope.codigo())
+                    && scopesRegistrados.putIfAbsent(scope.codigo(), scope) == null;
         }
 
         @Override public Set<String> catalogados(Collection<String> codigos) {

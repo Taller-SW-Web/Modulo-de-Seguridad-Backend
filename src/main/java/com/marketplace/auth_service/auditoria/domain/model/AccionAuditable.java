@@ -45,7 +45,8 @@ public enum AccionAuditable {
     CLIENTE_SERVICIO_REACTIVADO(true),
     SECRETO_SERVICIO_ROTADO(true),
     SCOPE_CONCEDIDO(true),
-    SCOPE_REVOCADO(true);
+    SCOPE_REVOCADO(true),
+    SCOPE_CATALOGO_CREADO(true);
 
     private final boolean critica;
 

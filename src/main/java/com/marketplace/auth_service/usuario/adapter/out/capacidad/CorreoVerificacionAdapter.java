@@ -9,6 +9,7 @@ import com.marketplace.auth_service.credencial.application.port.in.TokensUnUsoPo
 import com.marketplace.auth_service.usuario.application.port.out.CorreoVerificacionPort;
 import com.marketplace.auth_service.usuario.domain.exception.VerificacionNoDisponibleException;
 import com.marketplace.auth_service.usuario.domain.model.CanalOrigen;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -21,10 +22,8 @@ import org.slf4j.LoggerFactory;
  * Puente de la verificación de correo hacia tokens de un uso (Juan José) y el outbox (Christian).
  * El enlace solo va dentro del correo cifrado, nunca en logs, auditoría ni eventos.
  *
- * <p>Todos los canales llevan por ahora a {@code /verificar-correo} de nuestra SPA (FEAT-01-T2);
- * la pantalla propia de CHATBOT de RF-02.8 queda pendiente. Fuera de {@code WEB}, el enlace añade
- * {@code &canal=} con el nombre del canal (lista cerrada, nunca una URL): la SPA lo traduce a su
- * login de retorno permitido por entorno (FEAT-01-T4, FRONT-03).
+ * <p>CHATBOT usa su origen público configurado en el servidor. Cuando falta esa
+ * configuración, el enlace lleva a la SPA de Seguridad con el canal de origen.
  */
 public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
 
@@ -36,19 +35,37 @@ public final class CorreoVerificacionAdapter implements CorreoVerificacionPort {
     private final TokensUnUsoPort tokens;
     private final MensajeriaPort mensajeria;
     private final String urlSpa;
+    private final String origenChatbot;
 
-    public CorreoVerificacionAdapter(TokensUnUsoPort tokens, MensajeriaPort mensajeria, String urlSpa) {
+    public CorreoVerificacionAdapter(TokensUnUsoPort tokens, MensajeriaPort mensajeria, String urlSpa,
+                                     String origenChatbot) {
         this.tokens = Objects.requireNonNull(tokens);
         this.mensajeria = Objects.requireNonNull(mensajeria);
         this.urlSpa = Objects.requireNonNull(urlSpa).replaceAll("/+$", "");
+        this.origenChatbot = validarOrigenChatbot(origenChatbot);
+    }
+
+    private static String validarOrigenChatbot(String configurado) {
+        String origen = configurado.strip().replaceAll("/+$", "");
+        if (origen.isEmpty()) {
+            return origen;
+        }
+        URI uri = URI.create(origen);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null
+                || uri.getRawUserInfo() != null || !uri.getRawPath().isEmpty()
+                || uri.getRawQuery() != null || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException("G7_VERIFICACION_CHATBOT_ORIGEN debe ser un origen HTTPS");
+        }
+        return origen;
     }
 
     @Override
     public void enviar(UUID usuarioId, String correo, String nombres, CanalOrigen canalOrigen) {
         var token = tokens.emitir(usuarioId, PropositoToken.VERIFICAR_CORREO, VIGENCIA);
-        String enlace = urlSpa + "/verificar-correo?token="
+        boolean destinoChatbot = canalOrigen == CanalOrigen.CHATBOT && !origenChatbot.isEmpty();
+        String enlace = (destinoChatbot ? origenChatbot : urlSpa) + "/verificar-correo?token="
                 + URLEncoder.encode(token.tokenClaro(), StandardCharsets.UTF_8)
-                + (canalOrigen == CanalOrigen.WEB ? "" : "&canal=" + canalOrigen.name());
+                + (destinoChatbot || canalOrigen == CanalOrigen.WEB ? "" : "&canal=" + canalOrigen.name());
         Plantilla plantilla = canalOrigen == CanalOrigen.MARKETPLACE
                 ? new Plantilla(TipoPlantilla.VERIFICACION_MARKETPLACE, enlace) : null;
         try {
