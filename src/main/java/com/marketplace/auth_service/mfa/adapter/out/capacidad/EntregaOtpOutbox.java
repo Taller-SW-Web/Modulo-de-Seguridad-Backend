@@ -1,6 +1,8 @@
 package com.marketplace.auth_service.mfa.adapter.out.capacidad;
 
 import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.Plantilla;
+import com.marketplace.auth_service.auditoria.application.dto.EntregaCorreo.TipoPlantilla;
 import com.marketplace.auth_service.auditoria.application.port.in.MensajeriaPort;
 import com.marketplace.auth_service.mfa.application.port.out.EntregaOtpPort;
 import com.marketplace.auth_service.mfa.domain.model.CanalOtp;
@@ -23,6 +25,7 @@ public final class EntregaOtpOutbox implements EntregaOtpPort {
         }
         mensajeria.guardarCorreo(new EntregaCorreo(UUID.randomUUID(), "otp", destino,
                 "Tu código para iniciar sesión es " + codigo + ".\n\n"
-                + "Solo es válido mientras tu desafío siga vigente. Si solicitaste otro, utiliza el más reciente.\n"));
+                + "Solo es válido mientras tu desafío siga vigente. Si solicitaste otro, utiliza el más reciente.\n",
+                new Plantilla(TipoPlantilla.OTP_INICIO_SESION, codigo)));
     }
 }

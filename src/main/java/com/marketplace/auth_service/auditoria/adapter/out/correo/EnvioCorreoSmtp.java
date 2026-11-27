@@ -53,6 +53,11 @@ public final class EnvioCorreoSmtp implements EnvioCorreoPort {
                 variable = "{{resetUrl}}";
                 asuntoMarketplace = "Restablece tu contraseña de Inka Athletics";
             }
+            case OTP_INICIO_SESION -> {
+                archivo = "otp-inicio-sesion.html";
+                variable = "{{otp}}";
+                asuntoMarketplace = "Tu código para iniciar sesión";
+            }
             default -> throw new IllegalArgumentException("Plantilla de correo desconocida");
         }
         try {
