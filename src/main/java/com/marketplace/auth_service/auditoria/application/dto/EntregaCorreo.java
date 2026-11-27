@@ -29,6 +29,7 @@ public record EntregaCorreo(UUID mensajeId, String topico, String destino, Strin
 
     public enum TipoPlantilla {
         VERIFICACION_MARKETPLACE,
-        RECUPERACION_MARKETPLACE
+        RECUPERACION_MARKETPLACE,
+        OTP_INICIO_SESION
     }
 }
