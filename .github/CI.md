@@ -158,8 +158,9 @@ riesgo.
 La precarga Gradle y `bootJar` durante la construcción Docker se reintentan
 hasta tres veces, con esperas de 20 y 40 segundos, para absorber respuestas
 transitorias como HTTP 429 de Maven Central. El envío del dependency graph usa
-la caché Gradle y una precarga con reintentos por el mismo límite. Si el error
-persiste después de los intentos, el check falla y el PR no debe integrarse.
+la caché Gradle y conserva lo descargado aunque falle la ejecución; un PR del
+repositorio puede escribir su propia caché, mientras que los PR desde forks
+solo la leen. Si el error persiste, el check falla y el PR no debe integrarse.
 
 La ejecución de Trivy del PR #98 detectó 11 hallazgos `HIGH` y 7 `CRITICAL` en
 dependencias Java. Este cambio actualiza Jackson, RabbitMQ, Tomcat, PostgreSQL y
