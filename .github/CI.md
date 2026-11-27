@@ -155,6 +155,11 @@ conservan como información en el escaneo de la imagen. Una excepción no cambia
 el resultado del escaneo original ni elimina la obligación de reevaluar el
 riesgo.
 
+La resolución inicial de dependencias Gradle durante la construcción Docker
+se reintenta hasta tres veces, con esperas de 20 y 40 segundos. Esto absorbe
+respuestas transitorias como HTTP 429 de Maven Central; si persiste, la
+construcción falla y el PR no debe integrarse.
+
 La ejecución de Trivy del PR #98 detectó 11 hallazgos `HIGH` y 7 `CRITICAL` en
 dependencias Java. Este cambio actualiza Jackson, RabbitMQ, Tomcat, PostgreSQL y
 Netty;
