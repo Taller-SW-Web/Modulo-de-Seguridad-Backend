@@ -17,6 +17,96 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secret-history:
+    name: Secretos / historial del PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener el historial completo del PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Descargar y verificar Gitleaks 8.29.1
+        run: |
+          set -euo pipefail
+          version=8.29.1
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${version}"
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          curl --fail --silent --show-error --location "$release/$archive" -o "$RUNNER_TEMP/$archive"
+          curl --fail --silent --show-error --location "$release/gitleaks_${version}_checksums.txt" -o "$RUNNER_TEMP/checksums.txt"
+          checksum=$(awk -v file="$archive" '$2 == file || (substr($2, 1, 1) == "*" && substr($2, 2) == file) { print $1 }' "$RUNNER_TEMP/checksums.txt")
+          test -n "$checksum"
+          echo "$checksum  $RUNNER_TEMP/$archive" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+
+      - name: Detectar secretos entre la base y la cabeza del PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/gitleaks/gitleaks" git \
+            --no-banner \
+            --redact=100 \
+            --exit-code=0 \
+            --report-format=sarif \
+            --report-path="$GITHUB_WORKSPACE/gitleaks-results.sarif" \
+            --log-opts="$BASE_SHA..$HEAD_SHA" \
+            "$GITHUB_WORKSPACE"
+
+      - name: Conservar reporte de secretos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitleaks-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: gitleaks-results.sarif
+          if-no-files-found: warn
+          retention-days: 7
+
+  container-image-scan:
+    name: Imagen / vulnerabilidades del backend
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Construir imagen local para análisis
+        run: docker build --pull --tag auth-service:security .
+
+      - name: Escanear vulnerabilidades de la imagen
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: auth-service:security
+          version: v0.76.2
+          format: table
+          output: ${{ runner.temp }}/trivy-image-results.txt
+          exit-code: '0'
+          cache: true
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          timeout: 15m
+
+      - name: Conservar reporte de la imagen
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trivy-image-results.txt
+          if-no-files-found: warn
+          retention-days: 7
+
   dependency-submission:
     name: Dependencias / Gradle
     runs-on: ubuntu-24.04
