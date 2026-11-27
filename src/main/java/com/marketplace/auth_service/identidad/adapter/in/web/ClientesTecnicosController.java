@@ -44,7 +44,10 @@ public class ClientesTecnicosController {
             "clientId", "De 3 a 50 caracteres: minúsculas, números y guiones; empieza con letra o número.",
             "nombre", "Entre 1 y 100 caracteres.",
             "scopes", "Solo scopes del catálogo, sin repetir.",
-            "scope", "Debe ser un scope del catálogo.");
+            "scope", "Debe ser un scope del catálogo.",
+            "codigo", "Usa segmentos en minúsculas separados por dos puntos, hasta 50 caracteres.",
+            "audiencia", "Selecciona una audiencia del catálogo de APIs.",
+            "descripcion", "Escribe una descripción de hasta 255 caracteres.");
 
     private final ClientesTecnicosPort clientes;
 
@@ -61,6 +64,21 @@ public class ClientesTecnicosController {
     @GetMapping("/api/v2/scopes")
     public ResponseEntity<?> catalogo(@AuthenticationPrincipal ActorUsuario actor, HttpServletRequest peticion) {
         return respuesta(clientes.catalogo(actor, ContextoPeticiones.desde(peticion)), ResponseEntity::ok);
+    }
+
+    @PostMapping("/api/v2/scopes")
+    public ResponseEntity<?> crearScope(@AuthenticationPrincipal ActorUsuario actor,
+                                        @RequestBody(required = false) Map<String, Object> cuerpo,
+                                        HttpServletRequest peticion) {
+        Map<String, Object> campos = cuerpo != null && Set.of("codigo", "audiencia", "descripcion")
+                .containsAll(cuerpo.keySet()) ? cuerpo : Map.of();
+        return respuesta(clientes.crearScope(actor, texto(campos.get("codigo")), texto(campos.get("audiencia")),
+                        texto(campos.get("descripcion")), ContextoPeticiones.desde(peticion)),
+                scope -> ResponseEntity.status(HttpStatus.CREATED).body(scope));
+    }
+
+    private static String texto(Object valor) {
+        return valor instanceof String texto ? texto : null;
     }
 
     @PostMapping(BASE)
@@ -156,13 +174,15 @@ public class ClientesTecnicosController {
         HttpStatus estado = switch (codigo) {
             case ResultadoGestionCliente.VALIDACION -> HttpStatus.BAD_REQUEST;
             case ResultadoGestionCliente.NO_ENCONTRADO -> HttpStatus.NOT_FOUND;
-            case ResultadoGestionCliente.CLIENTE_SERVICIO_EXISTENTE -> HttpStatus.CONFLICT;
+            case ResultadoGestionCliente.CLIENTE_SERVICIO_EXISTENTE,
+                 ResultadoGestionCliente.SCOPE_CATALOGO_EXISTENTE -> HttpStatus.CONFLICT;
             default -> HttpStatus.FORBIDDEN;
         };
         String titulo = switch (codigo) {
             case ResultadoGestionCliente.VALIDACION -> "Datos de entrada inválidos";
             case ResultadoGestionCliente.NO_ENCONTRADO -> "Recurso no encontrado";
             case ResultadoGestionCliente.CLIENTE_SERVICIO_EXISTENTE -> "Ya existe un cliente con ese identificador";
+            case ResultadoGestionCliente.SCOPE_CATALOGO_EXISTENTE -> "Ya existe un scope con ese código";
             default -> "Permisos insuficientes";
         };
         ProblemDetail problema = Problemas.problema(estado, codigo, titulo, null);

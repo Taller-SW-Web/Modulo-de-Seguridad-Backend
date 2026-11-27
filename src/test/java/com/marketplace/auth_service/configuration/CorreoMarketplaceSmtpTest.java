@@ -62,7 +62,7 @@ class CorreoMarketplaceSmtpTest {
                     .thenReturn(new TokenEmitido(UUID.randomUUID(), TOKEN, ahora.plusSeconds(1800)));
 
             if (ruta.equals("verificar-correo")) {
-                new CorreoVerificacionAdapter(tokens, mensajeria, SPA)
+                new CorreoVerificacionAdapter(tokens, mensajeria, SPA, "")
                         .enviar(usuario, DESTINO, "Cliente de prueba", CanalOrigen.MARKETPLACE);
             } else {
                 new CorreoRecuperacionAdapter(tokens, mensajeria, SPA)
