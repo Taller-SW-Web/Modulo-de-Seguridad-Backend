@@ -18,13 +18,13 @@
 -- e inventario:operaciones:leer. Ya estaban en la base desplegada (27 scopes, consulta
 -- Q7 de docs/integracion/hito-5-clientes-tecnicos.md) y los define su API dueña:
 -- api-ventas.md §1.11 de G5 y el OpenAPI 0.6.0-rc.3 de G6. Con ellos el archivo tiene
--- 31 scopes. Render no ejecuta Flyway (spring.flyway.enabled=false), así que la base
+-- Render no ejecuta Flyway (spring.flyway.enabled=false), así que la base
 -- desplegada no los recibe al desplegar: David aplica este archivo a mano después del
 -- merge, previa consulta de solo lectura de los códigos que faltan.
 --
 -- 22-nov-2026 (#107): se añaden cupones:consumir, cupones:restaurar,
 -- cupones:operaciones:leer e inventario:reservas:estado:leer, que define G6 en su
--- propuesta de operaciones de cupones H5. Con ellos el archivo tiene 35 scopes.
+-- propuesta de operaciones de cupones H5. Con ellos (y los dos de incidencias de Retail, #101) el archivo tiene 37 scopes.
 -- ventas:pedidos:evidencia-cupon:leer NO entra: falta la aprobación de G5, dueño de api-ventas.
 -- Ya estaban en la base desplegada desde el 23-nov (David los aplicó a mano). El módulo de
 -- configuración no los registra: GET /api/v2/scopes solo lista el catálogo, no lo modifica.
@@ -61,6 +61,8 @@ INSERT INTO scope (codigo, audiencia, descripcion) VALUES
     ('cupones:validar',                 'api-productos',  'Validar cupones'),
     ('recomendaciones:leer',            'api-productos',  'Consultar recomendaciones'),
     ('inventario:disponibilidad:leer',  'api-productos',  'Consultar disponibilidad comercial'),
+    ('inventario:incidencias:reportar', 'api-productos',  'Reportar una incidencia física de inventario'),
+    ('inventario:incidencias:resolver', 'api-productos',  'Resolver una incidencia física de inventario'),
     ('inventario:reservar',             'api-productos',  'Reservar inventario de un pedido'),
     ('inventario:consumir',             'api-productos',  'Consumir inventario reservado'),
     ('inventario:liberar',              'api-productos',  'Liberar inventario reservado'),

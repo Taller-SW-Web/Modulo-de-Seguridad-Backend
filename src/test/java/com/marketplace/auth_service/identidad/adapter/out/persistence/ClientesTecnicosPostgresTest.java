@@ -103,6 +103,7 @@ class ClientesTecnicosPostgresTest {
         try (var c = DriverManager.getConnection(propia, usuario, contrasena); var s = c.createStatement()) {
             s.execute(leer("mfa/base-observada/schema.sql"));
             s.execute(leer("db/autorizacion/R__catalogo_autorizacion.sql"));
+            s.execute(leer("db/migration/V109__scope_codigo_guiones.sql"));
             s.execute(leer("db/identidad/R__catalogo_scopes.sql"));
         }
         registro.add("spring.datasource.url", () -> propia);
@@ -127,6 +128,7 @@ class ClientesTecnicosPostgresTest {
     @BeforeEach
     void preparar() {
         jdbc.execute("truncate cliente_servicio_scope, cliente_servicio");
+        jdbc.update("delete from scope where codigo = ?", "inventario:prueba-local");
         gobierno = new Gobierno();
         servicio = new GestionClientesTecnicosService(new RegistroClientesJdbcAdapter(jdbc), gobierno, Clock.systemUTC());
         emision = new ClientesServicioJdbcAdapter(jdbc);
@@ -230,9 +232,26 @@ class ClientesTecnicosPostgresTest {
     }
 
     @Test
+    void registraScopeSinConcederloYConservaLaEntradaAnteUnDuplicado() {
+        String codigo = "inventario:prueba-local";
+        var creado = valor(enTx(() -> servicio.crearScope(ADMIN, codigo, "api-productos", "  Prueba  ", CONTEXTO)));
+        assertThat(creado.descripcion()).isEqualTo("Prueba");
+        var duplicado = enTx(() -> servicio.crearScope(ADMIN, codigo, "api-ventas", "Otro", CONTEXTO));
+        assertThat(duplicado).isEqualTo(ResultadoGestionCliente.rechazo("SCOPE_CATALOGO_EXISTENTE"));
+        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).contains(creado);
+        assertThat(jdbc.queryForObject("select count(*) from cliente_servicio_scope where scope = ?",
+                Integer.class, codigo)).isZero();
+        assertThat(gobierno.acciones).containsExactly("SCOPE_CATALOGO_CREADO");
+    }
+
+    @Test
     void esc19_10_siLaAuditoriaFallaNadaCambia() {
         SecretoEntregado alta = valor(enTx(() -> servicio.crear(ADMIN, "modulo-prueba", "Prueba", List.of(), CONTEXTO)));
         gobierno.fallar = true;
+        assertThatThrownBy(() -> enTx(() -> servicio.crearScope(ADMIN, "inventario:prueba-local",
+                "api-productos", "Prueba", CONTEXTO))).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("select count(*) from scope where codigo = ?",
+                Integer.class, "inventario:prueba-local")).isZero();
 
         assertThatThrownBy(() -> enTx(() -> servicio.rotarSecreto(ADMIN, "modulo-prueba", CONTEXTO)))
                 .isInstanceOf(IllegalStateException.class);
@@ -259,7 +278,7 @@ class ClientesTecnicosPostgresTest {
         assertThat(lista).extracting(ClienteTecnico::clientId).containsExactly("modulo-a", "modulo-b");
         assertThat(lista.get(0).scopes()).isEmpty();
         assertThat(lista.toString()).doesNotContain(hash);
-        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).hasSize(35);
+        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).hasSize(37);
     }
 
     static final class Gobierno implements GobiernoClientesPort {

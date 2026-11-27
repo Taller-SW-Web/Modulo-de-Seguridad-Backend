@@ -52,11 +52,12 @@ public class RegistroClienteConfig {
         return new RolClienteInicialJpaAdapter(usuarioRol);
     }
 
-    /** El enlace usa el mismo origen público de la SPA que el desbloqueo ({@code G7_SPA_URL}). */
+    /** El canal CHATBOT puede usar su propia pantalla, configurada en el servidor. */
     @Bean
     CorreoVerificacionPort correoVerificacionPort(TokensUnUsoPort tokens, MensajeriaPort mensajeria,
-                                                  @Value("${g7.spa.url:http://localhost:5173}") String urlSpa) {
-        return new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa);
+                                                  @Value("${g7.spa.url:http://localhost:5173}") String urlSpa,
+                                                  @Value("${G7_VERIFICACION_CHATBOT_ORIGEN:}") String origenChatbot) {
+        return new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa, origenChatbot);
     }
 
     @Bean

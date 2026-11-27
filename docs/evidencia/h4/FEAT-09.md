@@ -3,8 +3,8 @@
 Evidencia del Hito 4 para FEAT-09 (TEC-INFRA). Dueño: Christian Gabriel Arancivia Salas.
 Rama de trabajo: `feat/FEAT-09-T1`, `feat/FEAT-09-T2-smoke` (fusionadas en `develop`).
 
-Este documento se actualiza durante S3. Las secciones T1, T2 y T5 están verificadas;
-T3 y el cierre de T6 quedan pendientes y se marcan como tal, sin declarar lo que no existe.
+Este documento se actualiza durante S3. T1, T2, T5 y T6 están verificadas; T3 sigue
+bloqueada por permisos en el repo frontend y se marca como tal, sin declarar lo que no existe.
 
 ## Estado por tarea
 
@@ -15,7 +15,7 @@ T3 y el cierre de T6 quedan pendientes y se marcan como tal, sin declarar lo que
 | T3 — Frontend desde el pipeline | Pendiente | bloqueada por permisos en el repo frontend (sin job de deploy) |
 | T4 — Ventana de migraciones V108+ | En curso | esquema en V108; sin migraciones nuevas pendientes |
 | T5 — CloudAMQP y SMTP real | Verificada | evento publicado, correo entregado y OTP recibido (ver abajo) |
-| T6 — Evidencia del recorrido | En curso | este documento; falta el E2E (FEAT-12-T4) para el run completo |
+| T6 — Evidencia del recorrido | Verificada | run `45327859496` (`develop` `27e5d19`, 24-nov): build, pruebas, imagen, deploy verificado por SHA, smoke y E2E contra Render en verde |
 
 ## T1 — Job de despliegue
 
@@ -135,7 +135,11 @@ Secretos del repositorio (solo nombres; los valores no se documentan):
 Recorrido exigido: build → compile → test → deploy → smoke → E2E.
 
 - build, compile, test, deploy y smoke: cubiertos y en verde (runs citados).
-- E2E: pendiente; depende de la suite de FEAT-12 (PR frontend en borrador).
+- E2E: **verificado contra Render** en el run `45327859496` (`develop` `27e5d19`,
+  24-nov). El job `E2E Playwright (FEAT-12-T4)` se ejecuta después del smoke y quedó
+  en verde, junto con la suite E2E en entorno aislado.
+- El primer tramo del recorrido (build → deploy → smoke) se validó en `41167699740`;
+  el recorrido completo, incluido E2E, es el de `45327859496`.
 
 ## Sanitización
 
