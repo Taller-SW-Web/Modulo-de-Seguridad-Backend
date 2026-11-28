@@ -33,8 +33,8 @@ public final class PerfilService implements PerfilPort {
     }
 
     @Override
-    public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
-        return edicion.actualizarPropio(actor, cambio);
+    public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio, ContextoPeticion contexto) {
+        return edicion.actualizarPropio(actor, cambio, contexto);
     }
 
     @Override

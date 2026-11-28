@@ -24,9 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   Sin permiso, 403 {@code SCOPE_INSUFICIENTE} antes de leer o escribir nada.</li>
  * </ul>
  *
- * <p>Pendiente para cerrar T004 (EP-06, Christian): evento
- * {@code usuario.atributos_actualizados} por outbox en el mismo commit y auditoría no
- * crítica {@code ATRIBUTOS_ACTUALIZADOS}/acceso denegado.
+ * <p>Las dos ramas dejan el evento {@code usuario.atributos_actualizados} en el outbox (mismo commit)
+ * y la auditoría no crítica {@code ATRIBUTOS_ACTUALIZADOS} tras el commit, solo con nombres de campo.
  */
 @RestController
 public class AtributosPropiosController {
@@ -47,7 +46,8 @@ public class AtributosPropiosController {
             HttpServletRequest peticion) {
         if (actor.esTitularDe(id) && !AtributosPropiosWebMapper.tienePrivilegiados(cuerpo)) {
             CambioAtributos cambio = AtributosPropiosWebMapper.aCambio(cuerpo);
-            return PerfilWebMapper.aPerfilUsuario(perfil.actualizarPropio(actor, cambio));
+            return PerfilWebMapper.aPerfilUsuario(
+                    perfil.actualizarPropio(actor, cambio, ContextoPeticiones.desde(peticion)));
         }
         CambioAdministrativo cambio = AtributosAdministrativosWebMapper.aCambio(cuerpo);
         return PerfilWebMapper.aPerfilUsuario(

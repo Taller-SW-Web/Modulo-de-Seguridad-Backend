@@ -7,5 +7,11 @@ import java.util.UUID;
 
 /** {@code ATRIBUTOS_ACTUALIZADOS} no crítico tras el commit (SPEC-16 RF-16.10). Nunca valores. */
 public interface AuditoriaPerfilPort {
+    /** Edición administrativa: {@code actor} edita la cuenta {@code usuarioId}. */
     void atributosActualizados(ActorUsuario actor, UUID usuarioId, List<String> campos, ContextoPeticion contexto);
+
+    /** Edición propia: el titular edita su cuenta. Por defecto, la cuenta editada es la del actor. */
+    default void atributosActualizadosPorTitular(ActorUsuario actor, List<String> campos, ContextoPeticion contexto) {
+        atributosActualizados(actor, actor.sub(), campos, contexto);
+    }
 }

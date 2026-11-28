@@ -95,7 +95,8 @@ class AtributosPropiosHttpTest {
                 }
 
                 @Override
-                public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
+                public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio,
+                                                         ContextoPeticion contexto) {
                     LLAMADAS.incrementAndGet();
                     RECIBIDO.set(cambio);
                     return COMPORTAMIENTO.get().apply(actor, cambio);

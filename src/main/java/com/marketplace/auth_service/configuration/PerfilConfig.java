@@ -60,10 +60,13 @@ public class PerfilConfig {
                 perfiles,
                 autorizacionPerfil,
                 new ProyectorDocumento(protector.getIfAvailable(ProtectorDocumentoSinClave::new)));
-        var edicion = new EditarPerfilPropio(escrituraCuenta, consulta);
+        // Los mismos puentes para la edición propia y la administrativa: un solo sobre y una sola auditoría.
+        var eventosPerfil = new EventosPerfilAdapter(mensajeria);
+        var auditoriaPerfil = new AuditoriaPerfilAdapter(auditoria);
+        var edicion = new EditarPerfilPropio(escrituraCuenta, consulta, eventosPerfil, auditoriaPerfil);
         var edicionAdministrativa = new EditarAtributosAdministrativo(autorizacionPerfil, cuentasPerfil, rolesPerfil,
-                perfiles, escrituraCuenta, perfiles, new EventosPerfilAdapter(mensajeria),
-                new AuditoriaPerfilAdapter(auditoria), consulta, Clock.systemDefaultZone());
+                perfiles, escrituraCuenta, perfiles, eventosPerfil, auditoriaPerfil, consulta,
+                Clock.systemDefaultZone());
         return new PerfilPortTransaccional(new PerfilService(consulta, edicion, edicionAdministrativa));
     }
 

@@ -79,7 +79,8 @@ class PerfilHttpTest {
                 }
 
                 @Override
-                public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio) {
+                public PerfilProyectado actualizarPropio(ActorUsuario actor, CambioAtributos cambio,
+                                                         ContextoPeticion contexto) {
                     throw new UnsupportedOperationException();
                 }
 
