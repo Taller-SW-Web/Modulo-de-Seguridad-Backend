@@ -96,15 +96,12 @@ ON CONFLICT (client_id, scope) DO NOTHING;
 --   ('modulo-retail',      'roles:leer'),
 --   ('modulo-marketplace', 'ventas:pedidos:anular'),
 --   ('modulo-retail',      'ventas:pedidos:anular'),
---   ('modulo-marketplace', 'postventa:devoluciones:escribir'),
---   ('modulo-marketplace', 'postventa:reclamos:escribir'),
---   ('modulo-chatbot',     'postventa:devoluciones:escribir'),
---   ('modulo-chatbot',     'postventa:reclamos:escribir'),
---   ('modulo-retail',      'postventa:devoluciones:escribir'),
---   ('modulo-retail',      'postventa:reclamos:escribir'),
 
--- En espera de G5: ventas:pedidos:evidencia-cupon:leer para promotions-svc (#107) y
--- postventa:devoluciones:escribir / postventa:reclamos:escribir para modulo-chatbot (#108).
+-- En espera de G5: ventas:pedidos:evidencia-cupon:leer para promotions-svc (#107).
+--
+-- No se conceden a ningún canal: postventa:devoluciones:escribir y postventa:reclamos:escribir.
+-- G5 eligió el token del cliente para devoluciones, reclamos y evidencias (G5 #67, opción A,
+-- 22-nov), así que los canales no necesitan token de servicio para esas operaciones.
 
 -- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail están en la base sin
 -- respaldo del dueño (Q2 del 10-nov). Desde el 21-nov (docs #109) se conservan y figuran en el
