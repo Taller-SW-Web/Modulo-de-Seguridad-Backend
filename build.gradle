@@ -7,6 +7,12 @@ plugins {
 group = 'com.marketplace'
 version = '0.0.1-SNAPSHOT'
 
+ext['jackson-bom.version'] = '2.21.7'
+ext['rabbit-amqp-client.version'] = '5.38.0'
+ext['tomcat.version'] = '10.1.62'
+ext['postgresql.version'] = '42.7.12'
+ext['netty.version'] = '4.2.21.Final'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)

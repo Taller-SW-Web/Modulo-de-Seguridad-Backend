@@ -1,0 +1,193 @@
+name: Seguridad Backend
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: seguridad-backend-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-history:
+    name: Secretos / historial del PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener el historial completo del PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Descargar y verificar Gitleaks 8.29.1
+        run: |
+          set -euo pipefail
+          version=8.29.1
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${version}"
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          curl --fail --silent --show-error --location "$release/$archive" -o "$RUNNER_TEMP/$archive"
+          curl --fail --silent --show-error --location "$release/gitleaks_${version}_checksums.txt" -o "$RUNNER_TEMP/checksums.txt"
+          checksum=$(awk -v file="$archive" '$2 == file || (substr($2, 1, 1) == "*" && substr($2, 2) == file) { print $1 }' "$RUNNER_TEMP/checksums.txt")
+          test -n "$checksum"
+          echo "$checksum  $RUNNER_TEMP/$archive" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+
+      - name: Detectar secretos entre la base y la cabeza del PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/gitleaks/gitleaks" git \
+            --no-banner \
+            --redact=100 \
+            --exit-code=1 \
+            --report-format=sarif \
+            --report-path="$GITHUB_WORKSPACE/gitleaks-results.sarif" \
+            --log-opts="$BASE_SHA..$HEAD_SHA" \
+            "$GITHUB_WORKSPACE"
+
+      - name: Conservar reporte de secretos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitleaks-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: gitleaks-results.sarif
+          if-no-files-found: warn
+          retention-days: 7
+
+  container-image-scan:
+    name: Imagen / vulnerabilidades del backend
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Construir imagen local para análisis
+        run: docker build --pull --tag auth-service:security .
+
+      - name: Escanear vulnerabilidades de la imagen
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: auth-service:security
+          version: v0.76.2
+          trivyignores: .trivyignore
+          format: table
+          output: ${{ runner.temp }}/trivy-image-results.txt
+          exit-code: '1'
+          cache: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          timeout: 15m
+
+      - name: Conservar reporte de la imagen
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trivy-image-results.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+  dependency-submission:
+    name: Dependencias / Gradle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Preparar Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generar y enviar el grafo de dependencias
+        uses: gradle/actions/dependency-submission@v6
+        with:
+          dependency-graph: generate-and-submit
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          cache-cleanup: always
+
+  dependency-review:
+    name: Dependencias / revisión del PR
+    if: github.event_name == 'pull_request'
+    needs: [dependency-submission]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Revisar dependencias añadidas o actualizadas
+        uses: actions/dependency-review-action@v5
+        with:
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 600
+          warn-only: true
+          license-check: false
+          show-patched-versions: true
+          show-openssf-scorecard: false
+
+  codeql-java:
+    name: CodeQL / Java
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Preparar Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      - name: Compilar clases de producción para el análisis
+        run: bash ./gradlew --no-daemon --console=plain classes
+
+      - name: Analizar Java
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
+          output: ${{ runner.temp }}/codeql-results
+
+      - name: Conservar el reporte SARIF
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/codeql-results
+          if-no-files-found: warn
+          retention-days: 7

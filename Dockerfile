@@ -7,10 +7,29 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /fuente
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
-RUN chmod +x gradlew && ./gradlew --no-daemon dependencies > /dev/null
+RUN chmod +x gradlew && \
+    for attempt in 1 2 3; do \
+      if ./gradlew --no-daemon dependencies > /dev/null; then exit 0; fi; \
+      if [ "$attempt" -eq 3 ]; then break; fi; \
+      delay=$((attempt * 20)); \
+      echo "Gradle dependency download failed; retry $((attempt + 1))/3 in ${delay}s." >&2; \
+      sleep "$delay"; \
+    done; \
+    echo "Gradle dependency download failed after 3 attempts." >&2; \
+    exit 1
 COPY src src
-RUN ./gradlew --no-daemon bootJar -x test \
-    && cp build/libs/auth-service-*-SNAPSHOT.jar /fuente/app.jar
+RUN for attempt in 1 2 3; do \
+      if ./gradlew --no-daemon bootJar -x test; then \
+        cp build/libs/auth-service-*-SNAPSHOT.jar /fuente/app.jar; \
+        exit 0; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then break; fi; \
+      delay=$((attempt * 20)); \
+      echo "Gradle bootJar failed; retry $((attempt + 1))/3 in ${delay}s." >&2; \
+      sleep "$delay"; \
+    done; \
+    echo "Gradle bootJar failed after 3 attempts." >&2; \
+    exit 1
 
 # --- Runtime: solo JRE, usuario sin privilegios. ---
 FROM eclipse-temurin:21-jre
