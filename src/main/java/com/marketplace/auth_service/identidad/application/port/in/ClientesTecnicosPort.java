@@ -24,6 +24,9 @@ public interface ClientesTecnicosPort {
 
     ResultadoGestionCliente<List<ScopeDisponible>> catalogo(ActorUsuario actor, ContextoPeticion contexto);
 
+    ResultadoGestionCliente<ScopeDisponible> crearScope(ActorUsuario actor, String codigo, String audiencia,
+                                                        String descripcion, ContextoPeticion contexto);
+
     ResultadoGestionCliente<SecretoEntregado> crear(ActorUsuario actor, String clientId, String nombre,
                                                    List<String> scopes, ContextoPeticion contexto);
 

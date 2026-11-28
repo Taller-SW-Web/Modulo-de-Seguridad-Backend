@@ -37,9 +37,14 @@ class CorreoVerificacionAdapterTest {
     }
 
     private EntregaCorreo enviar(String urlSpa, CanalOrigen canal) {
+        return enviar(urlSpa, canal, "");
+    }
+
+    private EntregaCorreo enviar(String urlSpa, CanalOrigen canal, String origenChatbot) {
         when(tokens.emitir(USUARIO, PropositoToken.VERIFICAR_CORREO, Duration.ofHours(24)))
                 .thenReturn(new TokenEmitido(UUID.randomUUID(), TOKEN, Instant.parse("2026-10-24T15:00:00Z")));
-        new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa).enviar(USUARIO, "maria@ejemplo.com", "María", canal);
+        new CorreoVerificacionAdapter(tokens, mensajeria, urlSpa, origenChatbot)
+                .enviar(USUARIO, "maria@ejemplo.com", "María", canal);
         var correo = ArgumentCaptor.forClass(EntregaCorreo.class);
         verify(mensajeria).guardarCorreo(correo.capture());
         return correo.getValue();
@@ -52,6 +57,7 @@ class CorreoVerificacionAdapterTest {
         verify(tokens).emitir(USUARIO, PropositoToken.VERIFICAR_CORREO, Duration.ofHours(24));
         assertThat(correo.topico()).isEqualTo("correo.verificacion_correo");
         assertThat(correo.destino()).isEqualTo("maria@ejemplo.com");
+        assertThat(correo.plantilla()).isNull();
         assertThat(correo.contenido())
                 .contains("Hola, María")
                 .contains("https://g7-seguridad-spa.onrender.com/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f")
@@ -63,10 +69,21 @@ class CorreoVerificacionAdapterTest {
     void fueraDeWebElEnlaceLlevaElCanalYNuncaUnaUrl() {
         for (CanalOrigen canal : List.of(CanalOrigen.MARKETPLACE, CanalOrigen.RETAIL, CanalOrigen.CHATBOT)) {
             org.mockito.Mockito.clearInvocations(mensajeria);
-            assertThat(enviar("https://spa.example.test", canal).contenido())
+            var correo = enviar("https://spa.example.test", canal);
+            assertThat(correo.plantilla() != null).isEqualTo(canal == CanalOrigen.MARKETPLACE);
+            assertThat(correo.contenido())
                     .contains("/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f&canal=" + canal.name() + "\n")
                     .doesNotContain("retorno", "http://", "vercel");
         }
+    }
+
+    @Test
+    void chatbotUsaSuPantallaConElTokenCodificadoSinParametroDeCanal() {
+        var correo = enviar("https://spa.example.test", CanalOrigen.CHATBOT,
+                "https://g3-chatbot-frontend.vercel.app/");
+        assertThat(correo.contenido())
+                .contains("https://g3-chatbot-frontend.vercel.app/verificar-correo?token=a%2Bb%2Fc%3Dd_e-f\n")
+                .doesNotContain("canal=", "spa.example.test");
     }
 
     @Test
@@ -80,7 +97,7 @@ class CorreoVerificacionAdapterTest {
         when(tokens.emitir(any(), any(), any(Duration.class)))
                 .thenReturn(new TokenEmitido(UUID.randomUUID(), TOKEN, Instant.parse("2026-10-24T15:00:00Z")));
         doThrow(new IllegalStateException("sin clave")).when(mensajeria).guardarCorreo(any());
-        var adaptador = new CorreoVerificacionAdapter(tokens, mensajeria, "http://localhost:5173");
+        var adaptador = new CorreoVerificacionAdapter(tokens, mensajeria, "http://localhost:5173", "");
 
         assertThatThrownBy(() -> adaptador.enviar(USUARIO, "maria@ejemplo.com", "María", CanalOrigen.WEB))
                 .isInstanceOf(VerificacionNoDisponibleException.class)
