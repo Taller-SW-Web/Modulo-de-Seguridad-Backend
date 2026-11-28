@@ -44,6 +44,10 @@ SELECT v.client_id, v.scope
     ('modulo-chatbot',     'ventas:pagos:webhook'),    -- 23-nov, #108
     ('modulo-chatbot',     'ventas:pedidos:anular'),   -- 23-nov, #108
     ('modulo-retail',      'ventas:pedidos:crear'),
+    -- Conservadas por decisión del 21-nov (docs #109): se suspende su revocación mientras G5
+    -- confirma el uso. El contrato de G5 las reserva a modulo-postventa y modulo-despacho.
+    ('modulo-retail',      'ventas:pedidos:consultar'),
+    ('modulo-retail',      'ventas:pedidos:estado'),
     ('modulo-despacho',    'ventas:pedidos:estado'),
     ('simulador-pasarela', 'ventas:pagos:webhook'),
     ('modulo-postventa',   'ventas:pedidos:consultar'),
@@ -102,7 +106,7 @@ ON CONFLICT (client_id, scope) DO NOTHING;
 -- En espera de G5: ventas:pedidos:evidencia-cupon:leer para promotions-svc (#107) y
 -- postventa:devoluciones:escribir / postventa:reclamos:escribir para modulo-chatbot (#108).
 
--- Concedidas en la base sin respaldo en la matriz (Q2 del 10-nov), NO incluidas aquí:
--- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail. El contrato de
--- G5 reserva la primera a modulo-postventa y la segunda a modulo-despacho. Quedan en
--- la base hasta que G5 las confirme o se revoquen desde el módulo de configuración.
+-- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail están en la base sin
+-- respaldo del dueño (Q2 del 10-nov). Desde el 21-nov (docs #109) se conservan y figuran en el
+-- INSERT mientras G5 confirma su uso; si G5 no lo confirma, se revocan desde el módulo de
+-- configuración y se quitan de aquí.
