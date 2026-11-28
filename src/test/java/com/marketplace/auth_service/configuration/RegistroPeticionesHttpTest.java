@@ -2,6 +2,7 @@ package com.marketplace.auth_service.configuration;
 
 import com.marketplace.auth_service.identidad.ClavesDePrueba;
 import com.marketplace.auth_service.identidad.adapter.in.web.DescubrimientoController;
+import com.marketplace.auth_service.shared.adapter.web.LineaPeticion;
 import com.marketplace.auth_service.shared.adapter.web.Problemas;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,9 +74,18 @@ class RegistroPeticionesHttpTest {
         @PostMapping(path = "/api/v1/auth/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
         ResponseEntity<ProblemDetail> token(@RequestParam(name = "client_id", required = false) String clientId,
                                             @RequestParam(name = "client_secret", required = false) String secreto) {
+            if ("modulo-correcto".equals(clientId)) {
+                return ResponseEntity.ok().build();
+            }
             ProblemDetail problema = Problemas.problema(HttpStatus.BAD_REQUEST, "VALIDACION", "Datos de entrada inválidos", null);
             problema.setProperty("errores", List.of(Map.of("campo", "grant_type", "mensaje", "Debe ser client_credentials.")));
             return ResponseEntity.badRequest().contentType(Problemas.PROBLEM_JSON).body(problema);
+        }
+
+        /** Ruta protegida: la cadena de seguridad responde 401 antes de llegar aquí. */
+        @GetMapping("/api/v1/usuarios/{id}")
+        String usuario() {
+            return "nunca";
         }
 
         @PostMapping("/api/v1/auth/login")
@@ -145,17 +155,43 @@ class RegistroPeticionesHttpTest {
     }
 
     @Test
-    void enElTokenDeServicioSeVeElModuloPeroNuncaSuSecreto(CapturedOutput salida) throws Exception {
+    void unaEmisionFallidaNoCopiaElClientIdNiElSecreto(CapturedOutput salida) throws Exception {
+        // Un valor corto que pasa la validación de caracteres: podría ser un secreto pegado por error.
+        String clientIdSensible = "Xk9-secreto-corto";
         var respuesta = enviar(HttpRequest.newBuilder(uri("/api/v1/auth/token"))
                 .header("Content-Type", MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-                .POST(HttpRequest.BodyPublishers.ofString("grant_type=password&client_id=modulo-ventas&client_secret="
-                        + SECRETO)));
+                .POST(HttpRequest.BodyPublishers.ofString("grant_type=password&client_id=" + clientIdSensible
+                        + "&client_secret=" + SECRETO)));
 
         assertThat(respuesta.statusCode()).isEqualTo(400);
         String linea = lineaDe(salida, respuesta.headers().firstValue("X-Request-Id").orElseThrow());
-        assertThat(linea).contains("modulo-ventas (pide token) | POST /api/v1/auth/token | 400 VALIDACION"
+        assertThat(linea).contains("cliente no autenticado (pide token) | POST /api/v1/auth/token | 400 VALIDACION"
                 + " | el cuerpo no cumple el contrato: campos grant_type | ").endsWith("[CLIENTE]");
-        assertThat(salida.getOut()).doesNotContain(SECRETO).doesNotContain("Debe ser client_credentials");
+        assertThat(salida.getOut()).doesNotContain(clientIdSensible).doesNotContain(SECRETO)
+                .doesNotContain("Debe ser client_credentials");
+    }
+
+    @Test
+    void unaEmisionCorrectaNombraAlModulo(CapturedOutput salida) throws Exception {
+        var respuesta = enviar(HttpRequest.newBuilder(uri("/api/v1/auth/token"))
+                .header("Content-Type", MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&client_id=modulo-correcto"
+                        + "&client_secret=" + SECRETO)));
+
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        String linea = lineaDe(salida, respuesta.headers().firstValue("X-Request-Id").orElseThrow());
+        assertThat(linea).contains("modulo-correcto (pide token) | POST /api/v1/auth/token | 200 | ").endsWith("[OK]");
+        assertThat(salida.getOut()).doesNotContain(SECRETO);
+    }
+
+    @Test
+    void unaRutaDesconocidaNoCopiaLaUrl(CapturedOutput salida) throws Exception {
+        String segmentoSensible = "Tok3n-corto-x";
+        var respuesta = enviar(HttpRequest.newBuilder(uri("/api/v1/no-existe/" + segmentoSensible)).GET());
+
+        String linea = lineaDe(salida, respuesta.headers().firstValue("X-Request-Id").orElseThrow());
+        assertThat(linea).contains("| GET " + LineaPeticion.RUTA_NO_RECONOCIDA + " | ");
+        assertThat(salida.getOut()).doesNotContain(segmentoSensible);
     }
 
     @Test

@@ -57,7 +57,7 @@ entre corchetes. Lo importante viene después, separado por `|`, siempre en el m
 | # | Parte | Ejemplo | Qué dice |
 |---|---|---|---|
 | 1 | **Quién llamó** | `modulo-despacho` | Ver la tabla de abajo |
-| 2 | **Qué pidió** | `GET /api/v1/usuarios/{id}` | Método y ruta. Los identificadores se muestran como `{id}`: nunca aparece el UUID real |
+| 2 | **Qué pidió** | `GET /api/v1/usuarios/{id}` | Método y ruta **declarada en el backend**: los identificadores salen como `{id}` y nunca se copia la URL recibida. Si la ruta no existe, se escribe `(ruta no reconocida)` |
 | 3 | **Qué respondimos** | `403 SCOPE_INSUFICIENTE` | Código HTTP y, si es un error del contrato, su código (ver §6) |
 | 4 | **Por qué** | `el token es válido pero le falta…` | El motivo en palabras. Si falta un campo, dice **cuál**; si falla la contraseña, dice **qué regla** |
 | 5 | **Cuánto tardó** | `11 ms` | Desde que llegó hasta que respondimos. Si pasa de 2 segundos se añade **`LENTO`** |
@@ -69,12 +69,13 @@ entre corchetes. Lo importante viene después, separado por `|`, siempre en el m
 | Valor | Significa |
 |---|---|
 | `modulo-marketplace`, `modulo-despacho`… | Un módulo con un **token de servicio válido**. Es su `client_id` |
-| `modulo-ventas (pide token)` | Un módulo pidiendo su token en `POST /auth/token`. Es el `client_id` que presentó, aunque sea incorrecto. **El secreto nunca se registra** |
-| `client_id ausente (pide token)` | Pidió token sin mandar `client_id` |
+| `modulo-ventas (pide token)` | Un módulo que **obtuvo** su token en `POST /auth/token` (respuesta 2xx). **El secreto nunca se registra** |
+| `cliente no autenticado (pide token)` | Pidió token y **no** lo obtuvo (secreto incorrecto, cliente desconocido o cuerpo inválido). El `client_id` recibido no se copia: podría ser un secreto pegado por error. Para saber quién fue, cruza la hora con el módulo que reclama o usa su `X-Request-Id` |
+| `client_id ausente (pide token)` | Obtuvo token sin mandar `client_id` (no debería ocurrir) |
 | `usuario 3f2a1b2c (CLIENTE)` | Una persona con sesión válida: los 8 primeros caracteres de su identificador y sus roles. **Nunca su correo** |
 | `token no aceptado` | Mandó un token, pero no era válido (vencido, mal formado, firma incorrecta). Por eso no sabemos quién es |
 | `anónimo` | No mandó token. Es lo normal en rutas públicas: login, registro, JWKS… |
-| `(valor no válido)` | Mandó un `client_id` con caracteres raros; no se copia al log por seguridad |
+| `(valor no válido)` | Obtuvo token, pero su `client_id` tiene caracteres raros; no se copia al log por seguridad |
 
 **El nivel** de la línea ayuda a filtrar: `INFO` si salió bien, `WARN` si lo envió mal quien
 llamó y `ERROR` si el problema es nuestro.
@@ -148,8 +149,8 @@ hora.
 - **No hay ninguna línea** → la petición no nos llegó: URL equivocada, problema de red del
   otro lado o del navegador (CORS). Que revisen la consola del navegador o sus logs.
 
-**«Su token no sirve» (un módulo).** Busca su `client_id`.
-- `POST /auth/token … 401 CLIENTE_INVALIDO` → su secreto no coincide.
+**«Su token no sirve» (un módulo).** Pídele su `X-Request-Id` o la hora exacta.
+- `cliente no autenticado (pide token) | POST /api/v1/auth/token | 401 CLIENTE_INVALIDO` → su secreto no coincide o el cliente no existe.
 - `200` en `/auth/token` y luego `401 TOKEN_INVALIDO` en otra ruta → usan un token vencido o
   lo mandan mal. Si validan el token por su cuenta con el JWKS, puede que tengan en caché
   una clave vieja.

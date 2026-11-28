@@ -97,18 +97,12 @@ class LineaPeticionTest {
     }
 
     @Test
-    void laRutaUsaLaPlantillaOOcultaLosIdentificadores() {
-        String id = UUID.randomUUID().toString();
-
-        assertThat(LineaPeticion.rutaDe("/api/v1/usuarios/{id}", "/api/v1/usuarios/" + id))
-                .isEqualTo("/api/v1/usuarios/{id}");
-        assertThat(LineaPeticion.rutaDe(null, "/api/v1/usuarios/" + id + "/direcciones"))
-                .isEqualTo("/api/v1/usuarios/{id}/direcciones");
-        assertThat(LineaPeticion.rutaDe(null, "/api/v1/algo/eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.firma"))
-                .isEqualTo("/api/v1/algo/{valor}");
-        assertThat(LineaPeticion.rutaDe(null, "/api/v1/pedidos/123456")).isEqualTo("/api/v1/pedidos/{valor}");
-        assertThat(LineaPeticion.rutaDe("/**", "/no/existe")).isEqualTo("/no/existe");
-        assertThat(LineaPeticion.rutaDe(null, "")).isEqualTo("/");
+    void laRutaEsUnaPlantillaDeclaradaOUnaEtiquetaFija() {
+        assertThat(LineaPeticion.rutaDe("/api/v1/usuarios/{id}")).isEqualTo("/api/v1/usuarios/{id}");
+        // Sin plantilla nunca se copia la URL recibida: podría llevar un token o un secreto.
+        assertThat(LineaPeticion.rutaDe(null)).isEqualTo(LineaPeticion.RUTA_NO_RECONOCIDA);
+        assertThat(LineaPeticion.rutaDe("/**")).isEqualTo(LineaPeticion.RUTA_NO_RECONOCIDA);
+        assertThat(LineaPeticion.rutaDe(" ")).isEqualTo(LineaPeticion.RUTA_NO_RECONOCIDA);
     }
 
     @Test

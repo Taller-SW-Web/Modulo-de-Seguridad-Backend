@@ -38,9 +38,6 @@ public record LineaPeticion(String llamante, String metodo, String ruta, int est
         NOSOTROS
     }
 
-    private static final Pattern UUID = Pattern.compile(
-            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-    private static final Pattern SEGMENTO_SEGURO = Pattern.compile("[A-Za-z0-9._:-]{1,40}");
     private static final Pattern TEXTO_SEGURO = Pattern.compile("[A-Za-z0-9._:-]{1,40}");
 
     /** Motivo legible por código del catálogo de errores (specs/catalogo-errores.md del repo de documentación). */
@@ -150,33 +147,19 @@ public record LineaPeticion(String llamante, String metodo, String ruta, int est
         return nombres;
     }
 
+    /** Lo que se escribe cuando la ruta no coincide con ninguna declarada en el backend. */
+    public static final String RUTA_NO_RECONOCIDA = "(ruta no reconocida)";
+
     /**
-     * Ruta con plantilla: {@code /api/v1/usuarios/{id}}, nunca el identificador real. Si Spring
-     * no llegó a elegir un controlador (por ejemplo, un 401 en la cadena de seguridad), se
-     * reemplazan los UUID y cualquier segmento que no parezca un nombre de ruta.
+     * Ruta con plantilla: {@code /api/v1/usuarios/{id}}, nunca el identificador real. Solo se
+     * escriben plantillas declaradas en el backend; si no hay ninguna, una etiqueta fija. Nunca se
+     * copia un trozo de la URL recibida: podría llevar un token o un secreto.
      */
-    public static String rutaDe(String plantilla, String uri) {
-        if (plantilla != null && !plantilla.isBlank() && !"/**".equals(plantilla)) {
-            return plantilla;
+    public static String rutaDe(String plantilla) {
+        if (plantilla == null || plantilla.isBlank() || "/**".equals(plantilla)) {
+            return RUTA_NO_RECONOCIDA;
         }
-        if (uri == null || uri.isBlank()) {
-            return "/";
-        }
-        StringBuilder ruta = new StringBuilder();
-        for (String segmento : uri.split("/")) {
-            if (segmento.isEmpty()) {
-                continue;
-            }
-            ruta.append('/');
-            if (UUID.matcher(segmento).matches()) {
-                ruta.append("{id}");
-            } else if (SEGMENTO_SEGURO.matcher(segmento).matches() && !segmento.matches(".*\\d{4,}.*")) {
-                ruta.append(segmento);
-            } else {
-                ruta.append("{valor}");
-            }
-        }
-        return ruta.isEmpty() ? "/" : ruta.toString();
+        return plantilla;
     }
 
     /** Un texto recibido de fuera, apto para el log; si no, se dice que no era válido. */

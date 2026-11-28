@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Registro de peticiones (docs/operacion/LOGS.md). Por cada petición:
@@ -40,6 +42,17 @@ public final class FiltroRegistroPeticiones extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(LOGGER);
     private static final String SALUD = "/actuator/health";
     private static final String TOKEN_SERVICIO = "/api/v1/auth/token";
+
+    /** Busca la plantilla de la ruta cuando Spring no eligió controlador; {@code null} si no hay. */
+    private final Function<HttpServletRequest, String> plantillas;
+
+    public FiltroRegistroPeticiones() {
+        this(peticion -> null);
+    }
+
+    public FiltroRegistroPeticiones(Function<HttpServletRequest, String> plantillas) {
+        this.plantillas = Objects.requireNonNull(plantillas, "plantillas");
+    }
 
     @Override
     protected boolean shouldNotFilterAsyncDispatch() {
@@ -78,21 +91,21 @@ public final class FiltroRegistroPeticiones extends OncePerRequestFilter {
                 RequestContextHolder.resetRequestAttributes();
             }
             if (fallo == null && peticion.isAsyncStarted()) {
-                peticion.getAsyncContext().addListener(new AlTerminar(peticion, respuesta, inicio, id));
+                peticion.getAsyncContext().addListener(new AlTerminar(peticion, respuesta, inicio, id, plantillas));
             } else {
-                registrar(peticion, respuesta, inicio, id, fallo);
+                registrar(peticion, respuesta, inicio, id, fallo, plantillas);
             }
         }
     }
 
     private static void registrar(HttpServletRequest peticion, HttpServletResponse respuesta, long inicio, String id,
-                                  Throwable fallo) {
+                                  Throwable fallo, Function<HttpServletRequest, String> plantillas) {
         try {
             int estado = fallo == null ? respuesta.getStatus() : 500;
             if (estado == 200 && SALUD.equals(peticion.getRequestURI())) {
                 return;
             }
-            LineaPeticion linea = linea(peticion, estado, inicio, id, fallo);
+            LineaPeticion linea = linea(peticion, estado, inicio, id, fallo, plantillas);
             escribir(linea);
         } catch (RuntimeException e) {
             // El registro nunca debe cambiar la respuesta.
@@ -100,17 +113,22 @@ public final class FiltroRegistroPeticiones extends OncePerRequestFilter {
         }
     }
 
-    static LineaPeticion linea(HttpServletRequest peticion, int estado, long inicio, String id, Throwable fallo) {
+    static LineaPeticion linea(HttpServletRequest peticion, int estado, long inicio, String id, Throwable fallo,
+                              Function<HttpServletRequest, String> plantillas) {
         ProblemDetail problema = peticion.getAttribute(RegistroPeticiones.ATRIBUTO_PROBLEMA) instanceof ProblemDetail p
                 ? p : null;
         String codigo = LineaPeticion.codigoDe(problema);
         String motivo = fallo == null
                 ? LineaPeticion.motivoDe(estado, problema)
                 : "error inesperado en nuestro servicio (" + causaDe(fallo).getClass().getSimpleName() + ")";
-        Object plantilla = peticion.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        String ruta = LineaPeticion.rutaDe(plantilla == null ? null : plantilla.toString(), peticion.getRequestURI());
+        Object elegida = peticion.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String plantilla = elegida == null ? null : elegida.toString();
+        if (plantilla == null || "/**".equals(plantilla)) {
+            plantilla = plantillas.apply(peticion);
+        }
+        String ruta = LineaPeticion.rutaDe(plantilla);
         long ms = (System.nanoTime() - inicio) / 1_000_000;
-        return new LineaPeticion(llamanteDe(peticion), peticion.getMethod(), ruta, estado, codigo, motivo, ms, id,
+        return new LineaPeticion(llamanteDe(peticion, estado), peticion.getMethod(), ruta, estado, codigo, motivo, ms, id,
                 LineaPeticion.responsableDe(estado));
     }
 
@@ -125,15 +143,19 @@ public final class FiltroRegistroPeticiones extends OncePerRequestFilter {
 
     /**
      * Quién llamó: el módulo o la persona del token validado; en {@code POST /auth/token}, el
-     * {@code client_id} que se presentó (el secreto nunca); si mandó un token que no se aceptó,
-     * se dice así; si no mandó nada, {@code anónimo}.
+     * {@code client_id} solo si el token se emitió (2xx): si falló, el valor recibido no se copia,
+     * porque podría ser un secreto pegado por error. Si mandó un token que no se aceptó, se dice
+     * así; si no mandó nada, {@code anónimo}.
      */
-    static String llamanteDe(HttpServletRequest peticion) {
+    static String llamanteDe(HttpServletRequest peticion, int estado) {
         Object capturado = peticion.getAttribute(RegistroPeticiones.ATRIBUTO_LLAMANTE);
         if (capturado instanceof String texto) {
             return texto;
         }
         if ("POST".equals(peticion.getMethod()) && TOKEN_SERVICIO.equals(peticion.getRequestURI())) {
+            if (estado < 200 || estado >= 300) {
+                return "cliente no autenticado (pide token)";
+            }
             String clientId = LineaPeticion.limpiar(peticion.getParameter("client_id"));
             return (clientId == null ? "client_id ausente" : clientId) + " (pide token)";
         }
@@ -162,12 +184,13 @@ public final class FiltroRegistroPeticiones extends OncePerRequestFilter {
     }
 
     /** Cierra la línea de una respuesta asíncrona cuando de verdad terminó. */
-    private record AlTerminar(HttpServletRequest peticion, HttpServletResponse respuesta, long inicio, String id)
+    private record AlTerminar(HttpServletRequest peticion, HttpServletResponse respuesta, long inicio, String id,
+                              Function<HttpServletRequest, String> plantillas)
             implements AsyncListener {
 
         @Override
         public void onComplete(AsyncEvent evento) {
-            registrar(peticion, respuesta, inicio, id, null);
+            registrar(peticion, respuesta, inicio, id, null, plantillas);
         }
 
         @Override
