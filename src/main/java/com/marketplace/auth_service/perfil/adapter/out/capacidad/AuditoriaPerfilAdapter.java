@@ -14,8 +14,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Puente a {@link AuditoriaPort}: {@code ATRIBUTOS_ACTUALIZADOS} no crítico tras el commit, con el
- * administrador como actor y la cuenta editada como objetivo. Un fallo de auditoría no revierte la edición.
+ * Puente a {@link AuditoriaPort}: {@code ATRIBUTOS_ACTUALIZADOS} no crítico tras el commit, con quien
+ * edita como actor y la cuenta editada como objetivo. {@code detalle.via} distingue la edición
+ * administrativa ({@code ADMINISTRACION}) de la propia ({@code PROPIA}). Un fallo de auditoría no
+ * revierte la edición.
  */
 public final class AuditoriaPerfilAdapter implements AuditoriaPerfilPort {
     private static final Logger LOG = LoggerFactory.getLogger(AuditoriaPerfilAdapter.class);
@@ -29,14 +31,24 @@ public final class AuditoriaPerfilAdapter implements AuditoriaPerfilPort {
     @Override
     public void atributosActualizados(ActorUsuario actor, UUID usuarioId, List<String> campos,
                                       ContextoPeticion contexto) {
+        registrar(actor, usuarioId, campos, contexto, "ADMINISTRACION");
+    }
+
+    @Override
+    public void atributosActualizadosPorTitular(ActorUsuario actor, List<String> campos, ContextoPeticion contexto) {
+        registrar(actor, actor.sub(), campos, contexto, "PROPIA");
+    }
+
+    private void registrar(ActorUsuario actor, UUID usuarioId, List<String> campos, ContextoPeticion contexto,
+                           String via) {
         try {
             auditoria.registrarNoCriticaTrasCommit(new RegistroSeguro(UUID.randomUUID(), "ATRIBUTOS_ACTUALIZADOS",
                     "EXITO", "USUARIO", actor.sub().toString(), usuarioId, Instant.now(),
                     contexto == null ? null : contexto.ip(), contexto == null ? null : contexto.agente(),
-                    Map.of("campos", String.join(",", campos), "via", "ADMINISTRACION")));
+                    Map.of("campos", String.join(",", campos), "via", via)));
         } catch (RuntimeException fallo) {
             // Solo la clase: el mensaje podría arrastrar datos de la petición.
-            LOG.warn("No se pudo registrar ATRIBUTOS_ACTUALIZADOS administrativo: {}",
+            LOG.warn("No se pudo registrar ATRIBUTOS_ACTUALIZADOS ({}): {}", via,
                     fallo.getClass().getSimpleName());
         }
     }
