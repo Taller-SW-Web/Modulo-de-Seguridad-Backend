@@ -7,9 +7,10 @@ Estado: **R1 (ronda corta) y ronda de referencia completadas el 23-nov. R2: el t
 ejecutó a las 22:01 y quedó interrumpido: tras varios 502 y 503, un 429 en `POST /api/v1/auth/login` disparó
 la parada automática.** Después, desde la misma conexión, se observó la verificación anti-bots de Cloudflare
 de Render, lo que apunta a la protección perimetral como origen del 429; sin las cabeceras de ese 429 no se
-puede confirmar. El origen de los 502 y 503 está sin confirmar. **Los tramos de 25 y 50 quedan pendientes;
-la latencia del token de servicio y de la introspección quedó sin medir** (acuerdo con David y Alejandro).
-**Último tramo completado: R1 (5 concurrentes).**
+puede confirmar. El origen de los 502 y 503 está sin confirmar. **Los tramos de 25 y 50 quedan pendientes.**
+**El 28-nov, de 00:17:02 a 00:17:06, David midió la emisión del token de servicio y la introspección con 1 y 5
+concurrentes** (36 muestras, todas 200, 0 errores; ver «Token de servicio e introspección»).
+**Último tramo completado de ingreso y renovación: R1 (5 concurrentes).**
 
 ## Condiciones
 
@@ -20,7 +21,7 @@ la latencia del token de servicio y de la introspección quedó sin medir** (acu
 | Versión desplegada (SHA) | `05ad567d16d1323c1b13711aeb83f6ee5f041254` (último confirmado en Render por David, 23-nov) |
 | Generador | Equipo de Valery (Windows, Python 3.14), red doméstica, fuera de Render |
 | Cuentas | 5 cuentas CLIENTE creadas desde la SPA con alias de un correo de Valery, verificadas y sin MFA (acuerdo con David); pasadas por `G7_CUENTAS_CARGA`. No son cuentas de la demo |
-| Escenarios | Ingreso y renovación (`--escenarios login,refresh`). Token de servicio e introspección: el scope temporal `tokens:introspeccion` para `modulo-prueba-h5` se concedió, David lo validó con una sesión de prueba (`activo: true`) y se revocó el 23-nov; su latencia quedó sin medir |
+| Escenarios | Ingreso y renovación (`--escenarios login,refresh`). Token de servicio e introspección: el scope temporal `tokens:introspeccion` para `modulo-prueba-h5` se concedió, David lo validó con una sesión de prueba (`activo: true`) y se revocó el 23-nov. El 28-nov se volvió a conceder para una ronda corta de token de servicio e introspección y se revocó al terminar |
 
 Antes de cada ronda, el script hace un login de calentamiento con cada cuenta (no se mide) y aborta
 si alguno falla, para no activar el bloqueo automático. Ninguno falló.
@@ -87,9 +88,29 @@ saturado o el borde de Render. Esta versión del script también se detiene ante
 No se ejecutaron: el tramo de 10 no terminó, y la regla acordada es subir solo si el anterior termina sin
 timeouts, 429 ni bloqueos. Además, solo hay 5 cuentas de carga.
 
-**Token de servicio e introspección: latencia sin medir.** El scope temporal `tokens:introspeccion` para
-`modulo-prueba-h5` se concedió, David lo validó con una sesión de prueba (`activo: true`) y se revocó el
-23-nov al terminar la ventana (David quitó el scope y Alejandro cerró la concesión en la matriz).
+El 23-nov, el scope temporal `tokens:introspeccion` para `modulo-prueba-h5` se concedió, David lo validó
+con una sesión de prueba (`activo: true`) y se revocó al terminar la ventana, sin medir latencia. La medición
+se hizo el 28-nov (sección siguiente).
+
+## Token de servicio e introspección (28-nov)
+
+Ejecutó David, con el secreto del cliente técnico `modulo-prueba-h5` y una cuenta CLIENTE de carga de
+Valery sin MFA (no las cuentas A ni B de Marketplace). Ventana: 28-nov-2026, de 00:17:02 a 00:17:06
+(America/Lima). Escenarios `token,introspeccion` con 1 y luego 5 concurrentes. El scope temporal
+`tokens:introspeccion` se concedió para la ronda y se revocó al terminar.
+
+**Resultado:** 36 muestras, todas 200, 0 errores; el cierre de sesión respondió 204. La introspección
+contó como éxito solo con `activo: true`.
+
+| Operación | Concurrentes | Muestras | p50 | p95 | p99 |
+|---|---|---|---|---|---|
+| Emisión de token | 1 | 3 | 226,9 ms | 245,0 ms | 245,0 ms |
+| Introspección | 1 | 3 | 374,9 ms | 471,0 ms | 471,0 ms |
+| Emisión de token | 5 | 15 | 276,1 ms | 386,5 ms | 386,5 ms |
+| Introspección | 5 | 15 | 350,2 ms | 432,3 ms | 432,3 ms |
+
+Fuente: tabla de métricas que David entregó al terminar la ronda. Con 3 y 15 muestras, p95 y p99 son el
+mismo valor (el máximo): son resultados de una ronda corta, no una medición estable.
 
 ## Comparación con los umbrales
 
@@ -97,11 +118,11 @@ timeouts, 429 ni bloqueos. Además, solo hay 5 cuentas de carga.
 |---|---|---|---|---|---|
 | Login | < 800 ms | 1666 ms (p50 581) · **No cumple**, por un valor aislado | 5661 ms · **No cumple** | **Tramo interrumpido**: p95 8348 ms con 54 errores en 56 peticiones; mezcla éxitos y fallos, no califica la latencia del login exitoso | _(pendiente)_ |
 | Refresh | < 300 ms | 239 ms · **Cumple** | 1408 ms · **No cumple** | **Tramo interrumpido**: 2 muestras, ambas 502 | _(pendiente)_ |
-| Introspección | < 200 ms | — | — | — | sin medir (scope concedido, validado con `activo: true` y revocado) |
-| Token de servicio | sin umbral | — | — | — | sin medir (scope concedido, validado y revocado) |
+| Introspección | < 200 ms | 471 ms (p50 375; 3 muestras) · **No cumple** | 432 ms (p50 350) · **No cumple** | — | _(pendiente)_ |
+| Token de servicio | sin umbral | 245 ms (p50 227; 3 muestras) | 387 ms (p50 276) | — | _(pendiente)_ |
 
 Los umbrales están definidos para 50 concurrentes: **pendiente de medir con 50**. Con 5 concurrentes
-los p95 de login y refresh ya superan los valores objetivo; se declara.
+los p95 de login, refresh e introspección ya superan los valores objetivo; se declara.
 
 ## Causas probables
 
@@ -120,6 +141,10 @@ los p95 de login y refresh ya superan los valores objetivo; se declara.
    (sin confirmar).** Con 10 concurrentes desde una misma conexión llegaron 502/503 y luego un 429, y después
    se observó la verificación anti-bots. Si se confirma, no se podría medir el despliegue actual con 25 o 50
    concurrentes desde un solo origen sin ajustar ese límite.
+5. **Introspección por encima del umbral incluso sin concurrencia.** Con 1 concurrente su p95 (471 ms)
+   ya supera los 200 ms, y con 5 no empeora (432 ms). Eso apunta a un costo base de cada petición (red
+   del generador, borde de Render, consulta a la base) más que a contención de CPU; con 3 y 15 muestras no
+   se puede separar. No usa Argon2.
 
 Por verificar con las métricas de Render: uso de CPU y memoria del servicio a las 22:01 del 23-nov, para
 saber si los 502/503 vinieron del backend saturado o del borde.
@@ -140,7 +165,9 @@ de su plan y se suma la latencia de red hacia Supabase y desde el generador.
 - El tramo de 10 se cortó a las 56 iteraciones y con casi todo en error: sus percentiles describen el
   servicio saturado o bloqueado, no su latencia normal.
 - Generador en una red doméstica: la latencia incluye esa red.
-- No se midió el login con MFA ni, por ahora, el token de servicio y la introspección.
+- No se midió el login con MFA.
+- Token de servicio e introspección: solo 1 y 5 concurrentes, con 3 y 15 muestras. La evaluación a
+  50 concurrentes sigue pendiente.
 
 ## Salida de las rondas
 
