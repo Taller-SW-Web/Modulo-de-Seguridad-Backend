@@ -21,6 +21,13 @@
 -- Render no ejecuta Flyway (spring.flyway.enabled=false), así que la base
 -- desplegada no los recibe al desplegar: David aplica este archivo a mano después del
 -- merge, previa consulta de solo lectura de los códigos que faltan.
+--
+-- 22-nov-2026 (#107): se añaden cupones:consumir, cupones:restaurar,
+-- cupones:operaciones:leer e inventario:reservas:estado:leer, que define G6 en su
+-- propuesta de operaciones de cupones H5. Con ellos (y los dos de incidencias de Retail, #101) el archivo tiene 37 scopes.
+-- ventas:pedidos:evidencia-cupon:leer NO entra: falta la aprobación de G5, dueño de api-ventas.
+-- Ya estaban en la base desplegada desde el 23-nov (David los aplicó a mano). El módulo de
+-- configuración no los registra: GET /api/v2/scopes solo lista el catálogo, no lo modifica.
 -- ============================================================================
 
 INSERT INTO scope (codigo, audiencia, descripcion) VALUES
@@ -61,7 +68,12 @@ INSERT INTO scope (codigo, audiencia, descripcion) VALUES
     ('inventario:liberar',              'api-productos',  'Liberar inventario reservado'),
     ('inventario:reintegrar',           'api-productos',  'Reintegrar inventario por devolución'),
     ('inventario:operaciones:leer',     'api-productos',  'Consultar el resultado de una operación de inventario'),
-    ('productos:fisicos:leer',          'api-productos',  'Consultar peso y dimensiones físicas por SKU')
+    ('productos:fisicos:leer',          'api-productos',  'Consultar peso y dimensiones físicas por SKU'),
+    -- api-productos, cupones y reservas H5 (#107, aprobados por el PO el 22-nov a pedido de G6)
+    ('cupones:consumir',                'api-productos',  'Consumir un cupón al confirmar un pedido'),
+    ('cupones:restaurar',               'api-productos',  'Restaurar un cupón consumido'),
+    ('cupones:operaciones:leer',        'api-productos',  'Consultar el resultado de una operación de cupón'),
+    ('inventario:reservas:estado:leer', 'api-productos',  'Consultar el estado de una reserva de inventario')
 ON CONFLICT (codigo) DO UPDATE
     SET audiencia = EXCLUDED.audiencia,
         descripcion = EXCLUDED.descripcion;

@@ -118,7 +118,7 @@ class ClientesServicioPostgresTest {
 
     @Test
     void elCatalogoDeScopesCumpleLasRestriccionesYAsignaLaAudienciaDeSuDueno() {
-        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(33);
+        assertThat(jdbc.queryForObject("select count(*) from scope", Integer.class)).isEqualTo(37);
         assertThat(jdbc.queryForList("""
                 select codigo from scope
                 where audiencia = 'api-productos' and codigo like 'inventario:incidencias:%'

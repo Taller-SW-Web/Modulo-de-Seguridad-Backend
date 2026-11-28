@@ -14,7 +14,8 @@
 -- configuración (SPEC-19, FEAT-14), que la audita con autor y fecha. Este archivo
 -- se actualiza después, para que el repositorio refleje la base.
 --
--- El INSERT refleja la base desplegada al 10-nov (consulta Q2). Las concesiones
+-- El INSERT refleja la base desplegada al 10-nov (consulta Q2), más las concesiones
+-- del 12, 23 y 25-nov hechas desde el módulo de configuración. Las concesiones
 -- aprobadas en la matriz que la base todavía no tiene están al final, comentadas:
 -- ejecutar este archivo no las concede.
 -- ============================================================================
@@ -40,7 +41,13 @@ SELECT v.client_id, v.scope
     -- api-ventas
     ('modulo-marketplace', 'ventas:pedidos:crear'),
     ('modulo-chatbot',     'ventas:pedidos:crear'),
+    ('modulo-chatbot',     'ventas:pagos:webhook'),    -- 23-nov, #108
+    ('modulo-chatbot',     'ventas:pedidos:anular'),   -- 23-nov, #108
     ('modulo-retail',      'ventas:pedidos:crear'),
+    -- Conservadas por decisión del 21-nov (docs #109): se suspende su revocación mientras G5
+    -- confirma el uso. El contrato de G5 las reserva a modulo-postventa y modulo-despacho.
+    ('modulo-retail',      'ventas:pedidos:consultar'),
+    ('modulo-retail',      'ventas:pedidos:estado'),
     ('modulo-despacho',    'ventas:pedidos:estado'),
     ('simulador-pasarela', 'ventas:pagos:webhook'),
     ('modulo-postventa',   'ventas:pedidos:consultar'),
@@ -62,10 +69,18 @@ SELECT v.client_id, v.scope
     ('modulo-ventas',      'inventario:consumir'),
     ('modulo-ventas',      'inventario:liberar'),
     ('modulo-ventas',      'inventario:operaciones:leer'),
+    -- Aplicadas en la base desplegada (23 y 25-nov, confirmadas por David en #107 y #108):
+    ('modulo-ventas',      'cupones:consumir'),
+    ('modulo-ventas',      'cupones:restaurar'),
+    ('modulo-ventas',      'cupones:operaciones:leer'),
+    ('modulo-ventas',      'inventario:reservas:estado:leer'),
+    ('modulo-ventas',      'inventario:disponibilidad:leer'),  -- #107
+    ('promotions-svc',     'inventario:reservas:estado:leer'), -- #107, cliente nuevo de G6
     ('modulo-postventa',   'inventario:reintegrar'),
     ('modulo-postventa',   'inventario:disponibilidad:leer'),
     ('modulo-productos',   'catalogo:leer'),
     ('modulo-productos',   'precios:leer'),
+    ('modulo-productos',   'inventario:disponibilidad:leer'),  -- 12-nov, desde Clientes técnicos (#78)
     ('modulo-despacho',    'productos:fisicos:leer')
   ) AS v(client_id, scope)
   JOIN cliente_servicio c ON c.client_id = v.client_id
@@ -80,17 +95,15 @@ ON CONFLICT (client_id, scope) DO NOTHING;
 --   ('modulo-retail',      'usuarios:leer'),
 --   ('modulo-retail',      'roles:leer'),
 --   ('modulo-marketplace', 'ventas:pedidos:anular'),
---   ('modulo-chatbot',     'ventas:pedidos:anular'),
---   ('modulo-chatbot',     'ventas:pagos:webhook'),
 --   ('modulo-retail',      'ventas:pedidos:anular'),
---   ('modulo-marketplace', 'postventa:devoluciones:escribir'),
---   ('modulo-marketplace', 'postventa:reclamos:escribir'),
---   ('modulo-chatbot',     'postventa:devoluciones:escribir'),
---   ('modulo-chatbot',     'postventa:reclamos:escribir'),
---   ('modulo-retail',      'postventa:devoluciones:escribir'),
---   ('modulo-retail',      'postventa:reclamos:escribir'),
 
--- Concedidas en la base sin respaldo en la matriz (Q2 del 10-nov), NO incluidas aquí:
--- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail. El contrato de
--- G5 reserva la primera a modulo-postventa y la segunda a modulo-despacho. Quedan en
--- la base hasta que G5 las confirme o se revoquen desde el módulo de configuración.
+-- En espera de G5: ventas:pedidos:evidencia-cupon:leer para promotions-svc (#107).
+--
+-- No se conceden a ningún canal: postventa:devoluciones:escribir y postventa:reclamos:escribir.
+-- G5 eligió el token del cliente para devoluciones, reclamos y evidencias (G5 #67, opción A,
+-- 22-nov), así que los canales no necesitan token de servicio para esas operaciones.
+
+-- ventas:pedidos:consultar y ventas:pedidos:estado para modulo-retail están en la base sin
+-- respaldo del dueño (Q2 del 10-nov). Desde el 21-nov (docs #109) se conservan y figuran en el
+-- INSERT mientras G5 confirma su uso; si G5 no lo confirma, se revocan desde el módulo de
+-- configuración y se quitan de aquí.

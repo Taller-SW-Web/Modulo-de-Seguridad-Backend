@@ -278,7 +278,7 @@ class ClientesTecnicosPostgresTest {
         assertThat(lista).extracting(ClienteTecnico::clientId).containsExactly("modulo-a", "modulo-b");
         assertThat(lista.get(0).scopes()).isEmpty();
         assertThat(lista.toString()).doesNotContain(hash);
-        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).hasSize(33);
+        assertThat(valor(enTx(() -> servicio.catalogo(ADMIN, CONTEXTO)))).hasSize(37);
     }
 
     static final class Gobierno implements GobiernoClientesPort {
